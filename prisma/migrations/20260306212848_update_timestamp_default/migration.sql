@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Arac" ALTER COLUMN "guncellemeTarihi" SET DEFAULT CURRENT_TIMESTAMP;
