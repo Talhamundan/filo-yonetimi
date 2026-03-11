@@ -1,36 +1,59 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 🚛 Filo Yönetim Sistemi (Fleet Management SaaS)
 
-## Getting Started
+Profesyonel bir filo yönetim ve takip sistemi. Bu uygulama, araç envanterini, yakıt harcamalarını, cezaları, muayeneleri, HGS yüklemelerini ve personel atamalarını merkezi bir platform üzerinden yönetmenizi sağlar.
 
-First, run the development server:
+## 🚀 Öne Çıkan Özellikler
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+- **Dashboard**: Filo istatistikleri, aktif araç sayısı ve maliyet grafiklerini içeren kapsamlı özet ekranı.
+- **Araç Yönetimi**: Araçların kategori (Binek, Kamyon/Tır, İş Makinesi), plaka, marka/model ve güncel durum (Aktif, Boşta, Serviste vb.) takibi.
+- **Yakıt Takibi**: Litre bazlı yakıt alımı, istasyon bilgisi ve otomatik toplam tutar hesaplama.
+- **Zimmet Sistemi**: Araçların şoförlere atanması ve geçmiş zimmet kayıtlarının takibi.
+- **Maliyet Yönetimi**: Ceza, Muayene, HGS, Bakım, Sigorta ve Kasko giderlerinin detaylı yönetimi.
+- **Doküman Yönetimi**: Ruhsat, sigorta ve fatura gibi belgelerin dijital arşivlenmesi.
+- **Modern UI**: Tailwind CSS ve Shadcn UI ile güçlendirilmiş, karanlık mod destekli, duyarlı tasarım.
+- **Bildirimler**: Sonner ile modernize edilmiş interaktif geri bildirimler.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 🛠️ Teknoloji Yığını
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- **Framework**: [Next.js 15 (App Router)](https://nextjs.org/)
+- **Dil**: TypeScript
+- **Veritabanı & ORM**: PostgreSQL & [Prisma](https://www.prisma.io/)
+- **Kimlik Doğrulama**: [NextAuth.js (Auth.js)](https://authjs.dev/)
+- **UI & Styling**: Tailwind CSS, Shadcn UI, Lucide Icons
+- **Bildirimler**: Sonner
+- **Formlar**: React Hook Form
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 💻 Kurulum ve Çalıştırma
 
-## Learn More
+1. **Depoyu Klonlayın:**
+   ```bash
+   git clone [repo-url]
+   cd filo-yonetimi
+   ```
 
-To learn more about Next.js, take a look at the following resources:
+2. **Bağımlılıkları Yükleyin:**
+   ```bash
+   npm install
+   ```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+3. **Ortam Değişkenlerini Ayarlayın:**
+   `.env.example` dosyasını `.env` olarak kopyalayın ve kendi bilgilerinizle doldurun.
+   ```bash
+   cp .env.example .env
+   ```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+4. **Veritabanını Hazırlayın:**
+   Prisma migration'larını çalıştırın ve istemciyi oluşturun:
+   ```bash
+   npx prisma migrate dev
+   npx prisma generate
+   ```
 
-## Deploy on Vercel
+5. **Uygulamayı Başlatın:**
+   ```bash
+   npm run dev
+   ```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 📄 Lisans
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Bu proje MIT lisansı ile lisanslanmıştır. Daha fazla bilgi için `LICENSE` dosyasına (varsa) bakabilirsiniz.
