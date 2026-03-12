@@ -19,37 +19,37 @@ export default async function DashboardOverview() {
         yaklasanMuayeneler, yaklasanKaskolar,
         tumYakit, tumBakim, tumMasraf
     ] = await Promise.all([
-        (prisma as any).arac.count({ where: sirketFilter as any }),
-        (prisma as any).arac.count({ where: { ...(sirketFilter as any), durum: { in: ['AKTIF', 'BOSTA'] } } }),
-        (prisma as any).arac.count({ where: { ...(sirketFilter as any), durum: 'SERVISTE' } }),
+        prisma.arac.count({ where: sirketFilter || {} }),
+        prisma.arac.count({ where: { ...(sirketFilter || {}), durum: { in: ['AKTIF', 'BOSTA'] } } }),
+        prisma.arac.count({ where: { ...(sirketFilter || {}), durum: 'SERVISTE' } }),
 
-        (prisma as any).yakit.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), tarih: { gte: buAyBasi, lte: buAySonu } } }),
-        (prisma as any).bakim.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), bakimTarihi: { gte: buAyBasi, lte: buAySonu } } }),
-        (prisma as any).masraf.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), tarih: { gte: buAyBasi, lte: buAySonu } } }),
+        prisma.yakit.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), tarih: { gte: buAyBasi, lte: buAySonu } } }),
+        prisma.bakim.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), bakimTarihi: { gte: buAyBasi, lte: buAySonu } } }),
+        prisma.masraf.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), tarih: { gte: buAyBasi, lte: buAySonu } } }),
 
-        (prisma as any).arac.groupBy({ where: sirketFilter as any, by: ['durum'], _count: { durum: true } }),
+        prisma.arac.groupBy({ where: sirketFilter || {}, by: ['durum'], _count: { durum: true } }),
 
-        (prisma as any).muayene.findMany({ where: { ...(sirketFilter as any), gecerlilikTarihi: { lte: onBesGunSonrasi, gte: bugun }, aktifMi: true }, include: { arac: true } }),
-        (prisma as any).kasko.findMany({ where: { ...(sirketFilter as any), bitisTarihi: { lte: onBesGunSonrasi, gte: bugun }, aktifMi: true }, include: { arac: true } }),
+        prisma.muayene.findMany({ where: { ...(sirketFilter || {}), gecerlilikTarihi: { lte: onBesGunSonrasi, gte: bugun }, aktifMi: true }, include: { arac: true } }),
+        prisma.kasko.findMany({ where: { ...(sirketFilter || {}), bitisTarihi: { lte: onBesGunSonrasi, gte: bugun }, aktifMi: true }, include: { arac: true } }),
 
-        (prisma as any).yakit.groupBy({ where: sirketFilter as any, by: ['aracId'], _sum: { tutar: true } }),
-        (prisma as any).bakim.groupBy({ where: sirketFilter as any, by: ['aracId'], _sum: { tutar: true } }),
-        (prisma as any).masraf.groupBy({ where: sirketFilter as any, by: ['aracId'], _sum: { tutar: true } })
+        prisma.yakit.groupBy({ where: sirketFilter || {}, by: ['aracId'], _sum: { tutar: true } }),
+        prisma.bakim.groupBy({ where: sirketFilter || {}, by: ['aracId'], _sum: { tutar: true } }),
+        prisma.masraf.groupBy({ where: sirketFilter || {}, by: ['aracId'], _sum: { tutar: true } })
     ]);
 
-    const aylikYakit = (yakitAggr as any)._sum.tutar || 0;
-    const aylikBakim = (bakimAggr as any)._sum.tutar || 0;
-    const aylikMasrafCount = (masrafAggr as any)._sum.tutar || 0;
+    const aylikYakit = yakitAggr._sum.tutar || 0;
+    const aylikBakim = bakimAggr._sum.tutar || 0;
+    const aylikMasrafCount = masrafAggr._sum.tutar || 0;
     const aylikToplamGider = aylikYakit + aylikBakim + aylikMasrafCount;
 
-    const durumData = (durumDagitimi as any[]).map((d: any) => ({ name: d.durum, value: d._count.durum }));
+    const durumData = durumDagitimi.map((d: any) => ({ name: d.durum, value: d._count.durum }));
 
     const alerts = [
-        ...(yaklasanMuayeneler as any[]).map((m: any) => ({ id: `m-${m.id}`, plaka: m.arac.plaka, message: "Muayene Yaklaştı", tarih: m.gecerlilikTarihi })),
-        ...(yaklasanKaskolar as any[]).map((k: any) => ({ id: `k-${k.id}`, plaka: k.arac.plaka, message: "Kasko Bitiyor", tarih: k.bitisTarihi }))
+        ...yaklasanMuayeneler.map((m: any) => ({ id: `m-${m.id}`, plaka: m.arac.plaka, message: "Muayene Yaklaştı", tarih: m.gecerlilikTarihi })),
+        ...yaklasanKaskolar.map((k: any) => ({ id: `k-${k.id}`, plaka: k.arac.plaka, message: "Kasko Bitiyor", tarih: k.bitisTarihi }))
     ].sort((a, b) => a.tarih.getTime() - b.tarih.getTime()).slice(0, 4);
 
-    const kritikUyariSayisi = (yaklasanMuayeneler as any[]).length + (yaklasanKaskolar as any[]).length;
+    const kritikUyariSayisi = yaklasanMuayeneler.length + yaklasanKaskolar.length;
     const verimlilikOrani = toplamArac > 0 ? Math.round((aktifArac / toplamArac) * 100) : 0;
     const ortalamaYakit = aktifArac > 0 ? Math.round(aylikYakit / aktifArac) : 0;
 
@@ -63,33 +63,33 @@ export default async function DashboardOverview() {
 
     const trendResults = await Promise.all(
         son6AyQueries.map(({ start, end }) => Promise.all([
-            (prisma as any).yakit.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), tarih: { gte: start, lte: end } } }),
-            (prisma as any).bakim.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), bakimTarihi: { gte: start, lte: end } } }),
-            (prisma as any).masraf.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter as any), tarih: { gte: start, lte: end } } })
+            prisma.yakit.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), tarih: { gte: start, lte: end } } }),
+            prisma.bakim.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), bakimTarihi: { gte: start, lte: end } } }),
+            prisma.masraf.aggregate({ _sum: { tutar: true }, where: { ...(sirketFilter || {}), tarih: { gte: start, lte: end } } })
         ]))
     );
 
     const son6AyTrend = son6AyQueries.map(({ start }, i) => {
         const [y, b, m] = trendResults[i];
-        const total = ((y as any)._sum.tutar || 0) + ((b as any)._sum.tutar || 0) + ((m as any)._sum.tutar || 0);
+        const total = (y._sum.tutar || 0) + (b._sum.tutar || 0) + (m._sum.tutar || 0);
         const ayIsmi = format(start, 'MMM', { locale: tr });
         return { name: ayIsmi.charAt(0).toUpperCase() + ayIsmi.slice(1), gider: total };
     });
 
     // ─── Top 5 masraflı araç ───
     const aracMasrafMap: Record<string, number> = {};
-    (tumYakit as any[]).forEach((y: any) => { if (y.aracId) aracMasrafMap[y.aracId] = (aracMasrafMap[y.aracId] || 0) + (y._sum.tutar || 0); });
-    (tumBakim as any[]).forEach((b: any) => { if (b.aracId) aracMasrafMap[b.aracId] = (aracMasrafMap[b.aracId] || 0) + (b._sum.tutar || 0); });
-    (tumMasraf as any[]).forEach((m: any) => { if (m.aracId) aracMasrafMap[m.aracId] = (aracMasrafMap[m.aracId] || 0) + (m._sum.tutar || 0); });
+    tumYakit.forEach((y: any) => { if (y.aracId) aracMasrafMap[y.aracId] = (aracMasrafMap[y.aracId] || 0) + (y._sum.tutar || 0); });
+    tumBakim.forEach((b: any) => { if (b.aracId) aracMasrafMap[b.aracId] = (aracMasrafMap[b.aracId] || 0) + (b._sum.tutar || 0); });
+    tumMasraf.forEach((m: any) => { if (m.aracId) aracMasrafMap[m.aracId] = (aracMasrafMap[m.aracId] || 0) + (m._sum.tutar || 0); });
 
     const sortedMasrafAracIdList = Object.entries(aracMasrafMap).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const topAraclar = await (prisma as any).arac.findMany({
+    const topAraclar = await prisma.arac.findMany({
         where: { id: { in: sortedMasrafAracIdList.map(a => a[0]) } },
         select: { id: true, plaka: true }
     });
 
     const top5Masraf = sortedMasrafAracIdList.map(([id, tutar]) => ({
-        plaka: (topAraclar as any[]).find((a: any) => a.id === id)?.plaka || 'Bilinmiyor',
+        plaka: topAraclar.find((a: any) => a.id === id)?.plaka || 'Bilinmiyor',
         tutar
     }));
 

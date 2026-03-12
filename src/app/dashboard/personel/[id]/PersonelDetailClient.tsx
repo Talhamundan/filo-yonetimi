@@ -14,7 +14,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { FormFields } from "../PersonelForm";
-import { updatePersonel, deletePersonel } from "../actions";
+import { updatePersonel, deletePersonel, araciBirak } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
 
@@ -61,6 +61,26 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
         setLoading(false);
     };
 
+    const handleAraciBirak = async () => {
+        const confirmed = await openConfirm({ 
+            title: "Aracı Bırak", 
+            message: `${p.arac?.plaka} plakalı aracı bu personelden ayırmak istediğinizden emin misiniz? Araç durumu 'BOSTA' olarak güncellenecektir.`, 
+            confirmText: "Evet, Ayır",
+            variant: "warning"
+        });
+        if (!confirmed) return;
+        
+        setLoading(true);
+        const res = await araciBirak(p.id);
+        if (res.success) {
+            toast.success("Araç başarıyla bırakıldı");
+            router.refresh();
+        } else {
+            toast.error(res.error || "İşlem başarısız");
+        }
+        setLoading(false);
+    };
+
     const formatDate = (date: string | Date | null | undefined) => 
         date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
 
@@ -99,34 +119,46 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                 <h1 className="text-3xl font-bold text-slate-900">{p.ad} {p.soyad}</h1>
                                 {getRoleBadge(p.rol)}
                             </div>
-                            <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-500 mt-2">
+                            <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-500 mt-2 mb-4">
                                 <div className="flex items-center gap-1.5"><Briefcase size={16} /> {p.sirket?.ad || 'Bağımsız'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5"><MapPin size={16} /> {p.sehir || 'Şehir Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5 text-xs font-mono bg-slate-100 px-2 py-0.5 rounded">TC: {p.tcNo || 'Belirtilmemiş'}</div>
                             </div>
+
+                            <div className="flex items-center gap-2 mt-2">
+                                <button 
+                                    onClick={() => setEditOpen(true)}
+                                    className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
+                                >
+                                    <Pencil size={16} /> Düzenle
+                                </button>
+                                <button 
+                                    onClick={handleDelete}
+                                    className="flex items-center gap-2 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
+                                >
+                                    <Trash2 size={16} /> Sil
+                                </button>
+                            </div>
                         </div>
                     </div>
 
                     <div className="flex flex-col gap-3">
-                        <div className="flex items-center gap-2">
-                            <button 
-                                onClick={() => setEditOpen(true)}
-                                className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
-                            >
-                                <Pencil size={16} /> Düzenle
-                            </button>
-                            <button 
-                                onClick={handleDelete}
-                                className="flex items-center gap-2 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
-                            >
-                                <Trash2 size={16} /> Sil
-                            </button>
-                        </div>
 
-                        <div className="bg-[#F8FAFC] border border-[#F1F5F9] rounded-xl p-5 min-w-[280px]">
-                        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Zimmetli Araç</p>
+                        <div className="bg-[#F8FAFC] border border-[#F1F5F9] rounded-xl p-5 min-w-[320px]">
+                        <div className="flex items-center justify-between mb-3">
+                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Zimmetli Araç</p>
+                            {p.arac && (
+                                <button 
+                                    onClick={handleAraciBirak}
+                                    disabled={loading}
+                                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                >
+                                    ARACI BIRAK
+                                </button>
+                            )}
+                        </div>
                         {p.arac ? (
                             <div 
                                 className="flex items-center gap-3 cursor-pointer group"

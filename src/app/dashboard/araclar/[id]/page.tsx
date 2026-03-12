@@ -27,7 +27,8 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             yakitlar: { orderBy: { tarih: 'desc' } },
             masraflar: { orderBy: { tarih: 'desc' } },
             arizalar: { orderBy: { arizaTarihi: 'desc' } },
-            dokumanlar: { orderBy: { yuklemeTarihi: 'desc' } }
+            dokumanlar: { orderBy: { yuklemeTarihi: 'desc' } },
+            hgsYuklemeler: { orderBy: { tarih: 'desc' } }
         }
     });
 

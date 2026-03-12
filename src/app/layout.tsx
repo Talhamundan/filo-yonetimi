@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FiloBase - Filo Yönetim Sistemi",
+  title: "Bera Filo - Filo Yönetim Sistemi",
   description: "Filo yönetim sistemi",
 };
 
@@ -25,8 +25,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="tr" className="light">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
+    <html lang="tr" className="light" suppressHydrationWarning>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`} suppressHydrationWarning>
         {children}
         <Toaster richColors closeButton position="top-right" />
       </body>

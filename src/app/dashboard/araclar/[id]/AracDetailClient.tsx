@@ -6,7 +6,7 @@ import { Badge } from "../../../../components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import {
-    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, MapPin, FileDigit, Settings, Receipt, AlertTriangle, FileArchive
+    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, MapPin, FileDigit, Settings, Receipt, AlertTriangle, FileArchive, CreditCard, FileText
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -46,6 +46,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
             case 'YEDEK': return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold px-3 py-1 border-0 shadow-none">Yedek</Badge>;
             case 'ARIZALI': return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 font-semibold px-3 py-1 border-0 shadow-none">Arızalı</Badge>;
             case 'SATILDI': return <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold px-3 py-1 border-0 shadow-none">Satıldı</Badge>;
+            case 'BOSTA': return <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-200 font-semibold px-3 py-1 border-0 shadow-none">Boşta</Badge>;
             default: return <Badge variant="outline" className="font-semibold px-3 py-1 shadow-none">{durum}</Badge>;
         }
     };
@@ -73,7 +74,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                         <div>
                             <div className="flex items-center gap-4 mb-2">
                                 <h1 className="text-3xl font-black text-slate-900 font-mono tracking-tight">{arac.plaka}</h1>
-                                {getStatusBadge(arac.durum)}
+                                {getStatusBadge(arac.kullanici ? 'AKTIF' : arac.durum)}
                             </div>
                             <h2 className="text-lg font-semibold text-slate-700 tracking-tight">{arac.marka} {arac.model} <span className="text-slate-400 font-medium ml-1">({arac.yil})</span></h2>
 
@@ -109,12 +110,15 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             )}
                         </div>
                         {arac.kullanici ? (
-                            <div className="flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white uppercase">
+                            <div 
+                                className="flex items-center gap-3 cursor-pointer group hover:bg-white/50 p-2 -m-2 rounded-lg transition-colors"
+                                onClick={() => router.push(`/dashboard/personel/${arac.kullanici.id}`)}
+                            >
+                                <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white uppercase group-hover:scale-105 transition-transform">
                                     {arac.kullanici.ad.charAt(0)}
                                 </div>
                                 <div className="flex flex-col">
-                                    <span className="font-bold text-slate-800">{arac.kullanici.ad} {arac.kullanici.soyad}</span>
+                                    <span className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors">{arac.kullanici.ad} {arac.kullanici.soyad}</span>
                                     <span className="text-xs font-semibold text-slate-500 mt-0.5">{arac.kullanici.telefon || 'Telefon Bulunmuyor'}</span>
                                 </div>
                             </div>
@@ -128,12 +132,18 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                 </div>
 
                 <Tabs defaultValue="ozet" className="w-full">
-                    <TabsList className="flex flex-wrap h-auto gap-2 bg-transparent overflow-x-auto justify-start pb-2 border-b border-slate-200 w-full rounded-none">
+                    <TabsList className="flex flex-nowrap h-auto gap-2 bg-transparent overflow-x-auto justify-start pb-2 border-b border-slate-200 w-full rounded-none scrollbar-hide">
                         <TabsTrigger value="ozet" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Activity size={16} className="mr-2" /> Genel Özet
                         </TabsTrigger>
                         <TabsTrigger value="soforGecmisi" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Users size={16} className="mr-2" /> Şoför Geçmişi
+                        </TabsTrigger>
+                        <TabsTrigger value="ruhsat" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
+                            <FileText size={16} className="mr-2" /> Ruhsat Bilgileri
+                        </TabsTrigger>
+                        <TabsTrigger value="hgs" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
+                            <CreditCard size={16} className="mr-2" /> HGS Yüklemeleri
                         </TabsTrigger>
                         <TabsTrigger value="bakim" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Wrench size={16} className="mr-2" /> Bakım Geçmişi
@@ -179,10 +189,6 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                                                 <span className="text-sm font-medium text-slate-500">Filoya Katılım</span>
                                                 <span className="text-sm font-semibold text-slate-800">{formatDate(arac.olusturmaTarihi)}</span>
                                             </li>
-                                            <li className="flex justify-between items-center px-6 py-4">
-                                                <span className="text-sm font-medium text-slate-500">Sistem Kimliği</span>
-                                                <span className="text-xs font-mono font-medium text-slate-400 bg-slate-100 px-2 py-1 rounded">{arac.id.split('-')[0]}</span>
-                                            </li>
                                         </ul>
                                     </CardContent>
                                 </Card>
@@ -219,7 +225,100 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 3. BAKIM */}
+                        {/* 3. RUHSAT BİLGİLERİ */}
+                        <TabsContent value="ruhsat">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                                    <CardHeader className="border-b border-[#F1F5F9] py-4 bg-[#F8FAFC]">
+                                        <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                            <Settings size={16} className="text-slate-400" /> Tescil Bilgileri
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="p-0">
+                                        <ul className="divide-y divide-[#F1F5F9]">
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Plaka</span>
+                                                <span className="text-sm font-semibold text-slate-900">{arac.plaka}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Ruhsat Seri No</span>
+                                                <span className="text-sm font-semibold text-slate-900">{arac.ruhsatSeriNo || '-'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Marka / Model</span>
+                                                <span className="text-sm font-semibold text-slate-900">{arac.marka} {arac.model}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Model Yılı</span>
+                                                <span className="text-sm font-semibold text-slate-900">{arac.yil}</span>
+                                            </li>
+                                        </ul>
+                                    </CardContent>
+                                </Card>
+
+                                <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
+                                    <CardHeader className="border-b border-[#F1F5F9] py-4 bg-[#F8FAFC]">
+                                        <CardTitle className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                                            <FileText size={16} className="text-slate-400" /> Ruhsat Belgeleri
+                                        </CardTitle>
+                                    </CardHeader>
+                                    <Table>
+                                        <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                                            <TableRow>
+                                                <TableHead className="font-semibold text-slate-500">Yüklenme Tarihi</TableHead>
+                                                <TableHead className="font-semibold text-slate-500">Doküman Adı</TableHead>
+                                                <TableHead className="font-semibold text-slate-500 text-right">Aksiyon</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {arac.dokumanlar?.filter((d: any) => d.tur === 'RUHSAT').length > 0 ? (
+                                                arac.dokumanlar.filter((d: any) => d.tur === 'RUHSAT').map((d: any) => (
+                                                    <TableRow key={d.id}>
+                                                        <TableCell className="text-slate-700">{formatDate(d.yuklemeTarihi)}</TableCell>
+                                                        <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer">{d.ad}</TableCell>
+                                                        <TableCell className="text-right"><span className="text-sm font-medium text-slate-500 hover:text-indigo-600 cursor-pointer">Görüntüle</span></TableCell>
+                                                    </TableRow>
+                                                ))
+                                            ) : (
+                                                <TableRow><TableCell colSpan={3} className="h-32 text-center text-slate-500">Yüklenmiş ruhsat belgesi bulunmuyor.</TableCell></TableRow>
+                                            )}
+                                        </TableBody>
+                                    </Table>
+                                </Card>
+                            </div>
+                        </TabsContent>
+
+                        {/* 4. HGS YÜKLEMELERİ */}
+                        <TabsContent value="hgs">
+                            <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
+                                <Table>
+                                    <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                                        <TableRow>
+                                            <TableHead className="font-semibold text-slate-500">Yükleme Tarihi</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Etiket No</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Uygulanan KM</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {arac.hgsYuklemeler && arac.hgsYuklemeler.length > 0 ? (
+                                            arac.hgsYuklemeler.map((h: any) => (
+                                                <TableRow key={h.id}>
+                                                    <TableCell className="text-slate-700">{formatDate(h.tarih)}</TableCell>
+                                                    <TableCell className="text-slate-900 font-mono text-sm">{h.etiketNo || arac.hgsNo || '-'}</TableCell>
+                                                    <TableCell className="text-slate-700">{h.km?.toLocaleString() || '-'} km</TableCell>
+                                                    <TableCell className="font-bold text-slate-900 text-right">₺{h.tutar.toLocaleString()}</TableCell>
+                                                </TableRow>
+                                            ))
+                                        ) : (
+                                            <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">HGS yükleme kaydı bulunmuyor.</TableCell></TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </Card>
+                        </TabsContent>
+
+                        {/* 5. BAKIM */}
                         <TabsContent value="bakim">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -251,7 +350,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 4. YAKIT */}
+                        {/* 6. YAKIT */}
                         <TabsContent value="yakit">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -283,7 +382,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 5. MASRAFLAR */}
+                        {/* 7. MASRAFLAR */}
                         <TabsContent value="masraflar">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -311,7 +410,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 6. SİGORTA & KASKO */}
+                        {/* 8. SİGORTA & KASKO */}
                         <TabsContent value="sigorta">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
@@ -371,7 +470,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </div>
                         </TabsContent>
 
-                        {/* 7. MUAYENE */}
+                        {/* 9. MUAYENE */}
                         <TabsContent value="muayene">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -401,7 +500,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 8. ARIZALAR */}
+                        {/* 10. ARIZALAR */}
                         <TabsContent value="ariza">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -437,7 +536,7 @@ export default function AracDetailClient({ initialArac: arac }: { initialArac: A
                             </Card>
                         </TabsContent>
 
-                        {/* 9. DOKÜMANLAR */}
+                        {/* 11. DOKÜMANLAR */}
                         <TabsContent value="dokuman">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>

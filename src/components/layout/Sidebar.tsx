@@ -21,6 +21,7 @@ import {
     Building2,
     CreditCard
 } from "lucide-react"
+import Image from "next/image"
 
 const NavItem = ({ href, icon: Icon, label, badge }: { href: string, icon: React.ElementType, label: string, badge?: number }) => {
     const pathname = usePathname()
@@ -59,10 +60,15 @@ export default function Sidebar() {
         <aside className="hidden lg:flex flex-col w-[260px] border-r border-[#E2E8F0] bg-white px-4 py-6 h-screen sticky top-0 z-20 overflow-y-auto">
             {/* Logo Area */}
             <div className="flex items-center gap-3 mb-8 px-3">
-                <div className="bg-[#0F172A] text-white p-2 rounded-lg shadow-sm">
-                    <Route size={20} strokeWidth={2.5} />
+                <div className="relative h-10 w-10 overflow-hidden rounded-lg shadow-sm border border-slate-100">
+                    <Image 
+                        src="/logo-bera.png" 
+                        alt="Bera Filo Logo" 
+                        fill
+                        className="object-contain p-1"
+                    />
                 </div>
-                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Filo<span className="text-[#6366F1]">Base</span></h1>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">Bera <span className="text-[#6366F1]">Filo</span></h1>
             </div>
 
             {/* Fleet Overview */}

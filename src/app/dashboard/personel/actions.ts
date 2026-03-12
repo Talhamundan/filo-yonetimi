@@ -59,3 +59,49 @@ export async function deletePersonel(id: string) {
         return { success: false, error: "Personel silinemedi." };
     }
 }
+
+export async function araciBirak(personelId: string) {
+    try {
+        // 1. Personelin üzerindeki aracı bul
+        const arac = await prisma.arac.findUnique({
+            where: { kullaniciId: personelId }
+        });
+
+        if (!arac) {
+            return { success: false, error: "Zimmetli araç bulunamadı." };
+        }
+
+        // 2. Aracı boşa çıkar
+        await prisma.arac.update({
+            where: { id: arac.id },
+            data: {
+                kullaniciId: null,
+                durum: 'BOSTA'
+            }
+        });
+
+        // 3. Aktif zimmet kaydını kapat (bitis tarihini bugüne çek)
+        await prisma.kullaniciZimmet.updateMany({
+            where: {
+                kullaniciId: personelId,
+                aracId: arac.id,
+                bitis: null
+            },
+            data: {
+                bitis: new Date(),
+                notlar: (await prisma.kullaniciZimmet.findFirst({ where: { kullaniciId: personelId, aracId: arac.id, bitis: null } }))?.notlar + " (Sistem tarafından sonlandırıldı)"
+            }
+        });
+
+        revalidatePath(PATH);
+        revalidatePath(`${PATH}/${personelId}`);
+        revalidatePath('/dashboard/araclar');
+        revalidatePath(`/dashboard/araclar/${arac.id}`);
+        
+        return { success: true };
+    } catch (e) {
+        console.error(e);
+        return { success: false, error: "Araç bırakma işlemi başarısız oldu." };
+    }
+}
+
