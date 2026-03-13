@@ -1,11 +1,23 @@
 "use server";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
+import { auth } from "@/auth";
+import { isAdmin, getCurrentSirketId } from "@/lib/auth-utils";
 
-const PATH = '/dashboard/personel';
+const PATH = "/dashboard/personel";
+
+async function assertAdmin() {
+    const session = await auth();
+    if (!session?.user || (session.user as any).rol !== "ADMIN") {
+        throw new Error("Bu işlem için yetkiniz yok.");
+    }
+}
 
 export async function createPersonel(data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
     try {
+        await assertAdmin();
+        const currentSirketId = await getCurrentSirketId();
+
         await prisma.kullanici.create({
             data: {
                 ad: data.ad,
@@ -13,7 +25,7 @@ export async function createPersonel(data: { ad: string; soyad: string; eposta?:
                 eposta: data.eposta || null,
                 telefon: data.telefon || null,
                 rol: data.rol as any,
-                sirketId: data.sirketId || null,
+                sirketId: currentSirketId || data.sirketId || null,
                 sehir: data.sehir as any || null,
                 tcNo: data.tcNo || null,
             }
@@ -28,6 +40,9 @@ export async function createPersonel(data: { ad: string; soyad: string; eposta?:
 
 export async function updatePersonel(id: string, data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
     try {
+        await assertAdmin();
+        const currentSirketId = await getCurrentSirketId();
+
         await prisma.kullanici.update({
             where: { id },
             data: {
@@ -36,7 +51,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                 eposta: data.eposta || null,
                 telefon: data.telefon || null,
                 rol: data.rol as any,
-                sirketId: data.sirketId || null,
+                sirketId: currentSirketId || data.sirketId || null,
                 sehir: data.sehir as any || null,
                 tcNo: data.tcNo || null,
             }
@@ -51,6 +66,8 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
 
 export async function deletePersonel(id: string) {
     try {
+        await assertAdmin();
+
         await prisma.kullanici.delete({ where: { id } });
         revalidatePath(PATH);
         return { success: true };
@@ -62,6 +79,18 @@ export async function deletePersonel(id: string) {
 
 export async function araciBirak(personelId: string) {
     try {
+        // Sadece admin veya ilgili kullanıcının kendisi bu işlemi yapabilsin
+        const session = await auth();
+        const currentUser = session?.user as any | undefined;
+        if (!currentUser) {
+            return { success: false, error: "Oturum bulunamadı." };
+        }
+        const isSelf = currentUser.id === personelId;
+        const admin = await isAdmin();
+        if (!admin && !isSelf) {
+            return { success: false, error: "Bu işlem için yetkiniz yok." };
+        }
+
         // 1. Personelin üzerindeki aracı bul
         const arac = await prisma.arac.findUnique({
             where: { kullaniciId: personelId }

@@ -3,8 +3,16 @@
 // @/lib/prisma yerine göreceli yolu kullanarak hatayı bitiriyoruz
 import prisma from "../lib/prisma"
 import { revalidatePath } from "next/cache"
+import { auth } from "@/auth"
+import { getCurrentSirketId } from "@/lib/auth-utils"
 
 export async function aracEkle(formData: FormData) {
+  const session = await auth()
+  const user = session?.user as any | undefined
+  if (!user) {
+    throw new Error("Oturum bulunamadı.")
+  }
+
   const plaka = formData.get("plaka") as string
   const marka = formData.get("marka") as string
   const model = formData.get("model") as string
@@ -12,6 +20,8 @@ export async function aracEkle(formData: FormData) {
   const bulunduguIl = formData.get("bulunduguIl") as string
 
   try {
+    const sirketId = await getCurrentSirketId()
+
     await prisma.arac.create({
       data: {
         plaka,
@@ -19,7 +29,8 @@ export async function aracEkle(formData: FormData) {
         model,
         yil,
         bulunduguIl: bulunduguIl as any,
-        durum: "AKTIF"
+        durum: "AKTIF",
+        sirketId: sirketId || null
       }
     })
 

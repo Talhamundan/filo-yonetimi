@@ -1,23 +1,44 @@
 import React from "react"
-import Sidebar from "../../components/layout/Sidebar"
-import { Toaster } from "sonner"
+import { prisma } from "@/lib/prisma"
+import { canAccessAllCompanies, getCurrentUserRole } from "@/lib/auth-utils"
+import DashboardShell from "@/components/layout/DashboardShell"
 
-export default function DashboardLayout({
+export default async function DashboardLayout({
     children,
 }: {
     children: React.ReactNode
 }) {
+    const scopeOptions = await getScopeOptions();
+
     return (
-        <div className="flex min-h-screen bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
-            {/* Global Sidebar Persistent Across all /dashboard routes */}
-            <Sidebar />
-
-            <Toaster position="top-right" richColors />
-
-            {/* Main Content Area */}
-            <main className="flex-1 min-w-0 max-w-[1600px] mx-auto w-full">
-                {children}
-            </main>
-        </div>
+        <DashboardShell scopeOptions={scopeOptions}>
+            {children}
+        </DashboardShell>
     )
+}
+
+async function getScopeOptions() {
+    const [hasGlobalCompanyAccess, currentUserRole] = await Promise.all([
+        canAccessAllCompanies(),
+        getCurrentUserRole(),
+    ]);
+
+    if (!hasGlobalCompanyAccess) {
+        return {
+            canAccessAllCompanies: false,
+            isAdmin: currentUserRole === "ADMIN",
+            sirketler: [],
+        };
+    }
+
+    const sirketler = await prisma.sirket.findMany({
+        select: { id: true, ad: true },
+        orderBy: { ad: "asc" },
+    });
+
+    return {
+        canAccessAllCompanies: true,
+        isAdmin: currentUserRole === "ADMIN",
+        sirketler,
+    };
 }

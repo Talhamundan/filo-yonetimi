@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { CreditCard } from "lucide-react"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type HgsRow = {
     id: string;
@@ -11,26 +12,24 @@ export type HgsRow = {
     etiketNo: string | null;
     tutar: number;
     km: number | null;
-    arac: { id: string; plaka: string; marka: string; model: string };
+    arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
 }
 
 const formatDate = (date: string | Date | null | undefined) =>
     date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
 
-export const columns: ColumnDef<HgsRow>[] = [
+export const getColumns = (showCompanyInfo = false): ColumnDef<HgsRow>[] => [
     {
         accessorKey: "arac_plaka",
         header: "Araç",
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => (
-            <div className="flex flex-col">
-                <span className="font-mono font-bold text-slate-900 border border-slate-200 bg-slate-50 px-2.5 py-1 rounded-md inline-block shadow-sm tracking-wide text-xs w-max">
-                    {row.original.arac.plaka}
-                </span>
-                <span className="text-[11px] text-slate-500 mt-1">
-                    {row.original.arac.marka} {row.original.arac.model}
-                </span>
-            </div>
+            <VehicleIdentityCell
+                plaka={row.original.arac.plaka}
+                subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
+                companyName={row.original.arac.sirket?.ad}
+                showCompanyInfo={showCompanyInfo}
+            />
         ),
     },
     {

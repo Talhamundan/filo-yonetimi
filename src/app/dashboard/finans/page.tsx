@@ -1,21 +1,23 @@
 import { prisma } from "../../../lib/prisma";
 import FinansClient from "./FinansClient";
 import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function FinansPage() {
-    const yakitFilter = await getModelFilter('yakit');
-    const masrafFilter = await getModelFilter('masraf');
-    const aracFilter = await getModelFilter('arac');
+export default async function FinansPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const yakitFilter = await getModelFilter('yakit', selectedSirketId);
+    const masrafFilter = await getModelFilter('masraf', selectedSirketId);
+    const aracFilter = await getModelFilter('arac', selectedSirketId);
 
     const [yakitlar, masraflar] = await Promise.all([
         (prisma as any).yakit.findMany({
             where: yakitFilter as any,
-            include: { arac: true },
+            include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
             orderBy: { tarih: 'desc' }
         }),
         (prisma as any).masraf.findMany({
             where: masrafFilter as any,
-            include: { arac: true },
+            include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
             orderBy: { tarih: 'desc' }
         })
     ]);
@@ -39,7 +41,7 @@ export default async function FinansPage() {
     // Enriching yakitGroup with Arac data and calculations
     const araclar = await (prisma as any).arac.findMany({
         where: { id: { in: baseYakitGroup.map((g: any) => g.aracId) }, ...(aracFilter as any) },
-        select: { id: true, plaka: true }
+        select: { id: true, plaka: true, sirket: { select: { ad: true } } }
     });
 
     const metricsData = baseYakitGroup.map((group: any) => {
@@ -61,6 +63,7 @@ export default async function FinansPage() {
         return {
             aracId: group.aracId,
             plaka: arac?.plaka || 'Bilinmiyor',
+            sirketAd: arac?.sirket?.ad || null,
             toplamTutar,
             toplamLitre,
             tuketim100Km,
@@ -74,6 +77,7 @@ export default async function FinansPage() {
             tarih: y.tarih,
             tur: 'Yakıt Alımı',
             aracPlaka: y.arac?.plaka || "-",
+            aracSirket: y.arac?.sirket?.ad || null,
             detay: `${y.litre} L (${y.km.toLocaleString('tr-TR')} km) ${y.istasyon ? `- ${y.istasyon}` : ''}`,
             tutar: y.tutar
         })),
@@ -82,6 +86,7 @@ export default async function FinansPage() {
             tarih: m.tarih,
             tur: m.tur,
             aracPlaka: m.arac?.plaka || "-",
+            aracSirket: m.arac?.sirket?.ad || null,
             detay: 'Muhtelif Gider',
             tutar: m.tutar
         }))

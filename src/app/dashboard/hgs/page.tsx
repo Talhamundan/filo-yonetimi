@@ -1,26 +1,24 @@
 import { prisma } from "@/lib/prisma";
 import HgsClient from "./client";
 import { HgsRow } from "./columns";
-import { getModelFilter, getCurrentSirketId } from "@/lib/auth-utils";
+import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function HgsPage() {
-    const [filter, sirketId] = await Promise.all([
-        getModelFilter('hgs'),
-        getCurrentSirketId()
+export default async function HgsPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [filter, aracFilter] = await Promise.all([
+        getModelFilter('hgs', selectedSirketId),
+        getModelFilter('arac', selectedSirketId),
     ]);
-
-    const queryFilter = filter && Object.keys(filter).length > 0
-        ? { ...(filter as any) }
-        : sirketId ? { sirketId } : {};
 
     const [hgsKayitlari, araclar] = await Promise.all([
         (prisma as any).hgsYukleme.findMany({
-            where: queryFilter,
+            where: filter as any,
             orderBy: { tarih: 'desc' },
-            include: { arac: true }
+            include: { arac: { include: { sirket: { select: { ad: true } } } } }
         }),
         (prisma as any).arac.findMany({
-            where: sirketId ? { sirketId } : {},
+            where: aracFilter as any,
             select: { id: true, plaka: true },
             orderBy: { plaka: 'asc' }
         })

@@ -1,17 +1,23 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import CezalarClient from "./Client";
-import { getSirketFilter } from "@/lib/auth-utils";
+import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function CezalarPage() {
-    const sirketFilter = await getSirketFilter();
+export default async function CezalarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [cezaFilter, aracFilter, personelFilter] = await Promise.all([
+        getModelFilter('ceza', selectedSirketId),
+        getModelFilter('arac', selectedSirketId),
+        getModelFilter('kullanici', selectedSirketId),
+    ]);
 
     const [cezalar, topSoforler, araclar, soforler] = await Promise.all([
         (prisma as any).ceza.findMany({
-            where: sirketFilter as any,
+            where: cezaFilter as any,
             orderBy: { cezaTarihi: 'desc' },
             include: {
-                arac: { select: { plaka: true, marka: true } },
+                arac: { select: { plaka: true, marka: true, sirket: { select: { ad: true } } } },
                 kullanici: { select: { ad: true, soyad: true } }
             }
         }),
@@ -19,16 +25,16 @@ export default async function CezalarPage() {
             by: ['kullaniciId'],
             _sum: { tutar: true },
             _count: { id: true },
-            where: { ...(sirketFilter as any), kullaniciId: { not: null } },
+            where: { ...(cezaFilter as any), kullaniciId: { not: null } },
             orderBy: { _count: { id: 'desc' } },
             take: 5
         }),
         (prisma as any).arac.findMany({ 
-            where: sirketFilter as any,
+            where: aracFilter as any,
             select: { id: true, plaka: true } 
         }),
         (prisma as any).kullanici.findMany({
-            where: { ...(sirketFilter as any), rol: 'SOFOR' },
+            where: { ...(personelFilter as any), rol: 'SOFOR' },
             select: { id: true, ad: true, soyad: true }
         })
     ]);
@@ -37,11 +43,14 @@ export default async function CezalarPage() {
         id: c.id,
         tarih: c.cezaTarihi.toISOString(),
         arac: c.arac?.plaka || "-",
+        aracMarka: c.arac?.marka || "",
+        sirketAd: c.arac?.sirket?.ad || null,
         sofor: c.kullanici ? `${c.kullanici.ad} ${c.kullanici.soyad}` : "-",
         tutar: c.tutar,
         km: c.km,
         aciklama: c.aciklama || "-",
-        odendiMi: c.odendiMi
+        odendiMi: c.odendiMi,
+        sonOdemeTarihi: c.sonOdemeTarihi?.toISOString() || null
     }));
 
     const top5Stats = [];

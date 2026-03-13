@@ -6,9 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Wrench, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, BakimRow } from "./columns";
+import { getColumns, BakimRow } from "./columns";
 import { addBakim, updateBakim, deleteBakim } from "./actions";
 import { useRouter } from "next/navigation";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: "",
@@ -22,6 +23,7 @@ const EMPTY = {
 
 export default function BakimlarClient({ initialBakimlar, activeAraclar }: { initialBakimlar: BakimRow[], activeAraclar: { id: string; plaka: string; }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
+    const { canAccessAllCompanies } = useDashboardScope();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<BakimRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -107,7 +109,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

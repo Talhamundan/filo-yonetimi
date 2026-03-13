@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "../../../components/ui/badge"
 import { differenceInDays } from "date-fns"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type AracRow = {
     id: string;
@@ -20,9 +21,28 @@ export type AracRow = {
     sirket?: { ad: string } | null;
     muayene?: { gecerlilikTarihi: Date }[];
     kasko?: { bitisTarihi: Date }[];
+    trafikSigortasi?: { bitisTarihi: Date }[];
 }
 
-export const columns: ColumnDef<AracRow>[] = [
+function renderGecerlilikDurumu(tarih: Date) {
+    const kalan = differenceInDays(new Date(tarih), new Date());
+
+    if (kalan < 0) {
+        return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">Gecikti</Badge>;
+    }
+
+    if (kalan <= 15) {
+        return <Badge className="bg-red-500 text-white hover:bg-red-600 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün (Kritik)</Badge>;
+    }
+
+    if (kalan <= 30) {
+        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün</Badge>;
+    }
+
+    return <span className="text-emerald-600 font-semibold text-xs">{kalan} Gün</span>;
+}
+
+export const getColumns = (showCompanyInfo = false): ColumnDef<AracRow>[] => [
     {
         accessorKey: "durum",
         header: "Durum",
@@ -49,7 +69,14 @@ export const columns: ColumnDef<AracRow>[] = [
         accessorKey: "plaka",
         header: "Plaka",
         cell: ({ row }) => {
-            return <div className="font-mono font-bold text-slate-900 border border-slate-200 bg-slate-50 px-2.5 py-1 rounded-md inline-block shadow-sm tracking-wide">{row.getValue("plaka")}</div>
+            return (
+                <VehicleIdentityCell
+                    plaka={row.original.plaka}
+                    subtitle={`${row.original.marka} ${row.original.model}`}
+                    companyName={row.original.sirket?.ad}
+                    showCompanyInfo={showCompanyInfo}
+                />
+            )
         },
     },
     {
@@ -69,7 +96,7 @@ export const columns: ColumnDef<AracRow>[] = [
                 <div className="flex flex-col">
                     <span className="font-medium text-slate-900">{row.original.marka} {row.original.model}</span>
                     <span className="text-[11px] text-slate-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                        {row.original.sirket?.ad ? `${row.original.sirket.ad} • ` : ''}{row.original.yil} • {row.original.bulunduguIl}
+                        {row.original.yil} • {row.original.bulunduguIl}
                     </span>
                 </div>
             )
@@ -104,18 +131,39 @@ export const columns: ColumnDef<AracRow>[] = [
         },
     },
     {
+        accessorKey: "muayene",
+        header: "Muayene",
+        cell: ({ row }) => {
+            if (row.original.kategori === "IS_MAKINESI") {
+                return <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-0 shadow-none px-2.5 py-0.5 text-[10px]">Muaf</Badge>;
+            }
+
+            const muayeneList = row.original.muayene;
+            if (!muayeneList || muayeneList.length === 0) {
+                return <span className="text-slate-400 text-xs italic">Yok</span>;
+            }
+
+            return renderGecerlilikDurumu(muayeneList[0].gecerlilikTarihi);
+        },
+    },
+    {
         accessorKey: "kasko",
         header: "Kasko",
         cell: ({ row }) => {
             const kaskoList = row.original.kasko;
             if (!kaskoList || kaskoList.length === 0) return <span className="text-slate-400 text-xs italic">Yok</span>;
 
-            const kalan = differenceInDays(new Date(kaskoList[0].bitisTarihi), new Date());
+            return renderGecerlilikDurumu(kaskoList[0].bitisTarihi);
+        },
+    },
+    {
+        accessorKey: "trafikSigortasi",
+        header: "Trafik Sigortası",
+        cell: ({ row }) => {
+            const sigortaList = row.original.trafikSigortasi;
+            if (!sigortaList || sigortaList.length === 0) return <span className="text-slate-400 text-xs italic">Yok</span>;
 
-            if (kalan < 0) return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">Gecikti</Badge>;
-            if (kalan <= 15) return <Badge className="bg-red-500 text-white hover:bg-red-600 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün (Kritik)</Badge>;
-            if (kalan <= 30) return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün</Badge>;
-            return <span className="text-emerald-600 font-semibold text-xs">{kalan} Gün</span>;
+            return renderGecerlilikDurumu(sigortaList[0].bitisTarihi);
         },
     },
 ]

@@ -1,6 +1,7 @@
 "use client"
 
 import React, { useMemo } from "react";
+import useSWR from "swr";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import {
     Car, Wallet, ShieldAlert, Activity, TrendingUp, Fuel
@@ -9,8 +10,10 @@ import {
     AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
     PieChart, Pie, Cell
 } from 'recharts';
-import { useRouter } from "next/navigation";
-import { differenceInDays } from "date-fns";
+import { useRouter, useSearchParams } from "next/navigation";
+import { differenceInCalendarDays } from "date-fns";
+import { fetcher } from "@/lib/fetcher";
+import type { DashboardData } from "@/lib/dashboard-data";
 
 const STATUS_COLORS = {
     AKTIF: '#10B981',
@@ -22,33 +25,26 @@ const STATUS_COLORS = {
 
 
 
-interface DashboardMetrics {
-    aylikToplamGider: number;
-    kritikUyariSayisi: number;
-    verimlilikOrani: number;
-    ortalamaYakit: number;
-    aktifArac: number;
-    toplamArac: number;
-    servisteArac: number;
-}
-
-interface AlertItem {
-    id: string;
-    plaka: string;
-    message: string;
-    tarih: string;
-}
-
 interface DashboardClientProps {
-    metrics: DashboardMetrics;
-    durumData: { name: string, value: number }[];
-    alerts: AlertItem[];
-    sixMonthsTrend: { name: string, gider: number }[];
-    top5Expenses: { plaka: string, tutar: number }[];
+    initialData: DashboardData;
 }
 
-export default function DashboardClient({ metrics, durumData, alerts, sixMonthsTrend, top5Expenses }: DashboardClientProps) {
+export default function DashboardClient({ initialData }: DashboardClientProps) {
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const selectedSirketId = searchParams.get("sirket");
+    const dashboardApiKey = selectedSirketId
+        ? `/api/dashboard?sirket=${encodeURIComponent(selectedSirketId)}`
+        : "/api/dashboard";
+
+    const { data } = useSWR<DashboardData>(dashboardApiKey, fetcher, {
+        refreshInterval: 30000,
+        revalidateOnFocus: true,
+        shouldRetryOnError: true,
+        fallbackData: initialData,
+    });
+
+    const { metrics, durumData, alerts, sixMonthsTrend, top5Expenses } = data!;
 
     const formattedDurumData = useMemo(() => {
         return durumData.map(item => {
@@ -68,15 +64,35 @@ export default function DashboardClient({ metrics, durumData, alerts, sixMonthsT
     }, [durumData]);
 
     const calculateDays = (dateStr: string) => {
-        return differenceInDays(new Date(dateStr), new Date());
-    }
+        return differenceInCalendarDays(new Date(dateStr), new Date());
+    };
 
     return (
         <div className="p-6 md:p-8 xl:p-10">
-            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Operasyon Özeti</h2>
-                    <p className="text-slate-500 text-sm mt-1">Filo karlılığı ve kritik uyarı sistemi anlık verileri.</p>
+            <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                <div className="space-y-2">
+                    <div>
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900">Operasyon Özeti</h2>
+                        <p className="text-slate-500 text-sm mt-1">
+                            Filo kârlılığı, araç durumu ve kritik tarihler için canlı kontrol paneli.
+                        </p>
+                    </div>
+                    <div className="inline-flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-3 py-1">
+                        <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-slate-400" />
+                            Toplam Araç: <span className="font-semibold text-slate-900">{metrics.toplamArac}</span>
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                            Aktif: <span className="font-semibold text-slate-900">{metrics.aktifArac}</span>
+                        </span>
+                        <span className="w-1 h-1 rounded-full bg-slate-300" />
+                        <span className="inline-flex items-center gap-1">
+                            <span className="w-2 h-2 rounded-full bg-amber-500" />
+                            Serviste: <span className="font-semibold text-slate-900">{metrics.servisteArac}</span>
+                        </span>
+                    </div>
                 </div>
                 <div className="flex items-center gap-3">
                     <button onClick={() => router.push('/dashboard/araclar')} className="bg-white border border-[#E2E8F0] hover:bg-[#F8FAFC] text-slate-700 px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
@@ -99,7 +115,7 @@ export default function DashboardClient({ metrics, durumData, alerts, sixMonthsT
                                 <div key={alert.id} className="bg-white px-4 py-3 rounded-lg border border-amber-100 shadow-sm flex flex-col justify-between">
                                     <span className="font-mono text-sm font-bold text-slate-800 mb-1">{alert.plaka}</span>
                                     <span className={`text-xs font-semibold ${days <= 7 ? 'text-rose-600' : 'text-amber-600'}`}>
-                                        {alert.message} ({days} gün)
+                                        {alert.message} ({days < 0 ? `${Math.abs(days)} gün geçti` : `${days} gün`})
                                     </span>
                                 </div>
                             )
@@ -133,7 +149,7 @@ export default function DashboardClient({ metrics, durumData, alerts, sixMonthsT
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900">{metrics.kritikUyariSayisi} <span className="text-sm text-slate-400 font-medium">Risk</span></h3>
                         <p className="text-xs text-amber-600 font-medium mt-2">
-                            &lt; 15 gün kalan evraklar
+                            Geciken ve 15 gün içindeki evraklar
                         </p>
                     </CardContent>
                 </Card>

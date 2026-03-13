@@ -2,23 +2,34 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { AlertTriangle, User } from "lucide-react"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type CezaRow = {
     id: string;
     tarih: string;
     arac: string;
+    aracMarka?: string;
+    sirketAd?: string | null;
     sofor: string;
     tutar: number;
     km: number | null;
     aciklama: string;
     odendiMi: boolean;
+    sonOdemeTarihi?: string | null;
 }
 
-export const columns: ColumnDef<CezaRow>[] = [
+export const getColumns = (showCompanyInfo = false): ColumnDef<CezaRow>[] => [
     {
         accessorKey: "arac",
         header: "Araç Plaka",
-        cell: ({ row }) => <span className="font-semibold text-slate-900">{row.getValue("arac")}</span>
+        cell: ({ row }) => (
+            <VehicleIdentityCell
+                plaka={row.original.arac}
+                subtitle={row.original.aracMarka}
+                companyName={row.original.sirketAd}
+                showCompanyInfo={showCompanyInfo}
+            />
+        )
     },
     {
         accessorKey: "sofor",
@@ -32,8 +43,16 @@ export const columns: ColumnDef<CezaRow>[] = [
     },
     {
         accessorKey: "tarih",
-        header: "Tarih",
+        header: "Ceza Tarihi",
         cell: ({ row }) => new Date(row.getValue("tarih")).toLocaleDateString("tr-TR")
+    },
+    {
+        accessorKey: "sonOdemeTarihi",
+        header: "Son Ödeme",
+        cell: ({ row }) => {
+            const date = row.original.sonOdemeTarihi;
+            return date ? new Date(date).toLocaleDateString("tr-TR") : '-';
+        }
     },
     {
         accessorKey: "tutar",

@@ -2,9 +2,11 @@ import React from "react";
 import { prisma } from "../../../lib/prisma";
 import SirketlerClient from "./Client";
 import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function SirketlerPage() {
-    const filter = await getModelFilter('sirket');
+export default async function SirketlerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const filter = await getModelFilter('sirket', selectedSirketId);
 
     const sirketler = await (prisma as any).sirket.findMany({
         where: filter as any,

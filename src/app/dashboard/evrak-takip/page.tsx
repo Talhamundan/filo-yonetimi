@@ -2,16 +2,20 @@ import { prisma } from "../../../lib/prisma";
 import EvrakTakipClient from "./EvrakTakipClient";
 import { differenceInDays } from "date-fns";
 import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function EvrakTakipPage() {
-    const filter = await getModelFilter('arac');
+export default async function EvrakTakipPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const filter = await getModelFilter('arac', selectedSirketId);
 
     const araclar = await (prisma as any).arac.findMany({
         where: filter as any,
         orderBy: { plaka: 'asc' },
         include: {
+            sirket: { select: { ad: true } },
             muayene: { orderBy: { muayeneTarihi: 'desc' }, take: 1 },
-            kasko: { orderBy: { bitisTarihi: 'desc' }, take: 1 }
+            kasko: { orderBy: { bitisTarihi: 'desc' }, take: 1 },
+            trafikSigortasi: { orderBy: { bitisTarihi: 'desc' }, take: 1 }
         }
     });
 
@@ -29,6 +33,7 @@ export default async function EvrakTakipPage() {
                 aracId: arac.id,
                 plaka: arac.plaka,
                 marka: arac.marka,
+                sirketAd: arac.sirket?.ad || null,
                 tur: 'TÜVTÜRK Muayene',
                 gecerlilikTarihi: m.gecerlilikTarihi,
                 kalanGun: kalanGun,
@@ -44,8 +49,25 @@ export default async function EvrakTakipPage() {
                 aracId: arac.id,
                 plaka: arac.plaka,
                 marka: arac.marka,
-                tur: 'Kasko & Trafik',
+                sirketAd: arac.sirket?.ad || null,
+                tur: 'Kasko Poliçesi',
                 gecerlilikTarihi: k.bitisTarihi,
+                kalanGun: kalanGun,
+                durum: kalanGun < 0 ? 'GECIKTI' : kalanGun <= 15 ? 'KRITIK' : kalanGun <= 30 ? 'YAKLASTI' : 'GECERLI'
+            });
+        }
+
+        if (arac.trafikSigortasi && arac.trafikSigortasi.length > 0) {
+            const s = arac.trafikSigortasi[0];
+            const kalanGun = differenceInDays(new Date(s.bitisTarihi), bugun);
+            evrakListesi.push({
+                id: `ts-${s.id}`,
+                aracId: arac.id,
+                plaka: arac.plaka,
+                marka: arac.marka,
+                sirketAd: arac.sirket?.ad || null,
+                tur: 'Trafik Poliçesi',
+                gecerlilikTarihi: s.bitisTarihi,
                 kalanGun: kalanGun,
                 durum: kalanGun < 0 ? 'GECIKTI' : kalanGun <= 15 ? 'KRITIK' : kalanGun <= 30 ? 'YAKLASTI' : 'GECERLI'
             });

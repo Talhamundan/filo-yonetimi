@@ -2,7 +2,7 @@
 
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
-import { getSirketFilter } from "@/lib/auth-utils"
+import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope"
 
 export async function createHgs(data: {
     aracId: string;
@@ -12,30 +12,29 @@ export async function createHgs(data: {
     km?: number;
 }) {
     try {
-        const sirketFilter = await getSirketFilter();
-        const sirketId = (sirketFilter as any)?.sirketId || null;
+        await assertAuthenticatedUser();
+        const arac = await getScopedAracOrThrow(data.aracId, {
+            id: true,
+            sirketId: true,
+            guncelKm: true,
+        });
 
         await (prisma as any).hgsYukleme.create({
             data: {
-                aracId: data.aracId || null,
+                aracId: arac.id,
                 tarih: new Date(data.tarih),
                 etiketNo: data.etiketNo || null,
                 tutar: Number(data.tutar),
                 km: data.km ? Number(data.km) : null,
-                sirketId
+                sirketId: arac.sirketId
             }
         });
 
         // Araç KM güncelleme mantığı
         if (data.km) {
-            const arac = await (prisma as any).arac.findUnique({
-                where: { id: data.aracId },
-                select: { guncelKm: true }
-            });
-
-            if (arac && Number(data.km) > arac.guncelKm) {
+            if (Number(data.km) > arac.guncelKm) {
                 await (prisma as any).arac.update({
-                    where: { id: data.aracId },
+                    where: { id: arac.id },
                     data: { guncelKm: Number(data.km) }
                 });
             }
@@ -53,17 +52,43 @@ export async function updateHgs(id: string, data: {
     tarih: string;
     etiketNo: string;
     tutar: number;
+    km?: number;
 }) {
     try {
+        await assertAuthenticatedUser();
+        const mevcutKayit = await getScopedRecordOrThrow({
+            prismaModel: "hgsYukleme",
+            filterModel: "hgs",
+            id,
+            select: { aracId: true, sirketId: true },
+            errorMessage: "HGS kaydi bulunamadi veya yetkiniz yok.",
+        });
+        const arac = data.aracId
+            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true, guncelKm: true })
+            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true, guncelKm: true });
+
         await (prisma as any).hgsYukleme.update({
             where: { id },
             data: {
-                aracId: data.aracId || null,
+                aracId: arac.id,
                 tarih: new Date(data.tarih),
                 etiketNo: data.etiketNo || null,
                 tutar: Number(data.tutar),
+                km: data.km ? Number(data.km) : null,
+                sirketId: arac.sirketId || mevcutKayit.sirketId,
             }
         });
+
+        // Araç KM güncelleme mantığı (eğer güncellenen KM mevcut olandan büyükse)
+        if (data.km && data.aracId) {
+            if (Number(data.km) > arac.guncelKm) {
+                await (prisma as any).arac.update({
+                    where: { id: arac.id },
+                    data: { guncelKm: Number(data.km) }
+                });
+            }
+        }
+
         revalidatePath("/dashboard/hgs");
         return { success: true };
     } catch (e: any) {
@@ -73,6 +98,14 @@ export async function updateHgs(id: string, data: {
 
 export async function deleteHgs(id: string) {
     try {
+        await assertAuthenticatedUser();
+        await getScopedRecordOrThrow({
+            prismaModel: "hgsYukleme",
+            filterModel: "hgs",
+            id,
+            errorMessage: "HGS kaydi bulunamadi veya yetkiniz yok.",
+        });
+
         await (prisma as any).hgsYukleme.delete({ where: { id } });
         revalidatePath("/dashboard/hgs");
         return { success: true };

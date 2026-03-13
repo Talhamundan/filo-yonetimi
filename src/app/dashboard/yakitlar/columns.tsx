@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { Fuel } from "lucide-react"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type YakitRow = {
     id: string;
@@ -18,13 +19,14 @@ export type YakitRow = {
         plaka: string; 
         marka: string; 
         model: string;
+        sirket?: { ad: string } | null;
         kullanici?: { id: string; ad: string; soyad: string } | null;
     };
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy HH:mm", { locale: tr }) : '-';
 
-export const columns: ColumnDef<YakitRow>[] = [
+export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => [
     {
         accessorKey: "arac_plaka",
         header: "Araç",
@@ -33,11 +35,13 @@ export const columns: ColumnDef<YakitRow>[] = [
             const { arac } = row.original;
             const sofor = arac.kullanici ? `${arac.kullanici.ad} ${arac.kullanici.soyad}` : null;
             return (
-                <div className="flex flex-col">
-                    <span className="font-mono font-bold text-slate-900 border border-slate-200 bg-slate-50 px-2.5 py-1 rounded-md inline-block shadow-sm tracking-wide text-xs w-max">{arac.plaka}</span>
-                    <span className="text-[11px] text-slate-500 mt-1">{arac.marka} {arac.model}</span>
-                    {sofor && <span className="text-[11px] text-indigo-500 font-semibold mt-0.5">👤 {sofor}</span>}
-                </div>
+                <VehicleIdentityCell
+                    plaka={arac.plaka}
+                    subtitle={`${arac.marka} ${arac.model}`}
+                    companyName={arac.sirket?.ad}
+                    showCompanyInfo={showCompanyInfo}
+                    extra={sofor ? <span className="text-[11px] text-indigo-500 font-semibold mt-0.5">👤 {sofor}</span> : null}
+                />
             )
         },
     },

@@ -1,11 +1,15 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import PersonelClient from "./Client";
-import { getModelFilter, getCurrentSirketId } from "@/lib/auth-utils";
+import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function PersonelPage() {
-    const filter = await getModelFilter('personel');
-    const sirketId = await getCurrentSirketId();
+export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [filter, sirketListFilter] = await Promise.all([
+        getModelFilter('personel', selectedSirketId),
+        getSirketListFilter()
+    ]);
 
     const [personeller, sirketler] = await Promise.all([
         (prisma as any).kullanici.findMany({
@@ -19,7 +23,7 @@ export default async function PersonelPage() {
             }
         }),
         (prisma as any).sirket.findMany({ 
-            where: sirketId ? { id: sirketId } : {},
+            where: sirketListFilter as any,
             select: { id: true, ad: true },
             orderBy: { ad: 'asc' }
         })

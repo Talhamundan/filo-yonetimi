@@ -1,32 +1,38 @@
 import { prisma } from "../../../../lib/prisma";
 import PersonelDetailClient from "./PersonelDetailClient";
 import { notFound } from "next/navigation";
-import { getSirketFilter } from "@/lib/auth-utils";
+import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function PersonelDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function PersonelDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
-    const sirketFilter = await getSirketFilter();
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [personelFilter, sirketListFilter] = await Promise.all([
+        getModelFilter("personel", selectedSirketId),
+        getSirketListFilter(),
+    ]);
 
     const personel = await (prisma as any).kullanici.findFirst({
         where: {
             id: params.id,
-            ...sirketFilter as any
+            ...(personelFilter as any)
         },
         include: {
             sirket: true,
             arac: {
                 include: {
+                    sirket: true,
                     yakitlar: { orderBy: { tarih: 'desc' }, take: 20 },
                     bakimlar: { orderBy: { bakimTarihi: 'desc' }, take: 10 },
                     masraflar: { orderBy: { tarih: 'desc' }, take: 10 }
                 }
             },
             zimmetler: {
-                include: { arac: true },
+                include: { arac: { include: { sirket: true } } },
                 orderBy: { baslangic: 'desc' }
             },
             cezalar: {
-                include: { arac: true },
+                include: { arac: { include: { sirket: true } } },
                 orderBy: { cezaTarihi: 'desc' }
             }
         }
@@ -37,7 +43,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
     }
 
     const sirketler = await (prisma as any).sirket.findMany({
-        where: sirketFilter && (sirketFilter as any).sirketId ? { id: (sirketFilter as any).sirketId } : {},
+        where: sirketListFilter as any,
         select: { id: true, ad: true },
         orderBy: { ad: 'asc' }
     });

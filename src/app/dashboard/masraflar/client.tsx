@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Receipt, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, MasrafRow } from "./columns";
+import { getColumns, MasrafRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createMasraf, updateMasraf, deleteMasraf } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const TUR_LIST = [
     'BAKIM_ONARIM',
@@ -70,7 +71,8 @@ const FormFields = ({ formData, setFormData, araclar, TUR_LIST }: { formData: an
 
 export default function MasraflarClient({ initialMasraflar, araclar }: { initialMasraflar: MasrafRow[], araclar: { id: string, plaka: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<MasrafRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -132,7 +134,7 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

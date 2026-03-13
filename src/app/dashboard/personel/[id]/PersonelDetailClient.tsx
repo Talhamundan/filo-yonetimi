@@ -17,10 +17,12 @@ import { FormFields } from "../PersonelForm";
 import { updatePersonel, deletePersonel, araciBirak } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 export default function PersonelDetailClient({ initialPersonel: p, sirketler }: { initialPersonel: any, sirketler: any[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [editOpen, setEditOpen] = useState(false);
     const [formData, setFormData] = useState({
         ad: p.ad,
@@ -88,7 +90,6 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
         switch (rol) {
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
             case 'YONETICI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yönetici</Badge>;
-            case 'YETKİLİ': return <Badge className="bg-purple-100 text-purple-800 border-0">Yetkili</Badge>;
             case 'MUDUR': return <Badge className="bg-blue-100 text-blue-800 border-0">Müdür</Badge>;
             case 'MUHASEBECI': return <Badge className="bg-emerald-100 text-emerald-800 border-0">Muhasebeci</Badge>;
             case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">Şoför</Badge>;
@@ -170,6 +171,9 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                 <div className="flex flex-col">
                                     <span className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors uppercase">{p.arac.plaka}</span>
                                     <span className="text-xs font-semibold text-slate-500 mt-0.5">{p.arac.marka} {p.arac.model}</span>
+                                    {canAccessAllCompanies && p.arac.sirket?.ad ? (
+                                        <span className="text-xs font-semibold text-indigo-600 mt-0.5">{p.arac.sirket.ad}</span>
+                                    ) : null}
                                 </div>
                             </div>
                         ) : (
@@ -264,7 +268,12 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                                     className="font-bold text-indigo-600 cursor-pointer uppercase"
                                                     onClick={() => router.push(`/dashboard/araclar/${z.arac.id}`)}
                                                 >
-                                                    {z.arac.plaka}
+                                                    <div className="flex flex-col">
+                                                        <span>{z.arac.plaka}</span>
+                                                        {canAccessAllCompanies && z.arac.sirket?.ad ? (
+                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">{z.arac.sirket.ad}</span>
+                                                        ) : null}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{formatDate(z.baslangic)}</TableCell>
                                                 <TableCell>{z.bitis ? formatDate(z.bitis) : <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Aktif</Badge>}</TableCell>
@@ -301,7 +310,14 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                         p.cezalar.map((c: any) => (
                                             <TableRow key={c.id}>
                                                 <TableCell>{formatDate(c.cezaTarihi)}</TableCell>
-                                                <TableCell className="font-mono font-bold">{c.arac?.plaka}</TableCell>
+                                                <TableCell className="font-mono font-bold">
+                                                    <div className="flex flex-col">
+                                                        <span>{c.arac?.plaka}</span>
+                                                        {canAccessAllCompanies && c.arac?.sirket?.ad ? (
+                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">{c.arac.sirket.ad}</span>
+                                                        ) : null}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-slate-600">{c.aciklama || '-'}</TableCell>
                                                 <TableCell className="text-right font-bold text-rose-600">₺{c.tutar.toLocaleString()}</TableCell>
                                             </TableRow>

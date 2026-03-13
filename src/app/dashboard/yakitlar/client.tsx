@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Fuel, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, YakitRow } from "./columns";
+import { getColumns, YakitRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createYakit, updateYakit, deleteYakit } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: '',
@@ -86,7 +87,8 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
 
 export default function YakitlarClient({ initialYakitlar, araclar }: { initialYakitlar: YakitRow[], araclar: { id: string, plaka: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<YakitRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -175,7 +177,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

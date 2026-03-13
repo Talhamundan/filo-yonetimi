@@ -1,16 +1,15 @@
 import { prisma } from "../../../lib/prisma";
 import YakitlarClient from "./client";
 import { YakitRow } from "./columns";
-import { getSirketFilter, isSofor, getCurrentUserId } from "@/lib/auth-utils";
+import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function YakitlarPage() {
-    const sirketFilter = await getSirketFilter();
-    const isSfr = await isSofor();
-    const userId = await getCurrentUserId();
-
-    const queryFilter = isSfr 
-        ? { arac: { kullaniciId: userId } }
-        : sirketFilter;
+export default async function YakitlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [queryFilter, aracFilter] = await Promise.all([
+        getModelFilter('yakit', selectedSirketId),
+        getModelFilter('arac', selectedSirketId),
+    ]);
 
     const [yakitlar, araclar] = await Promise.all([
         (prisma as any).yakit.findMany({ 
@@ -19,13 +18,14 @@ export default async function YakitlarPage() {
             include: { 
                 arac: {
                     include: {
+                        sirket: { select: { ad: true } },
                         kullanici: { select: { id: true, ad: true, soyad: true } }
                     }
                 } 
             } 
         }),
         (prisma as any).arac.findMany({ 
-            where: sirketFilter as any,
+            where: aracFilter as any,
             select: { id: true, plaka: true }, 
             orderBy: { plaka: 'asc' } 
         })

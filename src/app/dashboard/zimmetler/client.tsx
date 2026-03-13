@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, ClipboardCheck, Trash2 } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, SoforZimmetRow } from "./columns";
+import { getColumns, SoforZimmetRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createZimmet, deleteZimmet } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: '',
@@ -29,7 +30,8 @@ export default function ZimmetlerClient({
     kullanicilar: { id: string, adSoyad: string }[]
 }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
@@ -73,7 +75,7 @@ export default function ZimmetlerClient({
     };
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

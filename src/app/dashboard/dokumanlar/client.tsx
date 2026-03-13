@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Upload, FolderOpen, Trash2, Download } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, DokumanRow } from "./columns";
+import { getColumns, DokumanRow } from "./columns";
 import { createDokuman, deleteDokuman } from "./actions";
 import { useRouter } from "next/navigation";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     ad: "",
@@ -26,7 +27,8 @@ export default function DokumanlarClient({
     araclar: { id: string, plaka: string }[] 
 }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
@@ -69,7 +71,7 @@ export default function DokumanlarClient({
     };
 
     const columnsWithActions = [
-        ...columns.filter(col => (col as any).accessorKey !== 'dosyaUrl'), // Remove original actions
+        ...getColumns(canAccessAllCompanies).filter(col => (col as any).accessorKey !== 'dosyaUrl'),
         {
             id: 'actions',
             header: () => <div className="text-right">İşlemler</div>,

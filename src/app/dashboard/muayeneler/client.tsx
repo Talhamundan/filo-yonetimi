@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, CheckCircle2, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, MuayeneRow } from "./columns";
+import { getColumns, MuayeneRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createMuayene, updateMuayene, deleteMuayene } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: '',
@@ -62,7 +63,8 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
 
 export default function MuayenelerClient({ initialMuayeneler, araclar }: { initialMuayeneler: MuayeneRow[], araclar: { id: string, plaka: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<MuayeneRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -125,7 +127,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, Dialog
 import { Plus, CreditCard, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, HgsRow } from "./columns";
+import { getColumns, HgsRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createHgs, updateHgs, deleteHgs } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: '',
@@ -62,6 +63,7 @@ export default function HgsClient({
 }) {
     const router = useRouter();
     const { confirmModal, openConfirm } = useConfirm();
+    const { canAccessAllCompanies } = useDashboardScope();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<HgsRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -169,7 +171,7 @@ export default function HgsClient({
                     </Dialog>
                 </div>
 
-                <DataTable columns={[actionsCol, ...columns]} data={initialHgs} />
+                <DataTable columns={[actionsCol, ...getColumns(canAccessAllCompanies)]} data={initialHgs} />
 
                 {/* Edit Dialog */}
                 <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

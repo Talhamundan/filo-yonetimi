@@ -3,9 +3,10 @@
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as xlsx from "xlsx";
-import { getCurrentSirketId } from "@/lib/auth-utils";
+import { getSirketFilter } from "@/lib/auth-utils";
+import { assertAuthenticatedUser, getScopedKullaniciOrThrow, resolveActionSirketId } from "@/lib/action-scope";
 
-const PATH = '/dashboard/araclar';
+const PATH = "/dashboard/araclar";
 
 export async function createArac(data: {
     plaka: string;
@@ -21,7 +22,19 @@ export async function createArac(data: {
     kategori?: any;
 }) {
     try {
-        const currentSirketId = await getCurrentSirketId();
+        await assertAuthenticatedUser();
+        const sirketId = await resolveActionSirketId(data.sirketId);
+
+        if (!sirketId) {
+            return { success: false, error: "Şirket bilgisi olmadan araç ekleyemezsiniz." };
+        }
+        const kullanici = data.kullaniciId
+            ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true })
+            : null;
+
+        if (kullanici && kullanici.sirketId !== sirketId) {
+            return { success: false, error: "Seçilen şoför araçla aynı şirkete ait değil." };
+        }
         
         const arac = await prisma.arac.create({
             data: {
@@ -31,8 +44,8 @@ export async function createArac(data: {
                 yil: Number(data.yil),
                 bulunduguIl: data.bulunduguIl as any,
                 guncelKm: Number(data.guncelKm),
-                sirketId: (currentSirketId || data.sirketId) || null,
-                kullaniciId: data.kullaniciId || null,
+                sirketId,
+                kullaniciId: kullanici?.id || null,
                 hgsNo: data.hgsNo || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 durum: 'AKTIF',
@@ -41,11 +54,11 @@ export async function createArac(data: {
         });
 
         // Zimmet kaydı oluştur
-        if (data.kullaniciId) {
+        if (kullanici) {
             await prisma.kullaniciZimmet.create({
                 data: {
                     aracId: arac.id,
-                    kullaniciId: data.kullaniciId,
+                    kullaniciId: kullanici.id,
                     baslangic: new Date(),
                     baslangicKm: Number(data.guncelKm) || 0
                 }
@@ -64,10 +77,24 @@ export async function createArac(data: {
 
 export async function updateArac(id: string, data: any) {
     try {
-        const oldArac = await prisma.arac.findUnique({ 
-            where: { id }, 
-            select: { kullaniciId: true, guncelKm: true } 
+        await assertAuthenticatedUser();
+        const sirketFilter = await getSirketFilter();
+
+        const oldArac = await prisma.arac.findFirst({
+            where: { id, ...(sirketFilter as any) },
+            select: { kullaniciId: true, guncelKm: true, sirketId: true }
         });
+
+        if (!oldArac) {
+            return { success: false, error: "Araç bulunamadı veya yetkiniz yok." };
+        }
+        const kullanici = data.kullaniciId
+            ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true })
+            : null;
+
+        if (kullanici && kullanici.sirketId !== oldArac.sirketId) {
+            return { success: false, error: "Seçilen şoför araçla aynı şirkete ait değil." };
+        }
 
         await prisma.arac.update({
             where: { id },
@@ -78,8 +105,9 @@ export async function updateArac(id: string, data: any) {
                 yil: data.yil ? Number(data.yil) : undefined,
                 bulunduguIl: data.bulunduguIl as any,
                 guncelKm: data.guncelKm ? Number(data.guncelKm) : undefined,
-                sirketId: data.sirketId || null,
-                kullaniciId: data.kullaniciId || null,
+                // Sirket ID client'tan gelmemeli; mevcut kaydı koru
+                sirketId: oldArac.sirketId,
+                kullaniciId: kullanici?.id || null,
                 hgsNo: data.hgsNo || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 kategori: data.kategori || undefined
@@ -100,11 +128,11 @@ export async function updateArac(id: string, data: any) {
             });
 
             // 2. Yeni kullanıcı atanmışsa yeni zimmet aç
-            if (data.kullaniciId) {
+            if (kullanici) {
                 await (prisma as any).kullaniciZimmet.create({
                     data: {
                         aracId: id,
-                        kullaniciId: data.kullaniciId,
+                        kullaniciId: kullanici.id,
                         baslangic: new Date(),
                         baslangicKm: data.guncelKm ? Number(data.guncelKm) : (oldArac?.guncelKm || 0)
                     }
@@ -124,8 +152,11 @@ export async function updateArac(id: string, data: any) {
 
 export async function unassignArac(id: string, bitisKm?: number) {
     try {
-        const arac = await (prisma.arac as any).findUnique({
-            where: { id },
+        await assertAuthenticatedUser();
+        const sirketFilter = await getSirketFilter();
+
+        const arac = await (prisma.arac as any).findFirst({
+            where: { id, ...(sirketFilter as any) },
             select: { kullaniciId: true, guncelKm: true }
         });
 
@@ -148,6 +179,14 @@ export async function unassignArac(id: string, bitisKm?: number) {
             }
         });
 
+        // 3. Aracın güncel KM'sini güncelle (eğer sağlanan KM mevcut olandan büyükse)
+        if (bitisKm && bitisKm > arac.guncelKm) {
+            await (prisma.arac as any).update({
+                where: { id },
+                data: { guncelKm: bitisKm }
+            });
+        }
+
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${id}`);
         revalidatePath('/dashboard/zimmetler');
@@ -160,20 +199,51 @@ export async function unassignArac(id: string, bitisKm?: number) {
 
 export async function deleteArac(id: string) {
     try {
-        // Check for dependencies (sigorta, kasko, muayene etc) is handled by Prisma or we can do it manually
-        await prisma.arac.delete({ where: { id } });
+        await assertAuthenticatedUser();
+        const sirketFilter = await getSirketFilter();
+
+        const arac = await prisma.arac.findFirst({
+            where: { id, ...(sirketFilter as any) },
+            select: { id: true }
+        });
+
+        if (!arac) {
+            return { success: false, error: "Araç bulunamadı veya yetkiniz yok." };
+        }
+
+        await prisma.$transaction([
+            prisma.trafikSigortasi.deleteMany({ where: { aracId: id } }),
+            prisma.kasko.deleteMany({ where: { aracId: id } }),
+            prisma.muayene.deleteMany({ where: { aracId: id } }),
+            prisma.bakim.deleteMany({ where: { aracId: id } }),
+            prisma.ceza.deleteMany({ where: { aracId: id } }),
+            prisma.masraf.deleteMany({ where: { aracId: id } }),
+            prisma.kullaniciZimmet.deleteMany({ where: { aracId: id } }),
+            prisma.yakit.deleteMany({ where: { aracId: id } }),
+            prisma.ariza.deleteMany({ where: { aracId: id } }),
+            prisma.dokuman.deleteMany({ where: { aracId: id } }),
+            (prisma as any).hgsYukleme.deleteMany({ where: { aracId: id } }),
+            prisma.arac.delete({ where: { id } })
+        ]);
+
         revalidatePath(PATH);
         return { success: true };
     } catch (e) {
         console.error(e);
-        return { success: false, error: "Araç silinemedi. Bağlı kayıtlar (poliçe, ceza vb.) olabilir." };
+        return { success: false, error: "Araç silinemedi. Sistemde bir hata oluştu." };
     }
 }
 
 export async function importAraclarFromExcel(formData: FormData) {
     try {
+        await assertAuthenticatedUser();
         const file = formData.get('file') as File;
         if (!file) return { success: false, error: 'Dosya bulunamadı' };
+        const sirketId = await resolveActionSirketId(String(formData.get("sirketId") || ""));
+
+        if (!sirketId) {
+            return { success: false, error: 'Excel aktarımı için bir şirket seçmelisiniz.' };
+        }
         
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
@@ -192,6 +262,7 @@ export async function importAraclarFromExcel(formData: FormData) {
             yil: parseInt(row.Yil || row.yil) || new Date().getFullYear(),
             bulunduguIl: String(row.BulunduguIl || row.Il || row.il || 'İSTANBUL').toUpperCase() as any,
             guncelKm: parseInt(row.GuncelKm || row.Km || row.km) || 0,
+            sirketId,
             durum: 'AKTIF' as const,
             kategori: (row.Kategori || row.kategori || 'BINEK') as any
         })).filter(r => r.plaka && r.marka);
@@ -199,7 +270,7 @@ export async function importAraclarFromExcel(formData: FormData) {
         if (formattedData.length === 0) {
             return { success: false, error: 'Geçerli veri bulunamadı. Lütfen Plaka ve Marka sütunlarını kontrol edin.' };
         }
-        
+
         const result = await prisma.arac.createMany({
             data: formattedData,
             skipDuplicates: true

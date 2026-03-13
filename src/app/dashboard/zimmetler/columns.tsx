@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "../../../components/ui/badge"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type SoforZimmetRow = {
     id: string;
@@ -12,13 +13,13 @@ export type SoforZimmetRow = {
     baslangicKm: number;
     bitisKm: number | null;
     notlar: string | null;
-    arac: { id: string; plaka: string; marka: string; model: string };
+    arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
     kullanici: { id: string; ad: string; soyad: string; tcNo: string | null } | null;
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
 
-export const columns: ColumnDef<SoforZimmetRow>[] = [
+export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[] => [
     {
         id: "durum",
         header: "Durum",
@@ -34,12 +35,12 @@ export const columns: ColumnDef<SoforZimmetRow>[] = [
         header: "Araç Plakası",
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
-            return (
-                <div className="flex flex-col">
-                    <span className="font-mono font-bold text-slate-900 border border-slate-200 bg-slate-50 px-2.5 py-1 rounded-md inline-block shadow-sm tracking-wide text-xs w-max">{row.original.arac.plaka}</span>
-                    <span className="text-[11px] text-slate-500 mt-1">{row.original.arac.marka} {row.original.arac.model}</span>
-                </div>
-            )
+            return <VehicleIdentityCell
+                plaka={row.original.arac.plaka}
+                subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
+                companyName={row.original.arac.sirket?.ad}
+                showCompanyInfo={showCompanyInfo}
+            />
         },
     },
     {

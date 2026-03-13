@@ -1,12 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
-import { getModelFilter, getCurrentSirketId, getCurrentUserRole } from "@/lib/auth-utils";
+import { getModelFilter, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function AraclarPage() {
-    // auth() artık cache() ile memoized - tüm çağrılar tek JWT doğrulamasıyla çalışır
-    const [filter, sirketId, rol] = await Promise.all([
-        getModelFilter('arac'),
-        getCurrentSirketId(),
+export default async function AraclarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+
+    const [filter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
+        getModelFilter('arac', selectedSirketId),
+        getModelFilter('kullanici', selectedSirketId),
+        getSirketListFilter(),
         getCurrentUserRole()
     ]);
 
@@ -20,16 +23,17 @@ export default async function AraclarPage() {
                 kullanici: true,
                 sirket: true,
                 muayene: { orderBy: { muayeneTarihi: 'desc' }, take: 1 },
-                kasko: { orderBy: { bitisTarihi: 'desc' }, take: 1 }
+                kasko: { orderBy: { bitisTarihi: 'desc' }, take: 1 },
+                trafikSigortasi: { orderBy: { bitisTarihi: 'desc' }, take: 1 }
             }
         }),
         (prisma as any).sirket.findMany({ 
-            where: sirketId ? { id: sirketId } : {},
+            where: sirketListFilter as any,
             select: { id: true, ad: true }, 
             orderBy: { ad: 'asc' } 
         }),
         isSfr ? [] : (prisma as any).kullanici.findMany({ 
-            where: sirketId ? { sirketId } : {},
+            where: kullaniciFilter as any,
             select: { id: true, ad: true, soyad: true }, 
             orderBy: { ad: 'asc' } 
         })

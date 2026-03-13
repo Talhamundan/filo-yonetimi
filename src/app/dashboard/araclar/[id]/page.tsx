@@ -1,18 +1,14 @@
 import { prisma } from "../../../../lib/prisma";
 import AracDetailClient from "./AracDetailClient";
 import { notFound } from "next/navigation";
-import { getSirketFilter, isSofor, getCurrentUserId } from "@/lib/auth-utils";
+import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function AracDetailPage(props: { params: Promise<{ id: string }> }) {
+export default async function AracDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
-    const sirketFilter = await getSirketFilter();
-    const isSfr = await isSofor();
-    const userId = await getCurrentUserId();
-
-    // Güvenlik: Şoför ise sadece kendi zimmetli aracını, değilse kendi şirketinin aracını görebilir.
-    const queryFilter = isSfr 
-        ? { id: params.id, kullaniciId: userId } 
-        : { id: params.id, ...sirketFilter as any };
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const filter = await getModelFilter("arac", selectedSirketId);
+    const queryFilter = { id: params.id, ...(filter as any) };
 
     // Fetch the vehicle with a complete 360-degree relational view
     const arac = await (prisma as any).arac.findFirst({

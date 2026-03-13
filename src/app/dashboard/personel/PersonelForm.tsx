@@ -3,7 +3,7 @@
 import React from "react";
 import { Input } from "../../../components/ui/input";
 
-export const ROLLER = ['ADMIN', 'YONETICI', 'YETKİLİ', 'MUDUR', 'MUHASEBECI', 'SOFOR'];
+export const ROLLER = ['ADMIN', 'YONETICI', 'MUDUR', 'MUHASEBECI', 'SOFOR'];
 export const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
 
 export const FormFields = ({ formData, setFormData, sirketler }: { formData: any, setFormData: any, sirketler: any[] }) => (

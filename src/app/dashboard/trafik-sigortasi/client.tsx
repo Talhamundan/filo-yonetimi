@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, ShieldAlert, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, SigortaRow } from "./columns";
+import { getColumns, SigortaRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createSigorta, updateSigorta, deleteSigorta } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const EMPTY = {
     aracId: '',
@@ -65,7 +66,8 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
 
 export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { initialSigortalar: SigortaRow[], araclar: { id: string, plaka: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<SigortaRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -129,7 +131,7 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

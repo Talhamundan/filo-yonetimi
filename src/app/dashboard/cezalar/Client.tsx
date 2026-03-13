@@ -8,13 +8,14 @@ import { Plus, AlertOctagon, TrendingUp, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, CezaRow } from "./columns";
+import { getColumns, CezaRow } from "./columns";
 import { createCeza, updateCeza, deleteCeza } from "./actions";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 type TopStat = { adSoyad: string; cezaAdet: number; toplamTutar: number; }
 
-const EMPTY = { aracId: '', kullaniciId: '', tutar: '', km: '', aciklama: '', cezaTarihi: new Date().toISOString().split('T')[0], odendiMi: false };
+const EMPTY = { aracId: '', kullaniciId: '', tutar: '', km: '', aciklama: '', cezaTarihi: new Date().toISOString().split('T')[0], sonOdemeTarihi: '', odendiMi: false };
 
 const FormFields = ({ formData, setFormData, araclar, soforler }: { formData: any, setFormData: any, araclar: any[], soforler: any[] }) => (
     <div className="grid gap-4 py-4">
@@ -44,9 +45,15 @@ const FormFields = ({ formData, setFormData, araclar, soforler }: { formData: an
                 <Input type="number" value={formData.km} onChange={e => setFormData({...formData, km: e.target.value})} className="h-9" placeholder="123456" />
             </div>
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Ceza Tarihi</label>
-            <Input type="date" value={formData.cezaTarihi} onChange={e => setFormData({...formData, cezaTarihi: e.target.value})} className="h-9" />
+        <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Ceza Tarihi</label>
+                <Input type="date" value={formData.cezaTarihi} onChange={e => setFormData({...formData, cezaTarihi: e.target.value})} className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Son Ödeme Tarihi</label>
+                <Input type="date" value={formData.sonOdemeTarihi} onChange={e => setFormData({...formData, sonOdemeTarihi: e.target.value})} className="h-9" />
+            </div>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Açıklama / İhlal Türü</label>
@@ -65,7 +72,8 @@ export default function CezalarClient({
     initialData: CezaRow[], top5Stats: TopStat[], araclar: { id: string, plaka: string }[], soforler: { id: string, ad: string, soyad: string }[]
 }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<CezaRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -76,7 +84,13 @@ export default function CezalarClient({
             return toast.warning("Eksik Bilgi", { description: "Lütfen Araç ve Tutar alanlarını doldurun." });
         }
         setLoading(true);
-        const res = await createCeza({ ...formData, tutar: parseFloat(formData.tutar), km: formData.km ? parseInt(formData.km) : undefined, cezaTarihi: new Date(formData.cezaTarihi) });
+        const res = await createCeza({ 
+            ...formData, 
+            tutar: parseFloat(formData.tutar), 
+            km: formData.km ? parseInt(formData.km) : undefined, 
+            cezaTarihi: new Date(formData.cezaTarihi),
+            sonOdemeTarihi: formData.sonOdemeTarihi ? new Date(formData.sonOdemeTarihi) : null
+        });
         if (res.success) { 
             setCreateOpen(false); 
             setFormData({ ...EMPTY }); 
@@ -90,7 +104,13 @@ export default function CezalarClient({
     const handleUpdate = async () => {
         if (!editRow || !formData.aracId || !formData.tutar) return;
         setLoading(true);
-        const res = await updateCeza(editRow.id, { ...formData, tutar: parseFloat(formData.tutar), km: formData.km ? parseInt(formData.km) : undefined, cezaTarihi: new Date(formData.cezaTarihi) });
+        const res = await updateCeza(editRow.id, { 
+            ...formData, 
+            tutar: parseFloat(formData.tutar), 
+            km: formData.km ? parseInt(formData.km) : undefined, 
+            cezaTarihi: new Date(formData.cezaTarihi),
+            sonOdemeTarihi: formData.sonOdemeTarihi ? new Date(formData.sonOdemeTarihi) : null
+        });
         if (res.success) { 
             setEditRow(null); 
             toast.success("Güncelleme Başarılı", { description: "Ceza kaydı bilgileri başarıyla güncellendi." });
@@ -119,6 +139,7 @@ export default function CezalarClient({
             km: row.km ? String(row.km) : '',
             aciklama: row.aciklama === '-' ? '' : row.aciklama,
             cezaTarihi: new Date(row.tarih).toISOString().split('T')[0],
+            sonOdemeTarihi: row.sonOdemeTarihi ? new Date(row.sonOdemeTarihi).toISOString().split('T')[0] : '',
             odendiMi: row.odendiMi
         });
         setEditRow(row);
@@ -126,7 +147,7 @@ export default function CezalarClient({
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

@@ -5,12 +5,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Input } from "../../../components/ui/input";
 import { Search, Plus, Fuel, Receipt, CreditCard } from "lucide-react";
 import { Card, CardContent } from "../../../components/ui/card";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 type LedgerRecord = {
     id: string;
     tarih: Date;
     tur: string;
     aracPlaka: string;
+    aracSirket?: string | null;
     detay: string;
     tutar: number;
 };
@@ -18,6 +20,7 @@ type LedgerRecord = {
 type YakitMetric = {
     aracId: string;
     plaka: string;
+    sirketAd?: string | null;
     toplamTutar: number;
     toplamLitre: number;
     tuketim100Km: number;
@@ -25,6 +28,7 @@ type YakitMetric = {
 };
 
 export default function FinansClient({ initialRecords, yakitMetrics = [] }: { initialRecords: LedgerRecord[], yakitMetrics?: YakitMetric[] }) {
+    const { canAccessAllCompanies } = useDashboardScope();
     const [searchTerm, setSearchTerm] = useState("");
 
     const filteredRecords = useMemo(() => {
@@ -66,7 +70,12 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                             <Card key={metric.aracId} className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
                                 <CardContent className="p-4">
                                     <div className="flex justify-between items-start mb-3">
-                                        <span className="font-mono font-bold text-slate-800 text-base">{metric.plaka}</span>
+                                        <div className="flex flex-col">
+                                            <span className="font-mono font-bold text-slate-800 text-base">{metric.plaka}</span>
+                                            {canAccessAllCompanies && metric.sirketAd ? (
+                                                <span className="text-[11px] font-semibold text-indigo-600 mt-0.5">{metric.sirketAd}</span>
+                                            ) : null}
+                                        </div>
                                         <div className="p-1.5 bg-indigo-50 rounded-md text-indigo-600">
                                             <Fuel size={14} />
                                         </div>
@@ -128,7 +137,12 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                                             {new Date(rec.tarih).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5 align-middle">
-                                            <span className="font-mono font-bold text-slate-800">{rec.aracPlaka}</span>
+                                            <div className="flex flex-col">
+                                                <span className="font-mono font-bold text-slate-800">{rec.aracPlaka}</span>
+                                                {canAccessAllCompanies && rec.aracSirket ? (
+                                                    <span className="text-[11px] font-semibold text-indigo-600 mt-0.5">{rec.aracSirket}</span>
+                                                ) : null}
+                                            </div>
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5 align-middle">
                                             <div className="flex items-center gap-2">

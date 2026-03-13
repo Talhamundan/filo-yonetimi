@@ -2,6 +2,7 @@
 
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
+import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 
 const PATH = '/dashboard/masraflar';
 
@@ -13,9 +14,16 @@ export async function createMasraf(data: {
     aciklama?: string;
 }) {
     try {
+        await assertAuthenticatedUser();
+        const arac = await getScopedAracOrThrow(data.aracId, {
+            id: true,
+            sirketId: true,
+        });
+
         await prisma.masraf.create({
             data: {
-                aracId: data.aracId || null,
+                aracId: arac.id,
+                sirketId: arac.sirketId,
                 tarih: new Date(data.tarih),
                 tur: data.tur as any,
                 tutar: Number(data.tutar),
@@ -33,11 +41,24 @@ export async function createMasraf(data: {
 
 export async function updateMasraf(id: string, data: any) {
     try {
+        await assertAuthenticatedUser();
+        const mevcutKayit = await getScopedRecordOrThrow({
+            prismaModel: "masraf",
+            filterModel: "masraf",
+            id,
+            select: { aracId: true, sirketId: true },
+            errorMessage: "Masraf kaydi bulunamadi veya yetkiniz yok.",
+        });
+        const arac = data.aracId
+            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
+            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+
         await prisma.masraf.update({
             where: { id },
             data: {
                 ...data,
-                aracId: data.aracId || undefined,
+                aracId: arac.id,
+                sirketId: arac.sirketId || mevcutKayit.sirketId,
                 tur: data.tur ? (data.tur as any) : undefined,
                 tarih: data.tarih ? new Date(data.tarih) : undefined,
                 tutar: data.tutar ? Number(data.tutar) : undefined,
@@ -53,6 +74,14 @@ export async function updateMasraf(id: string, data: any) {
 
 export async function deleteMasraf(id: string) {
     try {
+        await assertAuthenticatedUser();
+        await getScopedRecordOrThrow({
+            prismaModel: "masraf",
+            filterModel: "masraf",
+            id,
+            errorMessage: "Masraf kaydi bulunamadi veya yetkiniz yok.",
+        });
+
         await prisma.masraf.delete({ where: { id } });
         revalidatePath(PATH);
         return { success: true };

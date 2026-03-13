@@ -7,9 +7,10 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, AlertTriangle, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, ArizaRow } from "./columns";
+import { getColumns, ArizaRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createAriza, updateAriza, deleteAriza } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const DURUM_LIST = [
     { label: 'Açık Arıza', value: 'ACIK' },
@@ -80,7 +81,8 @@ const FormFields = ({ formData, setFormData, araclar, DURUM_LIST }: { formData: 
 
 export default function ArizalarClient({ initialArizalar, araclar }: { initialArizalar: ArizaRow[], araclar: { id: string, plaka: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<ArizaRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
@@ -149,7 +151,7 @@ export default function ArizalarClient({ initialArizalar, araclar }: { initialAr
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',

@@ -2,18 +2,20 @@ import { prisma } from "../../../lib/prisma";
 import ZimmetlerClient from "./client";
 import { SoforZimmetRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
+import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 
-export default async function ZimmetlerPage() {
-    const filter = await getModelFilter('kullaniciZimmet');
-    const aracFilter = await getModelFilter('arac');
-    const personelFilter = await getModelFilter('kullanici');
+export default async function ZimmetlerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
+    const aracFilter = await getModelFilter('arac', selectedSirketId);
+    const personelFilter = await getModelFilter('kullanici', selectedSirketId);
 
     const [zimmetler, araclar, kullanicilar] = await Promise.all([
         (prisma as any).kullaniciZimmet.findMany({
             where: filter as any,
             orderBy: { baslangic: 'desc' },
             include: {
-                arac: true,
+                arac: { include: { sirket: { select: { ad: true } } } },
                 kullanici: true
             }
         }),

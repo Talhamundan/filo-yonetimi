@@ -107,7 +107,7 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
     ];
 
     return (
-        <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
+        <div className="w-full min-w-0 max-w-[1400px] mx-auto p-6 md:p-8 xl:p-10">
         {confirmModal}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
@@ -157,6 +157,7 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
                 data={initialData} 
                 searchKey="adSoyad" 
                 searchPlaceholder="İsim ile ara..." 
+                tableClassName="min-w-[1280px]"
                 onRowClick={(row) => router.push(`/dashboard/personel/${row.id}`)}
             />
         </div>

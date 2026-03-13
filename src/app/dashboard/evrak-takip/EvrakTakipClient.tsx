@@ -4,14 +4,16 @@ import React, { useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Input } from "../../../components/ui/input";
 import { Badge } from "../../../components/ui/badge";
-import { Search, Plus, ShieldAlert, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { Search, ShieldAlert, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
 import { useRouter } from "next/navigation";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 type EvrakRow = {
     id: string;
     aracId: string;
     plaka: string;
     marka: string;
+    sirketAd?: string | null;
     tur: string;
     gecerlilikTarihi: Date;
     kalanGun: number;
@@ -20,6 +22,7 @@ type EvrakRow = {
 
 export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar: EvrakRow[] }) {
     const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterDurum, setFilterDurum] = useState("TÜMÜ");
 
@@ -53,12 +56,6 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900">Evrak & Sigorta Takibi</h2>
                     <p className="text-slate-500 text-sm mt-1">Muayene, Kasko ve Trafik Sigortası bitiş süreleri.</p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
-                        <Plus size={16} />
-                        Yeni Poliçe/Evrak Ekle
-                    </button>
                 </div>
             </header>
 
@@ -113,6 +110,9 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                                             <div className="flex flex-col">
                                                 <span className="font-mono font-bold text-slate-900">{evrak.plaka}</span>
                                                 <span className="text-[11px] text-slate-500 mt-0.5">{evrak.marka}</span>
+                                                {canAccessAllCompanies && evrak.sirketAd ? (
+                                                    <span className="text-[11px] font-semibold text-indigo-600 mt-0.5">{evrak.sirketAd}</span>
+                                                ) : null}
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-4 py-3 align-middle font-semibold text-slate-700">

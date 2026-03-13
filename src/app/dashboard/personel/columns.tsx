@@ -21,7 +21,6 @@ const RoleIcon = ({ rol }: { rol: string }) => {
         case 'ADMIN': return <Shield size={14} className="text-red-600" />;
         case 'YONETICI': return <Briefcase size={14} className="text-indigo-600" />;
         case 'MUDUR': return <User size={14} className="text-blue-600" />;
-        case 'YETKİLİ': return <Shield size={14} className="text-purple-600" />;
         case 'MUHASEBECI': return <Calculator size={14} className="text-emerald-600" />;
         case 'SOFOR': return <Truck size={14} className="text-amber-600" />;
         default: return <User size={14} />

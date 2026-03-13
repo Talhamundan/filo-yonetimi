@@ -6,10 +6,11 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, FileUp, Trash2, Pencil, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, AracRow } from "./columns";
+import { getColumns, AracRow } from "./columns";
 import { importAraclarFromExcel, createArac, updateArac, deleteArac } from "./actions";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
 
@@ -29,24 +30,38 @@ const EMPTY = {
 
 const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: { formData: any, setFormData: any, sirketler: any[], kullanicilar: any[], ILLER: string[] }) => (
     <div className="grid grid-cols-2 gap-4 py-4">
+        <div className="col-span-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
+        </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium flex items-center gap-1.5"><Car size={14} className="text-slate-400" /> Plaka</label>
+            <label className="text-sm font-medium flex items-center gap-1.5">
+                <Car size={14} className="text-slate-400" />
+                Plaka <span className="text-rose-500">*</span>
+            </label>
             <Input value={formData.plaka} onChange={e => setFormData({...formData, plaka: e.target.value})} placeholder="34 ABC 123" className="h-9 font-mono" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Marka</label>
+            <label className="text-sm font-medium">
+                Marka <span className="text-rose-500">*</span>
+            </label>
             <Input value={formData.marka} onChange={e => setFormData({...formData, marka: e.target.value})} placeholder="Renault" className="h-9" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Model</label>
+            <label className="text-sm font-medium">
+                Model <span className="text-rose-500">*</span>
+            </label>
             <Input value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} placeholder="Megane" className="h-9" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Model Yılı</label>
+            <label className="text-sm font-medium">
+                Model Yılı <span className="text-rose-500">*</span>
+            </label>
             <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Güncel KM</label>
+            <label className="text-sm font-medium">
+                Güncel KM <span className="text-rose-500">*</span>
+            </label>
             <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
         </div>
         <div className="space-y-1.5">
@@ -71,8 +86,14 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
                 <option value="IS_MAKINESI">İş Makinesi</option>
             </select>
         </div>
+        <div className="col-span-2 pt-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
+        </div>
         <div className="space-y-1.5 col-span-2">
-            <label className="text-sm font-medium flex items-center gap-1.5"><Building2 size={14} className="text-slate-400" /> Bağlı Şirket</label>
+            <label className="text-sm font-medium flex items-center gap-1.5">
+                <Building2 size={14} className="text-slate-400" />
+                Bağlı Şirket
+            </label>
             <select 
                 value={formData.sirketId} 
                 onChange={e => setFormData({...formData, sirketId: e.target.value})}
@@ -83,7 +104,10 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
             </select>
         </div>
         <div className="space-y-1.5 col-span-2">
-            <label className="text-sm font-medium flex items-center gap-1.5"><User size={14} className="text-slate-400" /> Mevcut Şoför (Zimmet)</label>
+            <label className="text-sm font-medium flex items-center gap-1.5">
+                <User size={14} className="text-slate-400" />
+                Mevcut Şoför (Zimmet)
+            </label>
             <select 
                 value={formData.kullaniciId} 
                 onChange={e => setFormData({...formData, kullaniciId: e.target.value})}
@@ -92,6 +116,9 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
                 <option value="">Şoför Seçiniz (Atanmamış)</option>
                 {kullanicilar.map(u => <option key={u.id} value={u.id}>{u.adSoyad}</option>)}
             </select>
+        </div>
+        <div className="col-span-2 pt-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">HGS No</label>
@@ -114,7 +141,9 @@ export default function AraclarClient({
     kullanicilar: { id: string, adSoyad: string }[] 
 }) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { canAccessAllCompanies } = useDashboardScope();
+    const router = useRouter();
+    const searchParams = useSearchParams();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [uploading, setUploading] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
@@ -129,6 +158,10 @@ export default function AraclarClient({
         setUploading(true);
         const formData = new FormData();
         formData.append('file', file);
+        const selectedSirketId = searchParams.get("sirket");
+        if (selectedSirketId) {
+            formData.append("sirketId", selectedSirketId);
+        }
 
         const res = await importAraclarFromExcel(formData);
         
@@ -206,7 +239,7 @@ export default function AraclarClient({
 
 
     const columnsWithActions = [
-        ...columns,
+        ...getColumns(canAccessAllCompanies),
         {
             id: 'actions',
             header: 'İşlemler',
@@ -232,7 +265,7 @@ export default function AraclarClient({
     ];
 
     return (
-        <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
+        <div className="w-full min-w-0 max-w-[1400px] mx-auto p-6 md:p-8 xl:p-10">
         {confirmModal}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
@@ -311,6 +344,7 @@ export default function AraclarClient({
                 data={initialAraclar}
                 searchKey="plaka"
                 searchPlaceholder="Plaka ara..."
+                tableClassName="min-w-[1560px]"
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
             />
         </div>

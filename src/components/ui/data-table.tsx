@@ -32,6 +32,7 @@ interface DataTableProps<TData, TValue> {
     searchKey?: string
     searchPlaceholder?: string
     onRowClick?: (row: TData) => void
+    tableClassName?: string
 }
 
 export function DataTable<TData, TValue>({
@@ -40,6 +41,7 @@ export function DataTable<TData, TValue>({
     searchKey,
     searchPlaceholder = "Ara...",
     onRowClick,
+    tableClassName,
 }: DataTableProps<TData, TValue>) {
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -67,7 +69,7 @@ export function DataTable<TData, TValue>({
     })
 
     return (
-        <div className="w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+        <div className="w-full min-w-0 max-w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
             {searchKey && (
                 <div className="flex items-center p-4 border-b border-slate-100 bg-slate-50/50">
                     <div className="relative w-full max-w-sm">
@@ -83,8 +85,7 @@ export function DataTable<TData, TValue>({
                     </div>
                 </div>
             )}
-            <div className="overflow-x-auto">
-                <Table>
+            <Table className={tableClassName}>
                     <TableHeader className="bg-slate-50/80">
                         {table.getHeaderGroups().map((headerGroup) => (
                             <TableRow key={headerGroup.id} className="hover:bg-transparent border-b-slate-200">
@@ -137,7 +138,6 @@ export function DataTable<TData, TValue>({
                         )}
                     </TableBody>
                 </Table>
-            </div>
 
             {/* Pagination Layer if needed */}
             {table.getPageCount() > 1 && (

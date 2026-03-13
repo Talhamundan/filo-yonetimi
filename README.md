@@ -15,7 +15,7 @@ Profesyonel bir filo yönetim ve takip sistemi. Bu uygulama, araç envanterini, 
 
 ## 🛠️ Teknoloji Yığını
 
-- **Framework**: [Next.js 15 (App Router)](https://nextjs.org/)
+- **Framework**: [Next.js 16 (App Router)](https://nextjs.org/)
 - **Dil**: TypeScript
 - **Veritabanı & ORM**: PostgreSQL & [Prisma](https://www.prisma.io/)
 - **Kimlik Doğrulama**: [NextAuth.js (Auth.js)](https://authjs.dev/)
