@@ -34,7 +34,7 @@ export default async function AktiviteGecmisiPage(props: { searchParams?: Promis
         getSirketListFilter(),
     ]);
 
-    if (role !== "ADMIN" && role !== "YONETICI") {
+    if (role !== "ADMIN" && role !== "YETKILI") {
         return (
             <div className="p-8">
                 <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">

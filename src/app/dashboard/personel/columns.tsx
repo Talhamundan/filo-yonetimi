@@ -1,7 +1,7 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Shield, User, Briefcase, Calculator, Truck } from "lucide-react"
+import { Shield, User, Briefcase, Truck } from "lucide-react"
 import { AracLink, PersonelLink } from "@/components/links/RecordLinks"
 
 export type PersonelRow = {
@@ -31,9 +31,7 @@ function formatCurrency(value: number) {
 const RoleIcon = ({ rol }: { rol: string }) => {
     switch (rol) {
         case 'ADMIN': return <Shield size={14} className="text-red-600" />;
-        case 'YONETICI': return <Briefcase size={14} className="text-indigo-600" />;
-        case 'MUDUR': return <User size={14} className="text-blue-600" />;
-        case 'MUHASEBECI': return <Calculator size={14} className="text-emerald-600" />;
+        case 'YETKILI': return <Briefcase size={14} className="text-indigo-600" />;
         case 'SOFOR': return <Truck size={14} className="text-amber-600" />;
         default: return <User size={14} />
     }

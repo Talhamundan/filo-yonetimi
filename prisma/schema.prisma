@@ -311,9 +311,7 @@ model Dokuman {
 // ENUMLAR
 enum Rol {
   ADMIN
-  YONETICI
-  MUDUR
-  MUHASEBECI
+  YETKILI
   SOFOR
 }
 

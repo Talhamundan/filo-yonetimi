@@ -20,7 +20,7 @@ export type PolicyModelName =
     | "zimmet"
     | string;
 
-const GLOBAL_SCOPE_ROLES = new Set<Rol>(["ADMIN", "YONETICI"]);
+const GLOBAL_SCOPE_ROLES = new Set<Rol>(["ADMIN"]);
 const DRIVER_RESTRICTED_DASHBOARD_PATHS = [
     "/dashboard/personel",
     "/dashboard/onay-merkezi",
@@ -30,7 +30,12 @@ const DRIVER_RESTRICTED_DASHBOARD_PATHS = [
     "/dashboard/cop-kutusu",
 ] as const;
 
-const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YONETICI", "MUDUR", "MUHASEBECI", "SOFOR"] as const;
+const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YETKILI", "SOFOR"] as const;
+const LEGACY_ROLE_ALIASES: Record<string, Rol> = {
+    YONETICI: "YETKILI",
+    MUDUR: "YETKILI",
+    MUHASEBECI: "YETKILI",
+};
 const SOFT_DELETE_MODELS = new Set<PolicyModelName>([
     "arac",
     "kullanici",
@@ -57,7 +62,10 @@ const VEHICLE_RELATION_MODELS = new Set<PolicyModelName>([
 
 export function normalizeRole(role: string | null | undefined): Rol | null {
     if (!role) return null;
-    return ROLE_VALUES.includes(role as Rol) ? (role as Rol) : null;
+    if (ROLE_VALUES.includes(role as Rol)) {
+        return role as Rol;
+    }
+    return LEGACY_ROLE_ALIASES[role] ?? null;
 }
 
 export function canRoleAccessAllCompanies(role: string | null | undefined) {

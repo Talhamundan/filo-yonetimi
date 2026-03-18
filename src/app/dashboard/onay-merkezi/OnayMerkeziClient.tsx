@@ -175,9 +175,7 @@ export default function OnayMerkeziClient({
                                         className="h-10 px-3 pr-8 rounded-xl border border-slate-200 bg-slate-50 text-sm font-bold text-slate-700 outline-none focus:border-indigo-500 transition-all"
                                     >
                                         <option value="SOFOR">Şoför</option>
-                                        <option value="MUHASEBECI">Muhasebeci</option>
-                                        <option value="MUDUR">Müdür</option>
-                                        <option value="YONETICI">Yönetici</option>
+                                        <option value="YETKILI">Yetkili</option>
                                         <option value="ADMIN">Admin</option>
                                     </select>
                                 </div>

@@ -5,6 +5,15 @@ import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 
+const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR"> = {
+    ADMIN: "ADMIN",
+    YETKILI: "YETKILI",
+    SOFOR: "SOFOR",
+    YONETICI: "YETKILI",
+    MUDUR: "YETKILI",
+    MUHASEBECI: "YETKILI",
+};
+
 function getMonthDateRange(yil: number, ay: number) {
     const start = new Date(yil, ay - 1, 1, 0, 0, 0, 0);
     const end = new Date(yil, ay, 0, 23, 59, 59, 999);
@@ -66,7 +75,10 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         });
     }
     if (commonFilters.status) {
-        personelWhereParts.push({ rol: commonFilters.status });
+        const normalizedRoleStatus = PERSONEL_ROLE_FILTER_MAP[commonFilters.status];
+        if (normalizedRoleStatus) {
+            personelWhereParts.push({ rol: normalizedRoleStatus });
+        }
     }
     const personelWhere = personelWhereParts.length > 1 ? { AND: personelWhereParts } : personelWhereParts[0];
 

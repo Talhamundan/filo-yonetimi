@@ -147,9 +147,7 @@ export default function PersonelDetailClient({
     const getRoleBadge = (rol: string) => {
         switch (rol) {
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
-            case 'YONETICI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yönetici</Badge>;
-            case 'MUDUR': return <Badge className="bg-blue-100 text-blue-800 border-0">Müdür</Badge>;
-            case 'MUHASEBECI': return <Badge className="bg-emerald-100 text-emerald-800 border-0">Muhasebeci</Badge>;
+            case 'YETKILI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yetkili</Badge>;
             case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">Şoför</Badge>;
             default: return <Badge variant="outline">{rol}</Badge>;
         }

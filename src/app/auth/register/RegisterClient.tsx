@@ -149,9 +149,7 @@ export default function RegisterPage({ sirketler }: { sirketler: any[] }) {
                                 className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none bg-transparent text-sm"
                             >
                                 <option value="SOFOR">Şoför</option>
-                                <option value="MUHASEBECI">Muhasebeci</option>
-                                <option value="MUDUR">Müdür</option>
-                                <option value="YONETICI">Yönetici</option>
+                                <option value="YETKILI">Yetkili</option>
                             </select>
                         </div>
                     </div>
