@@ -177,8 +177,14 @@ export function DataTable<TData, TValue>({
         try {
             const formData = new FormData()
             formData.append("file", file)
+            const params = new URLSearchParams()
+            const selectedSirket = searchParams.get("sirket")
+            const selectedYil = searchParams.get("yil")
+            if (selectedSirket) params.set("sirket", selectedSirket)
+            if (selectedYil) params.set("yil", selectedYil)
+            const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
 
-            const response = await fetch(`/api/excel/${excelEntity}`, {
+            const response = await fetch(endpoint, {
                 method: "POST",
                 body: formData,
             })
@@ -204,7 +210,7 @@ export function DataTable<TData, TValue>({
             event.target.value = ""
             setIsImporting(false)
         }
-    }, [excelEntity, router])
+    }, [excelEntity, router, searchParams])
 
     return (
         <div className="w-full min-w-0 max-w-full bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">

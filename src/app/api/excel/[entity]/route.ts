@@ -16,6 +16,8 @@ type ModelDelegate = {
     findUnique?: (args: { where: WhereData; select: Record<string, boolean> }) => Promise<RowData | null>;
 };
 
+const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+
 function lowerFirst(value: string) {
     return value.charAt(0).toLowerCase() + value.slice(1);
 }
@@ -261,6 +263,14 @@ export async function GET(
     context: { params: Promise<{ entity: string }> }
 ) {
     try {
+        const role = await getCurrentUserRole();
+        if (!role) {
+            return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
+        }
+        if (role === "SOFOR") {
+            return NextResponse.json({ error: "Excel dışa aktarma yetkiniz bulunmuyor." }, { status: 403 });
+        }
+
         const { entity } = await context.params;
         const config = getEntityOrNull(entity);
         if (!config) {
@@ -330,6 +340,9 @@ export async function POST(
 ) {
     try {
         const role = await getCurrentUserRole();
+        if (!role) {
+            return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
+        }
         if (role === "SOFOR") {
             return NextResponse.json({ error: "Excel import yetkiniz bulunmuyor." }, { status: 403 });
         }
@@ -338,6 +351,9 @@ export async function POST(
         const config = getEntityOrNull(entity);
         if (!config) {
             return NextResponse.json({ error: "Desteklenmeyen import modeli." }, { status: 404 });
+        }
+        if (config.filterModel === "sirket" && role !== "ADMIN") {
+            return NextResponse.json({ error: "Şirket verisi import işlemi sadece admin yetkisi gerektirir." }, { status: 403 });
         }
 
         const modelMeta = getModelMeta(config.prismaModel);
@@ -349,12 +365,15 @@ export async function POST(
         const enumMap = getEnumValueMap();
 
         const formData = await req.formData();
-        const file = formData.get("file");
-        if (!file || typeof (file as Blob).arrayBuffer !== "function") {
+        const fileEntry = formData.get("file");
+        if (!(fileEntry instanceof File)) {
             return NextResponse.json({ error: "Excel dosyasi bulunamadi." }, { status: 400 });
         }
+        if (fileEntry.size > MAX_IMPORT_FILE_BYTES) {
+            return NextResponse.json({ error: "Excel dosyasi cok buyuk. Maksimum dosya boyutu 10MB." }, { status: 413 });
+        }
 
-        const buffer = Buffer.from(await file.arrayBuffer());
+        const buffer = Buffer.from(await fileEntry.arrayBuffer());
         const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
         const firstSheetName = workbook.SheetNames[0];
         if (!firstSheetName) {

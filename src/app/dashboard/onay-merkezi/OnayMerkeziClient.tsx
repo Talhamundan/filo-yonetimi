@@ -3,16 +3,25 @@
 import React, { useState } from "react";
 import { updateUserStatus } from "./actions";
 import { toast } from "sonner";
-import { Check, X, UserCog, Building2, Mail, ShieldCheck } from "lucide-react";
-import { format } from "date-fns";
-import { tr } from "date-fns/locale";
+import { Check, X, Building2, Mail, ShieldCheck } from "lucide-react";
+import type { OnayDurumu, Rol } from "@prisma/client";
+import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 
-export default function OnayMerkeziClient({ initialUsers }: { initialUsers: any[] }) {
+type OnayKullanici = {
+    id: string;
+    ad: string;
+    soyad: string;
+    eposta?: string | null;
+    rol: Rol;
+    sirket?: { ad: string } | null;
+};
+
+export default function OnayMerkeziClient({ initialUsers }: { initialUsers: OnayKullanici[] }) {
     const [loading, setLoading] = useState<string | null>(null);
 
-    const handleUpdate = async (userId: string, status: "ONAYLANDI" | "REDDEDILDI", role?: string) => {
+    const handleUpdate = async (userId: string, status: OnayDurumu, role?: Rol) => {
         setLoading(userId);
-        const res = await updateUserStatus(userId, status as any, role as any);
+        const res = await updateUserStatus(userId, status, role);
         if (res.success) {
             toast.success(status === "ONAYLANDI" ? "Kullanıcı onaylandı." : "Talep reddedildi.");
         } else {
@@ -23,11 +32,14 @@ export default function OnayMerkeziClient({ initialUsers }: { initialUsers: any[
 
     return (
         <div className="p-8 xl:p-12 max-w-[1400px] mx-auto">
-            <header className="mb-10">
-                <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
-                    <ShieldCheck className="text-indigo-600" size={32} /> Onay Merkezi
-                </h1>
-                <p className="text-slate-500 mt-2 font-medium">Sisteme yeni kayıt olan kullanıcıların taleplerini yönetin.</p>
+            <header className="mb-10 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div>
+                    <h1 className="text-3xl font-extrabold text-slate-900 flex items-center gap-3">
+                        <ShieldCheck className="text-indigo-600" size={32} /> Onay Merkezi
+                    </h1>
+                    <p className="text-slate-500 mt-2 font-medium">Sisteme yeni kayıt olan kullanıcıların taleplerini yönetin.</p>
+                </div>
+                <ExcelTransferToolbar options={[{ entity: "personel", label: "Personel" }]} />
             </header>
 
             <div className="grid grid-cols-1 gap-6">
@@ -74,7 +86,7 @@ export default function OnayMerkeziClient({ initialUsers }: { initialUsers: any[
                                     <button 
                                         disabled={loading === u.id}
                                         onClick={() => {
-                                            const role = (document.getElementById(`role-${u.id}`) as HTMLSelectElement).value;
+                                            const role = (document.getElementById(`role-${u.id}`) as HTMLSelectElement).value as Rol;
                                             handleUpdate(u.id, "ONAYLANDI", role);
                                         }}
                                         className="h-12 px-6 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl font-bold text-sm shadow-lg shadow-emerald-100 transition-all flex items-center gap-2 disabled:opacity-50"

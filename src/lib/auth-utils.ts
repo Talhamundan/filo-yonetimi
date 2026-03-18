@@ -1,5 +1,12 @@
 import { auth } from "@/auth";
 import { cache } from "react";
+import {
+    canRoleAccessAllCompanies,
+    getModelFilterByPolicy,
+    isAdminRole,
+    isDriverRole,
+    normalizeRole,
+} from "@/lib/policy";
 
 /**
  * auth() çağrısını bir request içinde memoize eder.
@@ -9,48 +16,6 @@ import { cache } from "react";
 const getSession = cache(async () => {
     return await auth();
 });
-
-const GLOBAL_SCOPE_ROLES = new Set(["ADMIN", "YONETICI"]);
-
-function getCompanyModelFilter(modelName: string, sirketId: string | null) {
-    if (modelName === "sirket") {
-        return sirketId ? { id: sirketId } : {};
-    }
-
-    if (!sirketId) {
-        return {};
-    }
-
-    switch (modelName) {
-        case "arac":
-        case "kullanici":
-        case "personel":
-        case "yakit":
-        case "ceza":
-        case "masraf":
-        case "bakim":
-        case "muayene":
-        case "kasko":
-        case "trafikSigortasi":
-        case "dokuman":
-        case "hgs":
-        case "hgsYukleme":
-            return { sirketId };
-        case "kullaniciZimmet":
-        case "zimmet":
-            return { arac: { sirketId } };
-        default:
-            return { sirketId };
-    }
-}
-
-function getBlockedFilter(modelName: string) {
-    if (modelName === "sirket") {
-        return { id: "blocked" };
-    }
-
-    return { id: "blocked" };
-}
 
 function getRequestedCompanyId(value?: string | null) {
     const trimmed = value?.trim();
@@ -63,11 +28,11 @@ function getRequestedCompanyId(value?: string | null) {
 export async function getSirketFilter(selectedSirketId?: string | null) {
     const session = await getSession();
     if (!session?.user) return { sirketId: "blocked" };
-    
-    const { rol, sirketId } = session.user as any;
+
+    const { rol, sirketId } = session.user;
     const requestedCompanyId = getRequestedCompanyId(selectedSirketId);
-    
-    if (GLOBAL_SCOPE_ROLES.has(rol)) {
+
+    if (canRoleAccessAllCompanies(rol)) {
         return requestedCompanyId ? { sirketId: requestedCompanyId } : {};
     }
 
@@ -79,41 +44,35 @@ export async function getSirketFilter(selectedSirketId?: string | null) {
  * @param modelName Prisma model adı (küçük harf)
  */
 export async function getModelFilter(modelName: string, selectedSirketId?: string | null) {
+    return getModelFilterWithOptions(modelName, selectedSirketId, { includeDeleted: false });
+}
+
+export async function getModelFilterWithOptions(
+    modelName: string,
+    selectedSirketId?: string | null,
+    options?: { includeDeleted?: boolean }
+) {
     const session = await getSession();
-    if (!session?.user) return getBlockedFilter(modelName);
-    
-    const { rol, sirketId, id: userId } = session.user as any;
+    if (!session?.user) {
+        return modelName === "sirket" ? { id: "blocked" } : { id: "blocked" };
+    }
+
+    const { rol, sirketId, id: userId } = session.user;
     const requestedCompanyId = getRequestedCompanyId(selectedSirketId);
-    
-    if (GLOBAL_SCOPE_ROLES.has(rol)) {
-        return getCompanyModelFilter(modelName, requestedCompanyId);
-    }
 
-    // Şoför kısıtlamaları
-    if (rol === 'SOFOR') {
-        const aracRelatedModels = ['yakit', 'ceza', 'masraf', 'bakim', 'muayene', 'kasko', 'trafikSigortasi', 'dokuman', 'kullaniciZimmet', 'zimmet'];
-        if (aracRelatedModels.includes(modelName)) {
-            return { arac: { kullaniciId: userId } };
-        }
-        if (modelName === 'arac') {
-            return { kullaniciId: userId };
-        }
-        if (modelName === 'kullanici' || modelName === 'personel') {
-            return { id: userId };
-        }
-        if (modelName === "sirket") {
-            return { id: sirketId || "blocked" };
-        }
-        return { id: 'none' };
-    }
-
-    // Diğer roller (Yönetici, Müdür vb.) sadece kendi şirketlerini görür
-    return getCompanyModelFilter(modelName, sirketId || null);
+    return getModelFilterByPolicy({
+        modelName,
+        role: rol,
+        currentSirketId: sirketId,
+        currentUserId: userId,
+        requestedSirketId: requestedCompanyId,
+        includeDeleted: options?.includeDeleted ?? false,
+    });
 }
 
 export async function canAccessAllCompanies() {
     const session = await getSession();
-    return GLOBAL_SCOPE_ROLES.has((session?.user as any)?.rol);
+    return canRoleAccessAllCompanies(session?.user?.rol);
 }
 
 export async function getSirketListFilter() {
@@ -122,8 +81,8 @@ export async function getSirketListFilter() {
         return { id: "blocked" };
     }
 
-    const { rol, sirketId } = session.user as any;
-    if (GLOBAL_SCOPE_ROLES.has(rol)) {
+    const { rol, sirketId } = session.user;
+    if (canRoleAccessAllCompanies(rol)) {
         return {};
     }
 
@@ -134,8 +93,8 @@ export async function getScopedSirketId(selectedSirketId?: string | null) {
     const session = await getSession();
     if (!session?.user) return null;
 
-    const { rol, sirketId } = session.user as any;
-    if (GLOBAL_SCOPE_ROLES.has(rol)) {
+    const { rol, sirketId } = session.user;
+    if (canRoleAccessAllCompanies(rol)) {
         return getRequestedCompanyId(selectedSirketId);
     }
 
@@ -144,22 +103,22 @@ export async function getScopedSirketId(selectedSirketId?: string | null) {
 
 export async function getCurrentSirketId() {
     const session = await getSession();
-    return (session?.user as any)?.sirketId || null;
+    return session?.user?.sirketId || null;
 }
 
 export async function getCurrentUserRole() {
     const session = await getSession();
-    return (session?.user as any)?.rol || null;
+    return normalizeRole(session?.user?.rol || null);
 }
 
 export async function isSofor() {
     const session = await getSession();
-    return (session?.user as any)?.rol === 'SOFOR';
+    return isDriverRole(session?.user?.rol);
 }
 
 export async function isAdmin() {
     const session = await getSession();
-    return (session?.user as any)?.rol === 'ADMIN';
+    return isAdminRole(session?.user?.rol);
 }
 
 export async function getCurrentUserId() {

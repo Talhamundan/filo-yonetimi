@@ -44,8 +44,7 @@ model Arac {
   kasko            Kasko[]
   muayene          Muayene[]
   bakimlar         Bakim[]
-  cezalar          Ceza[]            @relation("CezaPlakaRelation")
-  cezalarByAracId  Ceza[]            @relation("CezaAracIdRelation")
+  cezalar          Ceza[]
   masraflar        Masraf[]
   kullaniciGecmisi KullaniciZimmet[]
   yakitlar         Yakit[]
@@ -55,10 +54,13 @@ model Arac {
 
   olusturmaTarihi  DateTime @default(now())
   guncellemeTarihi DateTime @default(now()) @updatedAt
+  deletedAt        DateTime?
+  deletedBy        String?
 
   @@index([plaka])
   @@index([durum])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model Kullanici {
@@ -73,15 +75,19 @@ model Kullanici {
   rol     Rol     @default(SOFOR)
 
   onayDurumu OnayDurumu @default(BEKLIYOR)
+  deletedAt  DateTime?
+  deletedBy  String?
 
   sirket   Sirket? @relation(fields: [sirketId], references: [id])
   sirketId String?
 
-  arac      Arac? // Mevcut zimmetli araç
-  zimmetler KullaniciZimmet[] // Geçmiş tüm zimmet kayıtları
-  cezalar   Ceza[]            @relation("CezaSoforRelation")
+  arac           Arac? // Mevcut zimmetli araç
+  zimmetler      KullaniciZimmet[] // Geçmiş tüm zimmet kayıtları
+  cezalar        Ceza[]            @relation("CezaSoforRelation")
+  yakitKayitlari Yakit[]           @relation("YakitSoforRelation")
 
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model KullaniciZimmet {
@@ -115,9 +121,12 @@ model TrafikSigortasi {
   aracId   String
   saseNo   String?
   sirketId String?
+  deletedAt DateTime?
+  deletedBy String?
 
   @@index([aracId])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model Kasko {
@@ -172,14 +181,17 @@ model Bakim {
   aracId   String
   saseNo   String?
   sirketId String?
+  deletedAt DateTime?
+  deletedBy String?
 
   @@index([aracId])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model Ceza {
   id             String    @id @default(cuid())
-  plaka          String
+  plaka          String?
   soforId        String?   @map("kullaniciId")
   tarih          DateTime  @map("cezaTarihi")
   tutar          Float
@@ -191,15 +203,17 @@ model Ceza {
   aracId         String
   saseNo         String?
   sirketId       String?
+  deletedAt      DateTime?
+  deletedBy      String?
 
   kullanici Kullanici? @relation("CezaSoforRelation", fields: [soforId], references: [id])
-  arac      Arac       @relation("CezaPlakaRelation", fields: [plaka], references: [plaka])
-  aracById  Arac       @relation("CezaAracIdRelation", fields: [aracId], references: [id])
+  arac      Arac       @relation(fields: [aracId], references: [id])
 
   @@index([plaka])
   @@index([soforId])
   @@index([aracId])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model Masraf {
@@ -213,9 +227,12 @@ model Masraf {
   aracId   String
   saseNo   String?
   sirketId String?
+  deletedAt DateTime?
+  deletedBy String?
 
   @@index([aracId])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 model Yakit {
@@ -226,8 +243,10 @@ model Yakit {
   km           Int // Yakıt alındığı andaki KM
   istasyon     String?
   odemeYontemi OdemeYontemi @default(NAKIT)
+  soforId      String?
 
-  arac     Arac    @relation(fields: [aracId], references: [id])
+  arac     Arac       @relation(fields: [aracId], references: [id])
+  sofor    Kullanici? @relation("YakitSoforRelation", fields: [soforId], references: [id])
   aracId   String
   saseNo   String?
   sirketId String?
@@ -235,6 +254,7 @@ model Yakit {
   @@index([aracId])
   @@index([sirketId])
   @@index([tarih])
+  @@index([soforId])
 }
 
 model HgsYukleme {
@@ -271,6 +291,25 @@ model Ariza {
   @@index([sirketId])
 }
 
+model ActivityLog {
+  id         String             @id @default(cuid())
+  actionType ActivityActionType
+  entityType ActivityEntityType
+  entityId   String
+  summary    String
+  metadata   Json?
+  userId     String?
+  companyId  String?
+  createdAt  DateTime           @default(now())
+
+  @@index([actionType])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([companyId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
 model Dokuman {
   id            String      @id @default(cuid())
   ad            String
@@ -282,9 +321,12 @@ model Dokuman {
   aracId   String
   saseNo   String?
   sirketId String?
+  deletedAt DateTime?
+  deletedBy String?
 
   @@index([aracId])
   @@index([sirketId])
+  @@index([deletedAt])
 }
 
 // ENUMLAR
@@ -366,4 +408,27 @@ enum OnayDurumu {
 enum OdemeYontemi {
   TASIT_TANIMA
   NAKIT
+}
+
+enum ActivityActionType {
+  CREATE
+  UPDATE
+  DELETE
+  RESTORE
+  ARCHIVE
+  LOGIN_SUCCESS
+  LOGIN_FAILURE
+  ROLE_CHANGE
+  STATUS_CHANGE
+}
+
+enum ActivityEntityType {
+  ARAC
+  MASRAF
+  BAKIM
+  DOKUMAN
+  CEZA
+  KULLANICI
+  OTURUM
+  DIGER
 }

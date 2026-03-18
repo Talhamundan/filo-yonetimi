@@ -7,6 +7,7 @@ import { Search, Plus, Fuel, Receipt, CreditCard, ArrowDown, ArrowUp, ArrowUpDow
 import { Card, CardContent } from "../../../components/ui/card";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { AracLink } from "@/components/links/RecordLinks";
+import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 
 type LedgerRecord = {
     id: string;
@@ -111,7 +112,14 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900">Finans & HGS Defteri</h2>
                     <p className="text-slate-500 text-sm mt-1">Araçların tüm yakıt alımları, muayene ücretleri ve genel gider kalemleri.</p>
                 </div>
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-3 flex-wrap justify-end">
+                    <ExcelTransferToolbar
+                        options={[
+                            { entity: "yakit", label: "Yakıt" },
+                            { entity: "masraf", label: "Masraf" },
+                            { entity: "muayene", label: "Muayene" },
+                        ]}
+                    />
                     <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                         <Plus size={16} />
                         Gider İşle

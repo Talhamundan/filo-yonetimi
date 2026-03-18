@@ -1,5 +1,6 @@
 "use server";
 
+import { OdemeYontemi } from "@prisma/client";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
@@ -14,7 +15,7 @@ function revalidateYakitPages(aracId?: string) {
     if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
 }
 
-export async function createYakit(data: {
+type CreateYakitInput = {
     aracId: string;
     tarih: string;
     litre: number;
@@ -22,8 +23,17 @@ export async function createYakit(data: {
     km: number;
     soforId?: string;
     istasyon?: string;
-    odemeYontemi?: string;
-}) {
+    odemeYontemi?: OdemeYontemi | string;
+};
+
+type UpdateYakitInput = Partial<CreateYakitInput>;
+
+function resolveOdemeYontemi(value?: string | OdemeYontemi): OdemeYontemi {
+    if (!value) return OdemeYontemi.NAKIT;
+    return value in OdemeYontemi ? (value as OdemeYontemi) : OdemeYontemi.NAKIT;
+}
+
+export async function createYakit(data: CreateYakitInput) {
     try {
         await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
@@ -50,7 +60,7 @@ export async function createYakit(data: {
                 km: Number(km),
                 soforId: sofor?.id ?? arac.kullaniciId ?? null,
                 istasyon: data.istasyon || null,
-                odemeYontemi: (data.odemeYontemi as any) || 'NAKIT',
+                odemeYontemi: resolveOdemeYontemi(data.odemeYontemi),
             }
         });
 
@@ -64,7 +74,7 @@ export async function createYakit(data: {
     }
 }
 
-export async function updateYakit(id: string, data: any) {
+export async function updateYakit(id: string, data: UpdateYakitInput) {
     try {
         await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
@@ -109,10 +119,11 @@ export async function updateYakit(id: string, data: any) {
                 aracId: arac.id,
                 sirketId: arac.sirketId || mevcutKayit.sirketId,
                 tarih: data.tarih ? new Date(data.tarih) : undefined,
-                litre: data.litre ? Number(data.litre) : undefined,
-                tutar: data.tutar ? Number(data.tutar) : undefined,
+                litre: data.litre !== undefined ? Number(data.litre) : undefined,
+                tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
                 km: data.km !== undefined ? Number(normalizedKm) : undefined,
                 soforId: resolvedSoforId,
+                odemeYontemi: data.odemeYontemi ? resolveOdemeYontemi(data.odemeYontemi) : undefined,
             }
         });
 

@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { DEADLINE_STATUS_CLASS, getDeadlineLabel, type DeadlineStatus } from "@/lib/deadline-status";
 import { AracLink } from "@/components/links/RecordLinks";
+import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 
 type EvrakRow = {
     id: string;
@@ -120,6 +121,13 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900">Evrak Takibi</h2>
                     <p className="text-slate-500 text-sm mt-1">Muayene, kasko ve trafik poliçesi bitiş sürelerini izleyin.</p>
                 </div>
+                <ExcelTransferToolbar
+                    options={[
+                        { entity: "muayene", label: "Muayene" },
+                        { entity: "kasko", label: "Kasko" },
+                        { entity: "trafikSigortasi", label: "Trafik Sigortası" },
+                    ]}
+                />
             </header>
 
             <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">

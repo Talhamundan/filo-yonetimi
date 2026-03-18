@@ -1,4 +1,5 @@
 import type { NextAuthConfig } from "next-auth"
+import type { JWT } from "next-auth/jwt"
 
 export const authConfig = {
   pages: {
@@ -7,20 +8,22 @@ export const authConfig = {
   },
   providers: [], // Bu alan auth.ts içerisinde doldurulacak
   callbacks: {
-    async jwt({ token, user }: any) {
+    async jwt({ token, user }) {
       if (user) {
-        token.rol = user.rol
-        token.sirketId = user.sirketId
-        token.onayDurumu = user.onayDurumu
+        const typedUser = user as { rol: string; sirketId: string | null; onayDurumu: string }
+        token.rol = typedUser.rol
+        token.sirketId = typedUser.sirketId
+        token.onayDurumu = typedUser.onayDurumu
       }
       return token
     },
-    async session({ session, token }: any) {
+    async session({ session, token }) {
+      const typedToken = token as JWT & { rol?: string; sirketId?: string | null; onayDurumu?: string }
       if (token) {
-        session.user.id = token.sub
-        session.user.rol = token.rol
-        session.user.sirketId = token.sirketId
-        session.user.onayDurumu = token.onayDurumu
+        session.user.id = token.sub || ""
+        session.user.rol = typedToken.rol || "SOFOR"
+        session.user.sirketId = typedToken.sirketId || null
+        session.user.onayDurumu = typedToken.onayDurumu || "BEKLIYOR"
       }
       return session
     }

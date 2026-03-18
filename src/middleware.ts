@@ -1,13 +1,16 @@
 import NextAuth from "next-auth"
 import { authConfig } from "./auth.config"
 import { NextResponse } from "next/server"
+import { isDashboardPathRestrictedForRole, shouldForceWaitingPage } from "@/lib/policy"
 
 const { auth } = NextAuth(authConfig)
 
 export default auth((req) => {
   const { nextUrl } = req
   const isLoggedIn = !!req.auth
-  const userRole = (req.auth?.user as any)?.rol
+  const authUser = req.auth?.user as { rol?: string; onayDurumu?: string } | undefined
+  const userRole = authUser?.rol
+  const userOnayDurumu = authUser?.onayDurumu
   const isAuthPage = nextUrl.pathname.startsWith("/auth")
   const isDashboardPage = nextUrl.pathname.startsWith("/dashboard")
 
@@ -17,28 +20,16 @@ export default auth((req) => {
   }
 
   // 2. Onaylanmamış kullanıcı (ADMIN değilse) dashboard'a girerse bekleme sayfasına at
-  if (isLoggedIn && isDashboardPage && (req.auth?.user as any)?.onayDurumu !== "ONAYLANDI" && userRole !== "ADMIN") {
+  if (isLoggedIn && isDashboardPage && shouldForceWaitingPage(userRole, userOnayDurumu)) {
       if (nextUrl.pathname !== "/dashboard/bekleme") {
         return NextResponse.redirect(new URL("/dashboard/bekleme", nextUrl))
       }
   }
 
   // 3. Rol Bazlı Erişim Kontrolü (RBAC)
-  if (isLoggedIn && isDashboardPage) {
-    // Şoför kısıtlamaları
-    if (userRole === "SOFOR") {
-        const restrictedPaths = [
-            "/dashboard/personel",
-            "/dashboard/onay-merkezi",
-            "/dashboard/sirketler",
-            "/dashboard/finans"
-        ];
-        
-        if (restrictedPaths.some(path => nextUrl.pathname.startsWith(path))) {
-            return NextResponse.redirect(new URL("/dashboard", nextUrl));
-        }
+  if (isLoggedIn && isDashboardPage && isDashboardPathRestrictedForRole(userRole, nextUrl.pathname)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
-  }
 
   // 4. Giriş yapmış kullanıcı auth sayfalarına (login/register) girmek isterse dashboard'a at
   if (isAuthPage && isLoggedIn) {

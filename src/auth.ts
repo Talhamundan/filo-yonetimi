@@ -23,9 +23,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (!credentials?.eposta || !credentials?.sifre) return null
 
         try {
-          const user = await (prisma as any).kullanici.findUnique({
+          const user = await prisma.kullanici.findUnique({
             where: { eposta: credentials.eposta as string },
-            include: { sirket: true }
+            select: {
+              id: true,
+              ad: true,
+              soyad: true,
+              eposta: true,
+              sifre: true,
+              rol: true,
+              sirketId: true,
+              onayDurumu: true,
+            },
           })
 
           if (!user || !user.sifre) return null
