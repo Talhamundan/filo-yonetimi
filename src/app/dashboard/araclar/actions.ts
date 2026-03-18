@@ -273,7 +273,6 @@ export async function deleteArac(id: string) {
             prisma.masraf.deleteMany({ where: { aracId: id } }),
             prisma.kullaniciZimmet.deleteMany({ where: { aracId: id } }),
             prisma.yakit.deleteMany({ where: { aracId: id } }),
-            prisma.ariza.deleteMany({ where: { aracId: id } }),
             prisma.dokuman.deleteMany({ where: { aracId: id } }),
             (prisma as any).hgsYukleme.deleteMany({ where: { aracId: id } }),
             prisma.arac.delete({ where: { id } })

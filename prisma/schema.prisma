@@ -48,7 +48,6 @@ model Arac {
   masraflar        Masraf[]
   kullaniciGecmisi KullaniciZimmet[]
   yakitlar         Yakit[]
-  arizalar         Ariza[]
   dokumanlar       Dokuman[]
   hgsYuklemeler    HgsYukleme[]
 
@@ -121,12 +120,9 @@ model TrafikSigortasi {
   aracId   String
   saseNo   String?
   sirketId String?
-  deletedAt DateTime?
-  deletedBy String?
 
   @@index([aracId])
   @@index([sirketId])
-  @@index([deletedAt])
 }
 
 model Kasko {
@@ -274,23 +270,6 @@ model HgsYukleme {
   @@index([tarih])
 }
 
-model Ariza {
-  id           String      @id @default(cuid())
-  aciklama     String
-  arizaTarihi  DateTime    @default(now())
-  durum        ArizaDurumu @default(ACIK)
-  servis       String?
-  tahminiTutar Float?
-
-  arac     Arac    @relation(fields: [aracId], references: [id])
-  aracId   String
-  saseNo   String?
-  sirketId String?
-
-  @@index([aracId])
-  @@index([sirketId])
-}
-
 model ActivityLog {
   id         String             @id @default(cuid())
   actionType ActivityActionType
@@ -363,13 +342,6 @@ enum MasrafKategorisi {
   OTOPARK
   KOPRU_OBO
   DIGER
-}
-
-enum ArizaDurumu {
-  ACIK
-  TAMIRDE
-  COZULDU
-  PARCA_BEKLIYOR
 }
 
 enum DokumanTuru {

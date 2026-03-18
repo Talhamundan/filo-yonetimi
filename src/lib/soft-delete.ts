@@ -153,7 +153,6 @@ export async function hardDeleteEntity(entity: SoftDeleteEntity, id: string) {
                 prisma.masraf.deleteMany({ where: { aracId: id } }),
                 prisma.kullaniciZimmet.deleteMany({ where: { aracId: id } }),
                 prisma.yakit.deleteMany({ where: { aracId: id } }),
-                prisma.ariza.deleteMany({ where: { aracId: id } }),
                 prisma.dokuman.deleteMany({ where: { aracId: id } }),
                 prisma.hgsYukleme.deleteMany({ where: { aracId: id } }),
                 prisma.arac.delete({ where: { id } }),
