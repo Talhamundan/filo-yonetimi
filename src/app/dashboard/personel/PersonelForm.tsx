@@ -5,17 +5,34 @@ import { Input } from "../../../components/ui/input";
 
 export const ROLLER = ['ADMIN', 'YONETICI', 'MUDUR', 'MUHASEBECI', 'SOFOR'];
 export const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
-export const FormFields = ({ formData, setFormData, sirketler }: { formData: any, setFormData: any, sirketler: any[] }) => (
+export const FormFields = ({
+    formData,
+    setFormData,
+    sirketler
+}: {
+    formData: any,
+    setFormData: any,
+    sirketler: { id: string; ad: string; bulunduguIl?: string }[]
+}) => (
     <div className="grid gap-4 py-4">
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Ad <span className="text-red-500">*</span></label>
-                <Input value={formData.ad} onChange={e => setFormData({...formData, ad: e.target.value})} className="h-9" />
+                <Input
+                    value={formData.ad}
+                    onChange={e => setFormData({...formData, ad: forceUppercase(e.target.value)})}
+                    className="h-9 uppercase"
+                />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Soyad <span className="text-red-500">*</span></label>
-                <Input value={formData.soyad} onChange={e => setFormData({...formData, soyad: e.target.value})} className="h-9" />
+                <Input
+                    value={formData.soyad}
+                    onChange={e => setFormData({...formData, soyad: forceUppercase(e.target.value)})}
+                    className="h-9 uppercase"
+                />
             </div>
         </div>
         <div className="space-y-1.5">
@@ -42,7 +59,15 @@ export const FormFields = ({ formData, setFormData, sirketler }: { formData: any
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bağlı Şirket</label>
-                <select value={formData.sirketId} onChange={e => setFormData({...formData, sirketId: e.target.value})}
+                <select value={formData.sirketId} onChange={e => {
+                    const nextSirketId = e.target.value;
+                    const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                    setFormData({
+                        ...formData,
+                        sirketId: nextSirketId,
+                        sehir: selectedSirket?.bulunduguIl || formData.sehir
+                    });
+                }}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
                     <option value="">Bağımsız (Yok)</option>
                     {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}

@@ -2,9 +2,17 @@
 
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
-import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
+import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
+import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
 
 const PATH = '/dashboard/yakitlar';
+const ARACLAR_PATH = '/dashboard/araclar';
+
+function revalidateYakitPages(aracId?: string) {
+    revalidatePath(PATH);
+    revalidatePath(ARACLAR_PATH);
+    if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
+}
 
 export async function createYakit(data: {
     aracId: string;
@@ -12,6 +20,7 @@ export async function createYakit(data: {
     litre: number;
     tutar: number;
     km: number;
+    soforId?: string;
     istasyon?: string;
     odemeYontemi?: string;
 }) {
@@ -20,7 +29,15 @@ export async function createYakit(data: {
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             sirketId: true,
-            guncelKm: true,
+            kullaniciId: true,
+        });
+        const sofor = data.soforId
+            ? await getScopedKullaniciOrThrow(data.soforId, { id: true })
+            : null;
+        const km = await assertKmWriteConsistency({
+            aracId: arac.id,
+            km: data.km,
+            fieldLabel: "Yakit KM",
         });
 
         await prisma.yakit.create({
@@ -30,21 +47,16 @@ export async function createYakit(data: {
                 tarih: new Date(data.tarih),
                 litre: Number(data.litre),
                 tutar: Number(data.tutar),
-                km: Number(data.km),
+                km: Number(km),
+                soforId: sofor?.id ?? arac.kullaniciId ?? null,
                 istasyon: data.istasyon || null,
                 odemeYontemi: (data.odemeYontemi as any) || 'NAKIT',
             }
         });
 
-        // Araç KM güncelleme mantığı
-        if (Number(data.km) > arac.guncelKm) {
-            await prisma.arac.update({
-                where: { id: arac.id },
-                data: { guncelKm: Number(data.km) }
-            });
-        }
+        await syncAracGuncelKm(arac.id);
 
-        revalidatePath(PATH);
+        revalidateYakitPages(arac.id);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -59,12 +71,36 @@ export async function updateYakit(id: string, data: any) {
             prismaModel: "yakit",
             filterModel: "yakit",
             id,
-            select: { aracId: true, sirketId: true },
+            select: { aracId: true, sirketId: true, km: true, soforId: true },
             errorMessage: "Yakit kaydi bulunamadi veya yetkiniz yok.",
         });
         const arac = data.aracId
-            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true, guncelKm: true })
-            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true, guncelKm: true });
+            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true, kullaniciId: true })
+            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true, kullaniciId: true });
+        const sofor = data.soforId
+            ? await getScopedKullaniciOrThrow(data.soforId, { id: true })
+            : null;
+
+        const kmInput =
+            data.km !== undefined
+                ? data.km
+                : data.aracId && data.aracId !== mevcutKayit.aracId
+                    ? mevcutKayit.km
+                    : undefined;
+
+        const normalizedKm =
+            kmInput !== undefined
+                ? await assertKmWriteConsistency({
+                    aracId: arac.id,
+                    km: kmInput,
+                    fieldLabel: "Yakit KM",
+                    currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
+                })
+                : null;
+        const vehicleChanged = Boolean(data.aracId && data.aracId !== mevcutKayit.aracId);
+        const resolvedSoforId =
+            sofor?.id ??
+            (vehicleChanged ? (arac.kullaniciId ?? null) : (mevcutKayit.soforId ?? null));
 
         await prisma.yakit.update({
             where: { id },
@@ -75,19 +111,14 @@ export async function updateYakit(id: string, data: any) {
                 tarih: data.tarih ? new Date(data.tarih) : undefined,
                 litre: data.litre ? Number(data.litre) : undefined,
                 tutar: data.tutar ? Number(data.tutar) : undefined,
-                km: data.km ? Number(data.km) : undefined,
+                km: data.km !== undefined ? Number(normalizedKm) : undefined,
+                soforId: resolvedSoforId,
             }
         });
 
-        // Araç KM güncelleme mantığı (eğer güncellenen KM mevcut olandan büyükse)
-        if (data.km && Number(data.km) > arac.guncelKm) {
-            await prisma.arac.update({
-                where: { id: arac.id },
-                data: { guncelKm: Number(data.km) }
-            });
-        }
+        await syncAracGuncelKm(arac.id);
 
-        revalidatePath(PATH);
+        revalidateYakitPages(arac.id);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -98,15 +129,16 @@ export async function updateYakit(id: string, data: any) {
 export async function deleteYakit(id: string) {
     try {
         await assertAuthenticatedUser();
-        await getScopedRecordOrThrow({
+        const kayit = await getScopedRecordOrThrow({
             prismaModel: "yakit",
             filterModel: "yakit",
             id,
+            select: { aracId: true },
             errorMessage: "Yakit kaydi bulunamadi veya yetkiniz yok.",
         });
 
         await prisma.yakit.delete({ where: { id } });
-        revalidatePath(PATH);
+        revalidateYakitPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (e) {
         console.error(e);

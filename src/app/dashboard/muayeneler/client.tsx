@@ -11,17 +11,30 @@ import { getColumns, MuayeneRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createMuayene, updateMuayene, deleteMuayene } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: '',
     muayeneTarihi: new Date().toISOString().split('T')[0],
     gecerlilikTarihi: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().split('T')[0],
-    istasyon: '',
+    tutar: '',
+    gectiMi: true,
     km: '',
     aktifMi: true
 };
 
-const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: any[] }) => (
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string | null;
+    model?: string | null;
+    bulunduguIl?: string | null;
+};
+
+const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
+
+    return (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
@@ -31,8 +44,9 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Seçiniz...</option>
-                {araclar.map((a: any) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                {araclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
             </select>
+            <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -46,22 +60,34 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-                <label className="text-sm font-medium">TÜVTÜRK İstasyonu</label>
-                <Input value={formData.istasyon} onChange={e => setFormData({...formData, istasyon: e.target.value})} placeholder="Örn: İstanbul/Silivri" className="h-9" />
+                <label className="text-sm font-medium">Muayene Ücreti (₺)</label>
+                <Input type="number" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="2620" className="h-9" />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Muayene Anındaki KM</label>
                 <Input type="number" value={formData.km} onChange={e => setFormData({...formData, km: e.target.value})} placeholder="123456" className="h-9" />
             </div>
         </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Muayene Sonucu</label>
+            <select
+                value={formData.gectiMi ? "GECTI" : "GECMEDI"}
+                onChange={e => setFormData({ ...formData, gectiMi: e.target.value === "GECTI" })}
+                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+                <option value="GECTI">Geçti</option>
+                <option value="GECMEDI">Geçmedi</option>
+            </select>
+        </div>
         <div className="flex items-center gap-2">
             <input type="checkbox" id="aktifMi" checked={formData.aktifMi} onChange={e => setFormData({...formData, aktifMi: e.target.checked})} className="h-4 w-4 rounded border-slate-300" />
             <label htmlFor="aktifMi" className="text-sm font-medium">Bu Kayıt Güncel/Aktif mi?</label>
         </div>
     </div>
-);
+    );
+};
 
-export default function MuayenelerClient({ initialMuayeneler, araclar }: { initialMuayeneler: MuayeneRow[], araclar: { id: string, plaka: string }[] }) {
+export default function MuayenelerClient({ initialMuayeneler, araclar }: { initialMuayeneler: MuayeneRow[], araclar: AracOption[] }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
@@ -75,7 +101,11 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
             return toast.warning("Araç Seçilmedi", { description: "Lütfen bir araç seçin." });
         }
         setLoading(true);
-        const res = await createMuayene({ ...formData, km: formData.km ? parseInt(formData.km) : undefined } as any);
+        const res = await createMuayene({
+            ...formData,
+            km: formData.km ? parseInt(formData.km) : undefined,
+            tutar: formData.tutar ? parseFloat(formData.tutar) : undefined
+        } as any);
         if (res.success) {
             setCreateOpen(false);
             setFormData({ ...EMPTY });
@@ -90,7 +120,11 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
     const handleUpdate = async () => {
         if (!editRow || !formData.aracId) return;
         setLoading(true);
-        const res = await updateMuayene(editRow.id, { ...formData, km: formData.km ? parseInt(formData.km) : undefined } as any);
+        const res = await updateMuayene(editRow.id, {
+            ...formData,
+            km: formData.km ? parseInt(formData.km) : undefined,
+            tutar: formData.tutar ? parseFloat(formData.tutar) : undefined
+        } as any);
         if (res.success) {
             setEditRow(null);
             toast.success("Güncelleme Başarılı", { description: "Muayene bilgileri güncellendi." });
@@ -118,7 +152,8 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
             aracId: row.arac.id,
             muayeneTarihi: new Date(row.muayeneTarihi).toISOString().split('T')[0],
             gecerlilikTarihi: new Date(row.gecerlilikTarihi).toISOString().split('T')[0],
-            istasyon: row.istasyon || '',
+            tutar: String(row.tutar || ''),
+            gectiMi: row.gectiMi ?? true,
             km: row.km ? String(row.km) : '',
             aktifMi: row.aktifMi
         });
@@ -152,7 +187,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                         <CheckCircle2 className="text-emerald-600" /> Periyodik Muayene Takipleri
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Araçların TÜVTÜRK periyodik muayene tarihlerini ve istasyon bilgilerini yönetin.</p>
+                    <p className="text-slate-500 text-sm mt-1">Araçların periyodik muayene tarihlerini ve maliyetlerini yönetin.</p>
                 </div>
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                     <DialogTrigger asChild>
@@ -183,6 +218,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
                 data={initialMuayeneler}
                 searchKey="arac_plaka"
                 searchPlaceholder="Muayene kaydı için araç plakası ara..."
+                excelEntity="muayene"
             />
 
             <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

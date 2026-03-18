@@ -1,26 +1,31 @@
 "use client"
 
 import { useConfirm } from "@/components/ui/confirm-modal";
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, Users, Trash2, Pencil } from "lucide-react";
-import { Input } from "../../../components/ui/input";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { columns, PersonelRow } from "./columns";
 import { createPersonel, updatePersonel, deletePersonel } from "./actions";
-import { FormFields, ROLLER, ILLER } from "./PersonelForm";
+import { FormFields, ROLLER } from "./PersonelForm";
 
 const EMPTY = { ad: '', soyad: '', eposta: '', telefon: '', rol: 'SOFOR', sirketId: '', sehir: '', tcNo: '' };
 
-export default function PersonelClient({ initialData, sirketler }: { initialData: PersonelRow[], sirketler: { id: string, ad: string }[] }) {
+export default function PersonelClient({ initialData, sirketler }: { initialData: PersonelRow[], sirketler: { id: string, ad: string, bulunduguIl: string }[] }) {
     const { confirmModal, openConfirm } = useConfirm();
         const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<PersonelRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
+    const [roleFilter, setRoleFilter] = useState<string>("TUMU");
     const [loading, setLoading] = useState(false);
+
+    const filteredData = useMemo(() => {
+        if (roleFilter === "TUMU") return initialData;
+        return initialData.filter((row) => row.rol === roleFilter);
+    }, [initialData, roleFilter]);
 
     const handleCreate = async () => {
         if (!formData.ad || !formData.soyad) {
@@ -154,11 +159,26 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
 
             <DataTable 
                 columns={columnsWithActions as any} 
-                data={initialData} 
+                data={filteredData} 
                 searchKey="adSoyad" 
                 searchPlaceholder="İsim ile ara..." 
+                toolbarRight={
+                    <select
+                        value={roleFilter}
+                        onChange={(e) => setRoleFilter(e.target.value)}
+                        className="h-10 min-w-[180px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm"
+                    >
+                        <option value="TUMU">Tüm Roller</option>
+                        {ROLLER.map((rol) => (
+                            <option key={rol} value={rol}>
+                                {rol}
+                            </option>
+                        ))}
+                    </select>
+                }
                 tableClassName="min-w-[1280px]"
                 onRowClick={(row) => router.push(`/dashboard/personel/${row.id}`)}
+                excelEntity="personel"
             />
         </div>
     );

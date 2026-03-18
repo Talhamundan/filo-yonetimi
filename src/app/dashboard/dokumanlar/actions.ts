@@ -5,6 +5,13 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 
 const PATH = '/dashboard/dokumanlar';
+const ARACLAR_PATH = '/dashboard/araclar';
+
+function revalidateDokumanPages(aracId?: string) {
+    revalidatePath(PATH);
+    revalidatePath(ARACLAR_PATH);
+    if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
+}
 
 export async function createDokuman(data: {
     ad: string;
@@ -28,7 +35,7 @@ export async function createDokuman(data: {
                 sirketId: arac.sirketId,
             }
         });
-        revalidatePath(PATH);
+        revalidateDokumanPages(arac.id);
         return { success: true };
     } catch (error) {
         console.error("Doküman eklenirken hata:", error);
@@ -39,15 +46,16 @@ export async function createDokuman(data: {
 export async function deleteDokuman(id: string) {
     try {
         await assertAuthenticatedUser();
-        await getScopedRecordOrThrow({
+        const kayit = await getScopedRecordOrThrow({
             prismaModel: "dokuman",
             filterModel: "dokuman",
             id,
+            select: { aracId: true },
             errorMessage: "Dokuman bulunamadi veya yetkiniz yok.",
         });
 
         await prisma.dokuman.delete({ where: { id } });
-        revalidatePath(PATH);
+        revalidateDokumanPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (error) {
         console.error("Doküman silinirken hata:", error);

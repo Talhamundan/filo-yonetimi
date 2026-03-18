@@ -11,6 +11,7 @@ import { getColumns, DokumanRow } from "./columns";
 import { createDokuman, deleteDokuman } from "./actions";
 import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     ad: "",
@@ -24,7 +25,7 @@ export default function DokumanlarClient({
     araclar 
 }: { 
     initialDokumanlar: DokumanRow[], 
-    araclar: { id: string, plaka: string }[] 
+    araclar: { id: string, plaka: string, marka?: string | null, model?: string | null, bulunduguIl?: string | null }[] 
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -32,6 +33,7 @@ export default function DokumanlarClient({
     const [createOpen, setCreateOpen] = useState(false);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.ad) {
@@ -135,6 +137,7 @@ export default function DokumanlarClient({
                                         <option value="">Araç Seçiniz...</option>
                                         {araclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
                                     </select>
+                                    <SelectedAracInfo arac={selectedArac} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Dosya Adı <span className="text-red-500">*</span></label>
@@ -187,6 +190,7 @@ export default function DokumanlarClient({
                 data={initialDokumanlar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Evrak aramak için plaka giriniz..."
+                excelEntity="dokuman"
             />
         </div>
     );

@@ -7,8 +7,9 @@ import { Badge } from "../../../../components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../../components/ui/dialog";
+import { Input } from "../../../../components/ui/input";
 import {
-    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Pencil, Trash2
+    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Pencil, Trash2, Plus
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -18,8 +19,18 @@ import { updatePersonel, deletePersonel, araciBirak } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { createZimmet } from "../../zimmetler/actions";
+import { AracLink } from "@/components/links/RecordLinks";
 
-export default function PersonelDetailClient({ initialPersonel: p, sirketler }: { initialPersonel: any, sirketler: any[] }) {
+export default function PersonelDetailClient({
+    initialPersonel: p,
+    sirketler,
+    atamayaUygunAraclar
+}: {
+    initialPersonel: any,
+    sirketler: any[],
+    atamayaUygunAraclar: { id: string; plaka: string; marka: string; model: string; guncelKm: number; sirket?: { ad: string } | null }[]
+}) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
@@ -35,6 +46,13 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
         tcNo: p.tcNo || ''
     });
     const [loading, setLoading] = useState(false);
+    const [atamaOpen, setAtamaOpen] = useState(false);
+    const [atamaData, setAtamaData] = useState({
+        aracId: '',
+        baslangic: new Date().toISOString().split('T')[0],
+        baslangicKm: '',
+        notlar: ''
+    });
 
     const handleUpdate = async () => {
         setLoading(true);
@@ -79,6 +97,46 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
             router.refresh();
         } else {
             toast.error(res.error || "İşlem başarısız");
+        }
+        setLoading(false);
+    };
+
+    const handleAtamaAracChange = (aracId: string) => {
+        const seciliArac = atamayaUygunAraclar.find((arac) => arac.id === aracId);
+        setAtamaData((prev) => ({
+            ...prev,
+            aracId,
+            baslangicKm: seciliArac ? String(seciliArac.guncelKm || 0) : prev.baslangicKm
+        }));
+    };
+
+    const handleAracAta = async () => {
+        if (!atamaData.aracId) {
+            toast.warning("Araç Seçilmedi", { description: "Lütfen atamak için bir araç seçin." });
+            return;
+        }
+
+        setLoading(true);
+        const res = await createZimmet({
+            aracId: atamaData.aracId,
+            kullaniciId: p.id,
+            baslangic: atamaData.baslangic,
+            baslangicKm: Number(atamaData.baslangicKm || 0),
+            notlar: atamaData.notlar || undefined
+        });
+
+        if (res.success) {
+            toast.success("Araç ataması yapıldı");
+            setAtamaOpen(false);
+            setAtamaData({
+                aracId: '',
+                baslangic: new Date().toISOString().split('T')[0],
+                baslangicKm: '',
+                notlar: ''
+            });
+            router.refresh();
+        } else {
+            toast.error(res.error || "Araç ataması başarısız");
         }
         setLoading(false);
     };
@@ -158,6 +216,62 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                 >
                                     ARACI BIRAK
                                 </button>
+                            )}
+                            {!p.arac && (
+                                <Dialog open={atamaOpen} onOpenChange={setAtamaOpen}>
+                                    <DialogTrigger asChild>
+                                        <button
+                                            className="text-[10px] font-bold text-indigo-700 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded transition-colors flex items-center gap-1"
+                                            disabled={loading}
+                                        >
+                                            <Plus size={12} /> ARAÇ ATA
+                                        </button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[420px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Personel Araca Ata</DialogTitle>
+                                            <DialogDescription>
+                                                {p.ad} {p.soyad} için araç seçerek zimmet oluşturun.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
+                                                <select
+                                                    value={atamaData.aracId}
+                                                    onChange={(e) => handleAtamaAracChange(e.target.value)}
+                                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                                >
+                                                    <option value="">Araç seçiniz...</option>
+                                                    {atamayaUygunAraclar.map((arac) => (
+                                                        <option key={arac.id} value={arac.id}>
+                                                            {arac.plaka} - {arac.marka} {arac.model}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim Tarihi</label>
+                                                    <Input type="date" value={atamaData.baslangic} onChange={e => setAtamaData({ ...atamaData, baslangic: e.target.value })} className="h-9" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim KM</label>
+                                                    <Input type="number" value={atamaData.baslangicKm} onChange={e => setAtamaData({ ...atamaData, baslangicKm: e.target.value })} className="h-9" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Not</label>
+                                                <Input value={atamaData.notlar} onChange={e => setAtamaData({ ...atamaData, notlar: e.target.value })} className="h-9" placeholder="Opsiyonel not" />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <button onClick={handleAracAta} disabled={loading || atamayaUygunAraclar.length === 0} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                                {loading ? "Atanıyor..." : "Araç Ata"}
+                                            </button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             )}
                         </div>
                         {p.arac ? (
@@ -269,7 +383,9 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                                     onClick={() => router.push(`/dashboard/araclar/${z.arac.id}`)}
                                                 >
                                                     <div className="flex flex-col">
-                                                        <span>{z.arac.plaka}</span>
+                                                        <AracLink aracId={z.arac.id} className="hover:underline">
+                                                            {z.arac.plaka}
+                                                        </AracLink>
                                                         {canAccessAllCompanies && z.arac.sirket?.ad ? (
                                                             <span className="text-[11px] font-semibold text-indigo-500 normal-case">{z.arac.sirket.ad}</span>
                                                         ) : null}
@@ -301,7 +417,7 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                     <TableRow>
                                         <TableHead>Tarih</TableHead>
                                         <TableHead>Araç Plaka</TableHead>
-                                        <TableHead>Açıklama</TableHead>
+                                        <TableHead>Ceza Maddesi</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -309,16 +425,18 @@ export default function PersonelDetailClient({ initialPersonel: p, sirketler }: 
                                     {p.cezalar && p.cezalar.length > 0 ? (
                                         p.cezalar.map((c: any) => (
                                             <TableRow key={c.id}>
-                                                <TableCell>{formatDate(c.cezaTarihi)}</TableCell>
+                                                <TableCell>{formatDate(c.tarih)}</TableCell>
                                                 <TableCell className="font-mono font-bold">
                                                     <div className="flex flex-col">
-                                                        <span>{c.arac?.plaka}</span>
+                                                        <AracLink aracId={c.arac?.id} className="hover:text-indigo-600 hover:underline">
+                                                            {c.arac?.plaka}
+                                                        </AracLink>
                                                         {canAccessAllCompanies && c.arac?.sirket?.ad ? (
                                                             <span className="text-[11px] font-semibold text-indigo-500 normal-case">{c.arac.sirket.ad}</span>
                                                         ) : null}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell className="text-slate-600">{c.aciklama || '-'}</TableCell>
+                                                <TableCell className="text-slate-600">{c.cezaMaddesi || c.aciklama || '-'}</TableCell>
                                                 <TableCell className="text-right font-bold text-rose-600">₺{c.tutar.toLocaleString()}</TableCell>
                                             </TableRow>
                                         ))

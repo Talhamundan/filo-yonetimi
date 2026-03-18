@@ -1,16 +1,18 @@
 "use client"
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, ClipboardCheck, Trash2 } from "lucide-react";
+import { Plus, ClipboardCheck, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, SoforZimmetRow } from "./columns";
 import { useRouter } from "next/navigation";
-import { createZimmet, deleteZimmet } from "./actions";
+import { createZimmet, deleteZimmet, updateZimmet } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { sortByTextValue } from "@/lib/sort-utils";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: '',
@@ -20,13 +22,21 @@ const EMPTY = {
     notlar: ''
 };
 
+const EMPTY_EDIT = {
+    baslangic: '',
+    bitis: '',
+    baslangicKm: '',
+    bitisKm: '',
+    notlar: ''
+};
+
 export default function ZimmetlerClient({ 
     initialZimmetler, 
     araclar, 
     kullanicilar 
 }: { 
     initialZimmetler: SoforZimmetRow[], 
-    araclar: { id: string, plaka: string, guncelKm: number }[],
+    araclar: { id: string, plaka: string, marka?: string | null, model?: string | null, bulunduguIl?: string | null, guncelKm: number }[],
     kullanicilar: { id: string, adSoyad: string }[]
 }) {
     const { confirmModal, openConfirm } = useConfirm();
@@ -34,7 +44,12 @@ export default function ZimmetlerClient({
     const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [formData, setFormData] = useState({ ...EMPTY });
+    const [editRow, setEditRow] = useState<SoforZimmetRow | null>(null);
+    const [editFormData, setEditFormData] = useState({ ...EMPTY_EDIT });
     const [loading, setLoading] = useState(false);
+    const sortedAraclar = useMemo(() => sortByTextValue(araclar, (a) => a.plaka), [araclar]);
+    const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (k) => k.adSoyad), [kullanicilar]);
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.kullaniciId) {
@@ -49,6 +64,45 @@ export default function ZimmetlerClient({
             router.refresh();
         } else {
             toast.error("İşlem Başarısız", { description: res.error });
+        }
+        setLoading(false);
+    };
+
+    const openEdit = (row: SoforZimmetRow) => {
+        setEditFormData({
+            baslangic: new Date(row.baslangic).toISOString().split('T')[0],
+            bitis: row.bitis ? new Date(row.bitis).toISOString().split('T')[0] : '',
+            baslangicKm: String(row.baslangicKm || ''),
+            bitisKm: row.bitisKm ? String(row.bitisKm) : '',
+            notlar: row.notlar || ''
+        });
+        setEditRow(row);
+    };
+
+    const handleUpdate = async () => {
+        if (!editRow) return;
+        if (!editFormData.baslangic || !editFormData.baslangicKm) {
+            return toast.warning("Eksik Bilgi", { description: "Başlangıç tarihi ve başlangıç KM zorunludur." });
+        }
+        if (editFormData.bitis && new Date(editFormData.bitis) < new Date(editFormData.baslangic)) {
+            return toast.warning("Tarih Hatası", { description: "Bitiş tarihi, başlangıç tarihinden önce olamaz." });
+        }
+
+        setLoading(true);
+        const res = await updateZimmet(editRow.id, {
+            baslangic: editFormData.baslangic,
+            bitis: editFormData.bitis || null,
+            baslangicKm: Number(editFormData.baslangicKm),
+            bitisKm: editFormData.bitisKm ? Number(editFormData.bitisKm) : null,
+            notlar: editFormData.notlar || null
+        });
+        if (res.success) {
+            setEditRow(null);
+            setEditFormData({ ...EMPTY_EDIT });
+            toast.success("Zimmet Güncellendi", { description: "Zimmet geçmişi kaydı başarıyla güncellendi." });
+            router.refresh();
+        } else {
+            toast.error("Güncelleme Hatası", { description: res.error });
         }
         setLoading(false);
     };
@@ -81,6 +135,9 @@ export default function ZimmetlerClient({
             header: 'İşlemler',
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
+                    <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors">
+                        <Pencil size={15} />
+                    </button>
                     <button onClick={() => handleDelete(row.original.id)} className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors">
                         <Trash2 size={15} />
                     </button>
@@ -122,8 +179,9 @@ export default function ZimmetlerClient({
                                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                                 >
                                     <option value="">Seçiniz...</option>
-                                    {araclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                                    {sortedAraclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
                                 </select>
+                                <SelectedAracInfo arac={selectedArac} />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Personel / Şoför <span className="text-red-500">*</span></label>
@@ -133,7 +191,7 @@ export default function ZimmetlerClient({
                                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                                 >
                                     <option value="">Seçiniz...</option>
-                                    {kullanicilar.map(k => <option key={k.id} value={k.id}>{k.adSoyad}</option>)}
+                                    {sortedKullanicilar.map(k => <option key={k.id} value={k.id}>{k.adSoyad}</option>)}
                                 </select>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -165,7 +223,63 @@ export default function ZimmetlerClient({
                 data={initialZimmetler}
                 searchKey="arac_plaka"
                 searchPlaceholder="Araç plakasına göre ara..."
+                excelEntity="zimmet"
             />
+
+            <Dialog open={!!editRow} onOpenChange={(open) => {
+                if (!open) {
+                    setEditRow(null);
+                    setEditFormData({ ...EMPTY_EDIT });
+                }
+            }}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Zimmet Kaydını Düzenle</DialogTitle>
+                        <DialogDescription>
+                            {editRow?.arac.plaka} aracı için zimmet geçmişi detaylarını güncelleyin.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Araç</label>
+                            <Input value={editRow ? editRow.arac.plaka : ''} disabled className="h-9" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Personel / Şoför</label>
+                            <Input value={editRow?.kullanici ? `${editRow.kullanici.ad} ${editRow.kullanici.soyad}` : 'Atanmamış'} disabled className="h-9" />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Teslim Tarihi</label>
+                                <Input type="date" value={editFormData.baslangic} onChange={e => setEditFormData({ ...editFormData, baslangic: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">İade Tarihi</label>
+                                <Input type="date" value={editFormData.bitis} onChange={e => setEditFormData({ ...editFormData, bitis: e.target.value })} className="h-9" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Teslim KM</label>
+                                <Input type="number" value={editFormData.baslangicKm} onChange={e => setEditFormData({ ...editFormData, baslangicKm: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">İade KM</label>
+                                <Input type="number" value={editFormData.bitisKm} onChange={e => setEditFormData({ ...editFormData, bitisKm: e.target.value })} className="h-9" />
+                            </div>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Notlar</label>
+                            <Input value={editFormData.notlar} onChange={e => setEditFormData({ ...editFormData, notlar: e.target.value })} placeholder="Örn: Evraklar teslim edildi" className="h-9" />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                            {loading ? 'Güncelleniyor...' : 'Güncelle'}
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

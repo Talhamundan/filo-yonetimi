@@ -1,7 +1,7 @@
 "use client"
 
 import { useConfirm } from "@/components/ui/confirm-modal";
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, FileUp, Trash2, Pencil, Car, Building2, User } from "lucide-react";
@@ -11,25 +11,43 @@ import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, AracRow } from "./columns";
 import { importAraclarFromExcel, createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { sortByTextValue } from "@/lib/sort-utils";
 
 const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const EMPTY = {
     plaka: '',
     marka: '',
     model: '',
     yil: new Date().getFullYear(),
+    muayeneGecerlilikTarihi: '',
     bulunduguIl: 'İSTANBUL',
     guncelKm: 0,
     sirketId: '',
     kullaniciId: '',
     hgsNo: '',
     ruhsatSeriNo: '',
+    saseNo: '',
     kategori: 'BINEK'
 };
 
-const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: { formData: any, setFormData: any, sirketler: any[], kullanicilar: any[], ILLER: string[] }) => (
-    <div className="grid grid-cols-2 gap-4 py-4">
+const FormFields = ({
+    formData,
+    setFormData,
+    sirketler,
+    kullanicilar,
+    ILLER,
+    showInitialMuayeneField = false
+}: {
+    formData: any,
+    setFormData: any,
+    sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    kullanicilar: any[],
+    ILLER: string[],
+    showInitialMuayeneField?: boolean
+}) => (
+    <div className="grid grid-cols-2 gap-4 py-2">
         <div className="col-span-2">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
         </div>
@@ -38,19 +56,19 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
                 <Car size={14} className="text-slate-400" />
                 Plaka <span className="text-rose-500">*</span>
             </label>
-            <Input value={formData.plaka} onChange={e => setFormData({...formData, plaka: e.target.value})} placeholder="34 ABC 123" className="h-9 font-mono" />
+            <Input value={formData.plaka} onChange={e => setFormData({...formData, plaka: forceUppercase(e.target.value)})} placeholder="34 ABC 123" className="h-9 font-mono uppercase" />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">
                 Marka <span className="text-rose-500">*</span>
             </label>
-            <Input value={formData.marka} onChange={e => setFormData({...formData, marka: e.target.value})} placeholder="Renault" className="h-9" />
+            <Input value={formData.marka} onChange={e => setFormData({...formData, marka: forceUppercase(e.target.value)})} placeholder="RENAULT" className="h-9 uppercase" />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">
                 Model <span className="text-rose-500">*</span>
             </label>
-            <Input value={formData.model} onChange={e => setFormData({...formData, model: e.target.value})} placeholder="Megane" className="h-9" />
+            <Input value={formData.model} onChange={e => setFormData({...formData, model: forceUppercase(e.target.value)})} placeholder="MEGANE" className="h-9 uppercase" />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">
@@ -58,6 +76,17 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
             </label>
             <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
         </div>
+        {showInitialMuayeneField ? (
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Muayene Geçerlilik Tarihi (Opsiyonel)</label>
+                <Input
+                    type="date"
+                    value={formData.muayeneGecerlilikTarihi}
+                    onChange={e => setFormData({ ...formData, muayeneGecerlilikTarihi: e.target.value })}
+                    className="h-9"
+                />
+            </div>
+        ) : null}
         <div className="space-y-1.5">
             <label className="text-sm font-medium">
                 Güncel KM <span className="text-rose-500">*</span>
@@ -86,24 +115,32 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
                 <option value="IS_MAKINESI">İş Makinesi</option>
             </select>
         </div>
-        <div className="col-span-2 pt-2">
+        <div className="col-span-2 pt-1">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
         </div>
-        <div className="space-y-1.5 col-span-2">
+        <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <Building2 size={14} className="text-slate-400" />
                 Bağlı Şirket
             </label>
             <select 
                 value={formData.sirketId} 
-                onChange={e => setFormData({...formData, sirketId: e.target.value})}
+                onChange={e => {
+                    const nextSirketId = e.target.value;
+                    const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                    setFormData({
+                        ...formData,
+                        sirketId: nextSirketId,
+                        bulunduguIl: selectedSirket?.bulunduguIl || formData.bulunduguIl
+                    });
+                }}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Şirket Seçiniz (Bağımsız)</option>
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
-        <div className="space-y-1.5 col-span-2">
+        <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <User size={14} className="text-slate-400" />
                 Mevcut Şoför (Zimmet)
@@ -117,7 +154,7 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
                 {kullanicilar.map(u => <option key={u.id} value={u.id}>{u.adSoyad}</option>)}
             </select>
         </div>
-        <div className="col-span-2 pt-2">
+        <div className="col-span-2 pt-1">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
         </div>
         <div className="space-y-1.5">
@@ -128,6 +165,10 @@ const FormFields = ({ formData, setFormData, sirketler, kullanicilar, ILLER }: {
             <label className="text-sm font-medium">Ruhsat Seri No</label>
             <Input value={formData.ruhsatSeriNo} onChange={e => setFormData({...formData, ruhsatSeriNo: e.target.value})} className="h-9" />
         </div>
+        <div className="space-y-1.5 col-span-2">
+            <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
+            <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" />
+        </div>
     </div>
 );
 
@@ -137,7 +178,7 @@ export default function AraclarClient({
     kullanicilar 
 }: { 
     initialAraclar: AracRow[], 
-    sirketler: { id: string, ad: string }[],
+    sirketler: { id: string, ad: string, bulunduguIl: string }[],
     kullanicilar: { id: string, adSoyad: string }[] 
 }) {
     const { confirmModal, openConfirm } = useConfirm();
@@ -150,6 +191,7 @@ export default function AraclarClient({
     const [editRow, setEditRow] = useState<AracRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
+    const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (u) => u.adSoyad), [kullanicilar]);
 
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -208,30 +250,57 @@ export default function AraclarClient({
         setLoading(false);
     };
 
-    const handleDelete = async (id: string, plaka: string) => {
-        const confirmed = await openConfirm({ title: "Aracı Sil", message: `${plaka} plakalı aracı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`, confirmText: "Evet, Sil", variant: "danger" });
+    const handleDelete = async (arac: AracRow) => {
+        const { id, plaka, kullanici } = arac;
+        if (kullanici?.id) {
+            const soforAdSoyad = `${kullanici.ad} ${kullanici.soyad}`.trim();
+            const goDetail = await openConfirm({
+                title: "Araç Aktif Kullanımda",
+                message: `${plaka} plakalı araç şu anda ${soforAdSoyad} kullanımında. Silmeden önce şoförü araçtan ayırmalısınız. Araç detayına gitmek ister misiniz?`,
+                confirmText: "Detaya Git",
+                cancelText: "Vazgeç",
+                variant: "warning",
+            });
+            if (goDetail) {
+                router.push(`/dashboard/araclar/${id}`);
+            }
+            return;
+        }
+
+        const confirmed = await openConfirm({
+            title: "Aracı Sil",
+            message: `${plaka} plakalı aracı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+            confirmText: "Evet, Sil",
+            variant: "danger"
+        });
         if (!confirmed) return;
         const res = await deleteArac(id);
         if (res.success) {
             toast.success("Araç Silindi", { description: "Araç kaydı sistemden kalıcı olarak kaldırıldı." });
             router.refresh();
         } else {
-            toast.error("Silme İşlemi Başarısız", { description: res.error });
+            if ((res as any).code === "AKTIF_KULLANIM") {
+                toast.warning("Araç Silinemedi", { description: res.error });
+            } else {
+                toast.error("Silme İşlemi Başarısız", { description: res.error });
+            }
         }
     };
 
     const openEdit = (row: AracRow) => {
         setFormData({
-            plaka: row.plaka,
-            marka: row.marka,
-            model: row.model,
+            plaka: forceUppercase(row.plaka),
+            marka: forceUppercase(row.marka),
+            model: forceUppercase(row.model),
             yil: row.yil,
+            muayeneGecerlilikTarihi: '',
             bulunduguIl: row.bulunduguIl,
             guncelKm: row.guncelKm,
             sirketId: (row as any).sirketId || '',
             kullaniciId: (row as any).kullaniciId || '',
             hgsNo: row.hgsNo || '',
             ruhsatSeriNo: (row as any).ruhsatSeriNo || '',
+            saseNo: (row as any).saseNo || '',
             kategori: row.kategori || 'BINEK'
         });
         setEditRow(row);
@@ -253,7 +322,7 @@ export default function AraclarClient({
                         <Pencil size={15} />
                     </button>
                     <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id, row.original.plaka); }} 
+                        onClick={(e) => { e.stopPropagation(); handleDelete(row.original as AracRow); }} 
                         className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
                         title="Sil"
                     >
@@ -303,7 +372,7 @@ export default function AraclarClient({
                                     Filoya yeni bir araç eklemek için temel bilgileri girin.
                                 </DialogDescription>
                             </DialogHeader>
-                            <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={kullanicilar} ILLER={ILLER} />
+                            <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={sortedKullanicilar} ILLER={ILLER} showInitialMuayeneField={true} />
                             <DialogFooter>
                                 <button 
                                     onClick={handleCreate}
@@ -326,7 +395,7 @@ export default function AraclarClient({
                              "{editRow?.plaka}" plakalı aracın kayıtlı bilgilerini düzenleyin.
                         </DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={kullanicilar} ILLER={ILLER} />
+                    <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={sortedKullanicilar} ILLER={ILLER} />
                     <DialogFooter>
                         <button 
                             onClick={handleUpdate}
@@ -346,6 +415,7 @@ export default function AraclarClient({
                 searchPlaceholder="Plaka ara..."
                 tableClassName="min-w-[1560px]"
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
+                excelEntity="arac"
             />
         </div>
     );

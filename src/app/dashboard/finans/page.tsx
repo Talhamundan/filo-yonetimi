@@ -1,30 +1,46 @@
 import { prisma } from "../../../lib/prisma";
 import FinansClient from "./FinansClient";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 
 export default async function FinansPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const selectedSirketId = await getSelectedSirketId(props.searchParams);
+    const [selectedSirketId, selectedYil] = await Promise.all([
+        getSelectedSirketId(props.searchParams),
+        getSelectedYil(props.searchParams),
+    ]);
     const yakitFilter = await getModelFilter('yakit', selectedSirketId);
     const masrafFilter = await getModelFilter('masraf', selectedSirketId);
+    const muayeneFilter = await getModelFilter('muayene', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
+    const yakitWhere = withYilDateFilter((yakitFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const masrafWhere = withYilDateFilter((masrafFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const muayeneWhere = withYilDateFilter((muayeneFilter || {}) as Record<string, unknown>, "muayeneTarihi", selectedYil);
 
-    const [yakitlar, masraflar] = await Promise.all([
+    const [yakitlar, masraflar, muayenelerResult] = await Promise.all([
         (prisma as any).yakit.findMany({
-            where: yakitFilter as any,
+            where: yakitWhere as any,
             include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
             orderBy: { tarih: 'desc' }
         }),
         (prisma as any).masraf.findMany({
-            where: masrafFilter as any,
+            where: masrafWhere as any,
             include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
             orderBy: { tarih: 'desc' }
+        }),
+        (prisma as any).muayene.findMany({
+            where: { ...(muayeneWhere as any), tutar: { not: null } },
+            include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
+            orderBy: { muayeneTarihi: 'desc' }
+        }).catch((error: any) => {
+            console.warn("Muayene tutar verisi okunamadi. Finans ekraninda muayene kalemi atlandi.", error);
+            return [];
         })
     ]);
+    const muayeneler = muayenelerResult as any[];
 
     // Grouping and aggregating Yakit data for metrics
     const baseYakitGroup = await (prisma as any).yakit.groupBy({
-        where: yakitFilter as any,
+        where: yakitWhere as any,
         by: ['aracId'],
         _sum: {
             litre: true,
@@ -74,6 +90,7 @@ export default async function FinansPage(props: { searchParams?: Promise<Dashboa
     const unifiedLedger = [
         ...yakitlar.map((y: any) => ({
             id: `yakit-${y.id}`,
+            aracId: y.aracId,
             tarih: y.tarih,
             tur: 'Yakıt Alımı',
             aracPlaka: y.arac?.plaka || "-",
@@ -83,12 +100,23 @@ export default async function FinansPage(props: { searchParams?: Promise<Dashboa
         })),
         ...masraflar.map((m: any) => ({
             id: `masraf-${m.id}`,
+            aracId: m.aracId,
             tarih: m.tarih,
             tur: m.tur,
             aracPlaka: m.arac?.plaka || "-",
             aracSirket: m.arac?.sirket?.ad || null,
             detay: 'Muhtelif Gider',
             tutar: m.tutar
+        })),
+        ...muayeneler.map((m: any) => ({
+            id: `muayene-${m.id}`,
+            aracId: m.aracId,
+            tarih: m.muayeneTarihi,
+            tur: 'Muayene Ücreti',
+            aracPlaka: m.arac?.plaka || "-",
+            aracSirket: m.arac?.sirket?.ad || null,
+            detay: `Geçerlilik: ${new Date(m.gecerlilikTarihi).toLocaleDateString('tr-TR')}`,
+            tutar: m.tutar || 0
         }))
     ].sort((a: any, b: any) => b.tarih.getTime() - a.tarih.getTime());
 

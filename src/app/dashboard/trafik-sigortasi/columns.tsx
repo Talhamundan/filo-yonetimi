@@ -2,13 +2,15 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "../../../components/ui/badge"
-import { format, differenceInDays } from "date-fns"
+import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status"
 
 export type SigortaRow = {
     id: string;
     sirket: string | null;
+    acente: string | null;
     policeNo: string | null;
     baslangicTarihi: Date;
     bitisTarihi: Date;
@@ -25,15 +27,23 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SigortaRow>[] => 
         header: "Mevcut Durum",
         cell: ({ row }) => {
             const aktif = row.getValue("aktifMi") as boolean;
-            const bitis = new Date(row.original.bitisTarihi);
-            const kalanGun = differenceInDays(bitis, new Date());
+            const kalanGun = getDaysLeft(row.original.bitisTarihi);
 
-            if (!aktif) return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-0 shadow-none font-semibold px-2">Geçmiş Poliçe</Badge>;
+            if (!aktif) {
+                return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-0 shadow-none font-semibold px-2">Geçmiş Kayıt</Badge>;
+            }
 
-            if (kalanGun < 0) return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-none font-bold px-2">Poliçe Süresi Doldu!</Badge>;
-            if (kalanGun <= 15) return <Badge className="bg-orange-100 text-orange-800 hover:bg-orange-200 border-0 shadow-none font-bold px-2">Kritik ({kalanGun} Gün)</Badge>;
-            if (kalanGun <= 30) return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-none font-bold px-2">Yaklaşıyor ({kalanGun} Gün)</Badge>;
-            return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-0 shadow-none font-semibold px-2">Geçerli</Badge>;
+            if (kalanGun == null) {
+                return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-0 shadow-none font-semibold px-2">Belirsiz</Badge>;
+            }
+
+            if (kalanGun < 0) {
+                const badge = getDeadlineBadgeConfig(kalanGun);
+                return <Badge className={`${badge.className} font-bold px-2`}>{badge.label}</Badge>;
+            }
+
+            const badge = getDeadlineBadgeConfig(kalanGun);
+            return <Badge className={`${badge.className} ${badge.status === "GECERLI" ? "font-semibold" : "font-bold"} px-2`}>{badge.label}</Badge>;
         },
     },
     {
@@ -42,6 +52,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SigortaRow>[] => 
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
             return <VehicleIdentityCell
+                aracId={row.original.arac.id}
                 plaka={row.original.arac.plaka}
                 subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
                 companyName={row.original.arac.sirket?.ad}
@@ -51,10 +62,15 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SigortaRow>[] => 
     },
     {
         accessorKey: "sirket",
-        header: "Sigorta Şirketi",
+        header: "Sigorta Şirketi / Acente",
         cell: ({ row }) => {
             const sirket = row.getValue("sirket") as string;
-            return <div className="font-bold text-slate-800">{sirket || <span className="italic text-slate-400 font-normal">Belirtilmedi</span>}</div>
+            return (
+                <div className="flex flex-col">
+                    <span className="font-bold text-slate-800">{sirket || <span className="italic text-slate-400 font-normal">Belirtilmedi</span>}</span>
+                    <span className="text-xs text-slate-500">{row.original.acente || '-'}</span>
+                </div>
+            );
         },
     },
     {

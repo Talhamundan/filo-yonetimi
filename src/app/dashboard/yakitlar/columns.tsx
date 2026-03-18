@@ -5,6 +5,7 @@ import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import { Fuel } from "lucide-react"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { PersonelLink } from "@/components/links/RecordLinks"
 
 export type YakitRow = {
     id: string;
@@ -14,6 +15,8 @@ export type YakitRow = {
     km: number;
     istasyon: string | null;
     odemeYontemi: 'NAKIT' | 'TASIT_TANIMA';
+    soforId?: string | null;
+    kullanici?: { id: string; ad: string; soyad: string } | null;
     arac: { 
         id: string; 
         plaka: string; 
@@ -32,15 +35,26 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => [
         header: "Araç",
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
-            const { arac } = row.original;
-            const sofor = arac.kullanici ? `${arac.kullanici.ad} ${arac.kullanici.soyad}` : null;
+            const { arac, kullanici } = row.original;
+            const sofor = kullanici
+                ? `${kullanici.ad} ${kullanici.soyad}`
+                : (arac.kullanici ? `${arac.kullanici.ad} ${arac.kullanici.soyad}` : null);
+            const soforId = kullanici?.id || arac.kullanici?.id;
             return (
                 <VehicleIdentityCell
+                    aracId={arac.id}
                     plaka={arac.plaka}
                     subtitle={`${arac.marka} ${arac.model}`}
                     companyName={arac.sirket?.ad}
                     showCompanyInfo={showCompanyInfo}
-                    extra={sofor ? <span className="text-[11px] text-indigo-500 font-semibold mt-0.5">👤 {sofor}</span> : null}
+                    extra={sofor ? (
+                        <PersonelLink
+                            personelId={soforId}
+                            className="text-[11px] text-indigo-500 font-semibold mt-0.5 hover:underline"
+                        >
+                            👤 {sofor}
+                        </PersonelLink>
+                    ) : null}
                 />
             )
         },

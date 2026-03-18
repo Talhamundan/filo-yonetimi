@@ -5,6 +5,7 @@ import { Badge } from "../../../components/ui/badge"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { PersonelLink } from "@/components/links/RecordLinks"
 
 export type SoforZimmetRow = {
     id: string;
@@ -15,9 +16,16 @@ export type SoforZimmetRow = {
     notlar: string | null;
     arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
     kullanici: { id: string; ad: string; soyad: string; tcNo: string | null } | null;
+    maliyetKalemleri?: {
+        ceza: number;
+        yakit: number;
+        ariza: number;
+    };
+    toplamMaliyet?: number;
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+const formatCurrency = (value: number) => `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
 
 export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[] => [
     {
@@ -36,6 +44,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[]
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
             return <VehicleIdentityCell
+                aracId={row.original.arac.id}
                 plaka={row.original.arac.plaka}
                 subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
                 companyName={row.original.arac.sirket?.ad}
@@ -52,7 +61,9 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[]
             if (!k) return <span className="text-slate-400 italic text-xs">Atanmamış</span>;
             return (
                 <div className="flex flex-col">
-                    <span className="font-bold text-slate-900">{k.ad} {k.soyad}</span>
+                    <PersonelLink personelId={k.id} className="font-bold text-slate-900 hover:text-indigo-600 hover:underline">
+                        {k.ad} {k.soyad}
+                    </PersonelLink>
                     <span className="text-xs font-medium text-slate-500 mt-0.5">TC: {k.tcNo || '-'}</span>
                 </div>
             )
@@ -77,6 +88,39 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[]
         header: "KM Detayı (Teslim Alma / Etme)",
         cell: ({ row }) => {
             return <div className="text-slate-600 text-sm font-medium">{row.original.baslangicKm.toLocaleString()} km <span className="text-slate-300 mx-1">/</span> {row.original.bitisKm ? `${row.original.bitisKm.toLocaleString()} km` : '-'}</div>
+        },
+    },
+    {
+        accessorKey: "toplamMaliyet",
+        header: "Maliyet Özeti",
+        cell: ({ row }) => {
+            const toplam = row.original.toplamMaliyet || 0;
+            const kalemler = row.original.maliyetKalemleri || { ceza: 0, yakit: 0, ariza: 0 };
+            const nonZero = [
+                { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
+                { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                { key: "Arıza", value: kalemler.ariza, className: "bg-amber-50 text-amber-700 border-amber-200" },
+            ].filter((item) => item.value > 0);
+
+            return (
+                <div className="min-w-[180px]">
+                    <div className="text-sm font-bold text-slate-900">{formatCurrency(toplam)}</div>
+                    {nonZero.length > 0 ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                            {nonZero.map((item) => (
+                                <span
+                                    key={item.key}
+                                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${item.className}`}
+                                >
+                                    {item.key}: {formatCurrency(item.value)}
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="text-slate-400 italic text-xs">Kayıt yok</span>
+                    )}
+                </div>
+            );
         },
     },
 ]

@@ -11,6 +11,7 @@ import { getColumns, YakitRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createYakit, updateYakit, deleteYakit } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: '',
@@ -22,10 +23,21 @@ const EMPTY = {
     odemeYontemi: 'NAKIT'
 };
 
-const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: any[] }) => {
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string;
+    model?: string;
+    bulunduguIl?: string | null;
+    aktifSoforId?: string | null;
+    aktifSoforAdSoyad?: string | null;
+};
+
+const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
     const litre = parseFloat(formData.litre) || 0;
     const litreFiyati = parseFloat(formData.litreFiyati) || 0;
     const toplamTutar = litre * litreFiyati;
+    const seciliArac = araclar.find((a) => a.id === formData.aracId);
 
     return (
         <div className="grid gap-4 py-4">
@@ -37,8 +49,22 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
                     <option value="">Seçiniz...</option>
-                    {araclar.map((a: any) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                    {araclar.map((a) => (
+                        <option key={a.id} value={a.id}>
+                            {a.plaka}
+                            {a.aktifSoforAdSoyad ? ` - ${a.aktifSoforAdSoyad}` : " - Atanmamış"}
+                        </option>
+                    ))}
                 </select>
+                <SelectedAracInfo arac={seciliArac} />
+                {seciliArac && (
+                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+                        <p className="text-[11px] text-slate-500">Aktif Şoför</p>
+                        <p className={`text-xs font-semibold ${seciliArac.aktifSoforAdSoyad ? "text-emerald-700" : "text-amber-700"}`}>
+                            {seciliArac.aktifSoforAdSoyad || "Atanmamış"}
+                        </p>
+                    </div>
+                )}
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Alım Tarihi & Saati</label>
@@ -85,7 +111,7 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
     );
 };
 
-export default function YakitlarClient({ initialYakitlar, araclar }: { initialYakitlar: YakitRow[], araclar: { id: string, plaka: string }[] }) {
+export default function YakitlarClient({ initialYakitlar, araclar }: { initialYakitlar: YakitRow[], araclar: AracOption[] }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
@@ -233,6 +259,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                 data={initialYakitlar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Yakıt kaydı için araç plakası ara..."
+                excelEntity="yakit"
             />
 
             <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

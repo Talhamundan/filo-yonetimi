@@ -4,9 +4,11 @@ import React, { useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Input } from "../../../components/ui/input";
 import { Badge } from "../../../components/ui/badge";
-import { Search, ShieldAlert, CheckCircle2, Clock, AlertTriangle } from "lucide-react";
+import { Search, ShieldAlert, CheckCircle2, Clock, AlertTriangle, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { DEADLINE_STATUS_CLASS, getDeadlineLabel, type DeadlineStatus } from "@/lib/deadline-status";
+import { AracLink } from "@/components/links/RecordLinks";
 
 type EvrakRow = {
     id: string;
@@ -17,36 +19,97 @@ type EvrakRow = {
     tur: string;
     gecerlilikTarihi: Date;
     kalanGun: number;
-    durum: 'GECIKTI' | 'KRITIK' | 'YAKLASTI' | 'GECERLI';
+    durum: DeadlineStatus;
 };
+
+type EvrakSortKey = "durum" | "plaka" | "tur" | "gecerlilikTarihi" | "kalanGun";
+type SortDirection = "asc" | "desc";
 
 export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar: EvrakRow[] }) {
     const router = useRouter();
     const { canAccessAllCompanies } = useDashboardScope();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterDurum, setFilterDurum] = useState("TÜMÜ");
+    const [sortState, setSortState] = useState<{ key: EvrakSortKey; direction: SortDirection }>({
+        key: "gecerlilikTarihi",
+        direction: "asc",
+    });
 
     const filteredEvraklar = useMemo(() => {
-        return initialEvraklar.filter(evrak => {
+        const filtered = initialEvraklar.filter(evrak => {
             const matchesSearch = evrak.plaka.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesDurum = filterDurum === "TÜMÜ" || evrak.durum === filterDurum;
             return matchesSearch && matchesDurum;
         });
-    }, [initialEvraklar, searchTerm, filterDurum]);
 
-    const getDurumBadge = (durum: string) => {
+        return [...filtered].sort((a, b) => {
+            let aValue: number | string = "";
+            let bValue: number | string = "";
+
+            switch (sortState.key) {
+                case "durum":
+                    aValue = a.durum;
+                    bValue = b.durum;
+                    break;
+                case "plaka":
+                    aValue = a.plaka;
+                    bValue = b.plaka;
+                    break;
+                case "tur":
+                    aValue = a.tur;
+                    bValue = b.tur;
+                    break;
+                case "gecerlilikTarihi":
+                    aValue = new Date(a.gecerlilikTarihi).getTime();
+                    bValue = new Date(b.gecerlilikTarihi).getTime();
+                    break;
+                case "kalanGun":
+                    aValue = a.kalanGun;
+                    bValue = b.kalanGun;
+                    break;
+            }
+
+            const result =
+                typeof aValue === "number" && typeof bValue === "number"
+                    ? aValue - bValue
+                    : String(aValue).localeCompare(String(bValue), "tr", { numeric: true, sensitivity: "base" });
+
+            return sortState.direction === "asc" ? result : -result;
+        });
+    }, [initialEvraklar, searchTerm, filterDurum, sortState]);
+
+    const toggleSort = (key: EvrakSortKey) => {
+        setSortState((prev) => {
+            if (prev.key === key) {
+                return { key, direction: prev.direction === "asc" ? "desc" : "asc" };
+            }
+            return { key, direction: "asc" };
+        });
+    };
+
+    const renderSortIcon = (key: EvrakSortKey) => {
+        if (sortState.key !== key) return <ArrowUpDown size={13} className="text-slate-400" />;
+        return sortState.direction === "asc"
+            ? <ArrowUp size={13} className="text-slate-600" />
+            : <ArrowDown size={13} className="text-slate-600" />;
+    };
+
+    const getDurumBadge = (durum: DeadlineStatus, kalanGun: number) => {
+        const label = getDeadlineLabel(durum, kalanGun);
+        const className = DEADLINE_STATUS_CLASS[durum];
+
         switch (durum) {
-            case 'GECIKTI': return <div className="flex items-center gap-1.5"><Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-none"><ShieldAlert size={12} className="mr-1" />Gecikti</Badge></div>;
-            case 'KRITIK': return <div className="flex items-center gap-1.5"><Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-0 shadow-none"><AlertTriangle size={12} className="mr-1" />Kritik (&lt;15 Gün)</Badge></div>;
-            case 'YAKLASTI': return <div className="flex items-center gap-1.5"><Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-none"><Clock size={12} className="mr-1" />Yaklaştı</Badge></div>;
-            case 'GECERLI': return <div className="flex items-center gap-1.5"><Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-0 shadow-none"><CheckCircle2 size={12} className="mr-1" />Geçerli</Badge></div>;
+            case 'GECIKTI': return <div className="flex items-center gap-1.5"><Badge className={className}><ShieldAlert size={12} className="mr-1" />{label}</Badge></div>;
+            case 'KRITIK': return <div className="flex items-center gap-1.5"><Badge className={className}><AlertTriangle size={12} className="mr-1" />{label}</Badge></div>;
+            case 'YAKLASTI': return <div className="flex items-center gap-1.5"><Badge className={className}><Clock size={12} className="mr-1" />{label}</Badge></div>;
+            case 'GECERLI': return <div className="flex items-center gap-1.5"><Badge className={className}><CheckCircle2 size={12} className="mr-1" />{label}</Badge></div>;
             default: return null;
         }
     };
 
     const getRowColor = (durum: string, isEven: boolean) => {
         if (durum === 'GECIKTI') return "bg-rose-50/50 hover:bg-rose-50";
-        if (durum === 'KRITIK') return "bg-red-50/30 hover:bg-red-50/60";
+        if (durum === 'KRITIK') return "bg-orange-50/40 hover:bg-orange-50/70";
         return isEven ? 'bg-white hover:bg-[#F8FAFC]' : 'bg-[#FAFAFA] hover:bg-[#F8FAFC]';
     }
 
@@ -54,8 +117,8 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Evrak & Sigorta Takibi</h2>
-                    <p className="text-slate-500 text-sm mt-1">Muayene, Kasko ve Trafik Sigortası bitiş süreleri.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Evrak Takibi</h2>
+                    <p className="text-slate-500 text-sm mt-1">Muayene, kasko ve trafik poliçesi bitiş sürelerini izleyin.</p>
                 </div>
             </header>
 
@@ -88,11 +151,31 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                     <Table className="min-w-[900px]">
                         <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                             <TableRow className="hover:bg-transparent">
-                                <TableHead className="w-[180px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">Durum</TableHead>
-                                <TableHead className="w-[150px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">Plaka</TableHead>
-                                <TableHead className="w-[200px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">Evrak Türü</TableHead>
-                                <TableHead className="font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">Geçerlilik Tarihi</TableHead>
-                                <TableHead className="w-[150px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider text-right pr-6">Kalan Gün</TableHead>
+                                <TableHead className="w-[180px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">
+                                    <button type="button" onClick={() => toggleSort("durum")} className="inline-flex items-center gap-1.5">
+                                        Durum {renderSortIcon("durum")}
+                                    </button>
+                                </TableHead>
+                                <TableHead className="w-[150px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">
+                                    <button type="button" onClick={() => toggleSort("plaka")} className="inline-flex items-center gap-1.5">
+                                        Plaka {renderSortIcon("plaka")}
+                                    </button>
+                                </TableHead>
+                                <TableHead className="w-[200px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">
+                                    <button type="button" onClick={() => toggleSort("tur")} className="inline-flex items-center gap-1.5">
+                                        Evrak Türü {renderSortIcon("tur")}
+                                    </button>
+                                </TableHead>
+                                <TableHead className="font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">
+                                    <button type="button" onClick={() => toggleSort("gecerlilikTarihi")} className="inline-flex items-center gap-1.5">
+                                        Geçerlilik Tarihi {renderSortIcon("gecerlilikTarihi")}
+                                    </button>
+                                </TableHead>
+                                <TableHead className="w-[150px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider text-right pr-6">
+                                    <button type="button" onClick={() => toggleSort("kalanGun")} className="inline-flex items-center gap-1.5 ml-auto">
+                                        Kalan Gün {renderSortIcon("kalanGun")}
+                                    </button>
+                                </TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody className="text-sm">
@@ -104,11 +187,16 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                                         className={`cursor-pointer transition-colors border-b border-slate-100 ${getRowColor(evrak.durum, idx % 2 === 0)}`}
                                     >
                                         <TableCell className="px-4 py-4 align-middle">
-                                            {getDurumBadge(evrak.durum)}
+                                            {getDurumBadge(evrak.durum, evrak.kalanGun)}
                                         </TableCell>
                                         <TableCell className="px-4 py-3 align-middle">
                                             <div className="flex flex-col">
-                                                <span className="font-mono font-bold text-slate-900">{evrak.plaka}</span>
+                                                <AracLink
+                                                    aracId={evrak.aracId}
+                                                    className="font-mono font-bold text-slate-900 hover:text-indigo-600 hover:underline"
+                                                >
+                                                    {evrak.plaka}
+                                                </AracLink>
                                                 <span className="text-[11px] text-slate-500 mt-0.5">{evrak.marka}</span>
                                                 {canAccessAllCompanies && evrak.sirketAd ? (
                                                     <span className="text-[11px] font-semibold text-indigo-600 mt-0.5">{evrak.sirketAd}</span>

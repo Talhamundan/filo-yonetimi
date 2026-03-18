@@ -10,10 +10,11 @@ import { getColumns, BakimRow } from "./columns";
 import { addBakim, updateBakim, deleteBakim } from "./actions";
 import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: "",
-    tur: "PERIYODIK" as "PERIYODIK" | "ARIZA" | "KAPORTA",
+    kategori: "PERIYODIK_BAKIM" as "PERIYODIK_BAKIM" | "ARIZA",
     bakimTarihi: new Date().toISOString().split('T')[0],
     yapilanKm: "",
     servisAdi: "",
@@ -21,7 +22,15 @@ const EMPTY = {
     tutar: ""
 };
 
-export default function BakimlarClient({ initialBakimlar, activeAraclar }: { initialBakimlar: BakimRow[], activeAraclar: { id: string; plaka: string; }[] }) {
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string | null;
+    model?: string | null;
+    bulunduguIl?: string | null;
+};
+
+export default function BakimlarClient({ initialBakimlar, activeAraclar }: { initialBakimlar: BakimRow[], activeAraclar: AracOption[] }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const [createOpen, setCreateOpen] = useState(false);
@@ -29,6 +38,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const selectedArac = activeAraclar.find((arac) => arac.id === formData.aracId);
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.bakimTarihi || !formData.yapilanKm || !formData.tutar) {
@@ -41,7 +51,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
             aracId: formData.aracId,
             bakimTarihi: new Date(formData.bakimTarihi),
             yapilanKm: parseInt(formData.yapilanKm),
-            tur: formData.tur,
+            kategori: formData.kategori,
             servisAdi: formData.servisAdi || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
             tutar: parseFloat(formData.tutar)
@@ -65,7 +75,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
             aracId: formData.aracId,
             bakimTarihi: new Date(formData.bakimTarihi),
             yapilanKm: parseInt(formData.yapilanKm),
-            tur: formData.tur,
+            kategori: formData.kategori,
             servisAdi: formData.servisAdi || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
             tutar: parseFloat(formData.tutar)
@@ -96,7 +106,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
     const openEdit = (row: BakimRow) => {
         setFormData({
             aracId: row.arac.id,
-            tur: (row.tur as any) || "PERIYODIK",
+            kategori: (row.kategori as any) || (row.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM"),
             bakimTarihi: new Date(row.bakimTarihi).toISOString().split('T')[0],
             yapilanKm: String(row.yapilanKm),
             servisAdi: row.servisAdi || "",
@@ -118,7 +128,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                     <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors">
                         <Pencil size={15} />
                     </button>
-                    <button onClick={() => handleDelete(row.original.id, row.original.arac)} className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors">
+                    <button onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors">
                         <Trash2 size={15} />
                     </button>
                 </div>
@@ -132,7 +142,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                        <Wrench className="text-indigo-600" /> Servis & Bakım Yönetimi
+                        <Wrench className="text-indigo-600" /> Servis Kayıtları Yönetimi
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Filodaki tüm araçların güncel ve geçmiş servis operasyonlarının takibi.</p>
                 </div>
@@ -147,7 +157,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                         <DialogHeader>
                             <DialogTitle>Yeni Servis Kaydı</DialogTitle>
                             <DialogDescription>
-                                Araç plakası üzerinden yeni bir periyodik bakım veya servis faturası kaydı işleyebilirsiniz.
+                                Araç plakası üzerinden yeni bir periyodik bakım veya arıza kaydı işleyebilirsiniz.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
@@ -163,17 +173,17 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                                         <option key={arac.id} value={arac.id}>{arac.plaka}</option>
                                     ))}
                                 </select>
+                                <SelectedAracInfo arac={selectedArac} />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Bakım Tipi <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
                                 <select
                                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    value={formData.tur}
-                                    onChange={(e) => setFormData({...formData, tur: e.target.value as any})}
+                                    value={formData.kategori}
+                                    onChange={(e) => setFormData({...formData, kategori: e.target.value as "PERIYODIK_BAKIM" | "ARIZA"})}
                                 >
-                                    <option value="PERIYODIK">Periyodik</option>
+                                    <option value="PERIYODIK_BAKIM">Periyodik Bakım</option>
                                     <option value="ARIZA">Arıza</option>
-                                    <option value="KAPORTA">Kaporta</option>
                                 </select>
                             </div>
                             <div className="grid grid-cols-2 gap-3">
@@ -218,7 +228,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Servis Kaydını Düzenle</DialogTitle>
-                        <DialogDescription>"{editRow?.arac.plaka}" plakalı aracın servis bilgilerini güncelleyin.</DialogDescription>
+                        <DialogDescription>{editRow?.arac.plaka} plakalı aracın servis bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-1.5">
@@ -233,17 +243,17 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                                     <option key={arac.id} value={arac.id}>{arac.plaka}</option>
                                 ))}
                             </select>
+                            <SelectedAracInfo arac={selectedArac} />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Bakım Tipi <span className="text-red-500">*</span></label>
+                            <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
                             <select
                                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                value={formData.tur}
-                                onChange={(e) => setFormData({...formData, tur: e.target.value as any})}
+                                value={formData.kategori}
+                                onChange={(e) => setFormData({...formData, kategori: e.target.value as "PERIYODIK_BAKIM" | "ARIZA"})}
                             >
-                                <option value="PERIYODIK">Periyodik</option>
+                                <option value="PERIYODIK_BAKIM">Periyodik Bakım</option>
                                 <option value="ARIZA">Arıza</option>
-                                <option value="KAPORTA">Kaporta</option>
                             </select>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -286,7 +296,8 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                 columns={columnsWithActions as any}
                 data={initialBakimlar}
                 searchKey="arac_plaka"
-                searchPlaceholder="Gösterilecek bakım geçmişi için plaka arayın..."
+                searchPlaceholder="Gösterilecek servis kaydı için plaka arayın..."
+                excelEntity="bakim"
             />
         </div>
     );

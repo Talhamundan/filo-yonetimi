@@ -1,19 +1,22 @@
 "use client"
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, ShieldCheck, Trash2, Pencil } from "lucide-react";
+import { Plus, ShieldCheck, Trash2, Pencil, RefreshCw } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, KaskoRow } from "./columns";
-import { useRouter } from "next/navigation";
-import { createKasko, updateKasko, deleteKasko } from "./actions";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { createKasko, updateKasko, deleteKasko, renewKasko } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { sortByTextValue } from "@/lib/sort-utils";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: '',
     sirket: '',
+    acente: '',
     policeNo: '',
     baslangicTarihi: new Date().toISOString().split('T')[0],
     bitisTarihi: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
@@ -21,7 +24,33 @@ const EMPTY = {
     aktifMi: true
 };
 
-const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: any[] }) => (
+const oneYearAfter = (dateStr: string) => {
+    const date = new Date(dateStr);
+    date.setFullYear(date.getFullYear() + 1);
+    return date.toISOString().split('T')[0];
+};
+
+const getTodayDate = () => {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth() + 1).padStart(2, '0');
+    const dd = String(now.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+};
+
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string | null;
+    model?: string | null;
+    bulunduguIl?: string | null;
+};
+
+const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
+    const sortedAraclar = sortByTextValue(araclar, (a) => a.plaka);
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
+
+    return (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
@@ -31,12 +60,19 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Seçiniz...</option>
-                {araclar.map((a: any) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                {sortedAraclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
             </select>
+            <SelectedAracInfo arac={selectedArac} />
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Sigorta Şirketi</label>
-            <Input value={formData.sirket} onChange={e => setFormData({...formData, sirket: e.target.value})} placeholder="Örn: Allianz" className="h-9" />
+        <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Sigorta Şirketi</label>
+                <Input value={formData.sirket} onChange={e => setFormData({...formData, sirket: e.target.value})} placeholder="Örn: Allianz" className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Acente</label>
+                <Input value={formData.acente} onChange={e => setFormData({...formData, acente: e.target.value})} placeholder="Örn: ABC Acente" className="h-9" />
+            </div>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Poliçe No</label>
@@ -61,15 +97,95 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             <label htmlFor="aktifMi" className="text-sm font-medium">Poliçe Aktif</label>
         </div>
     </div>
+    );
+};
+
+const RenewFields = ({ renewData, setRenewData }: { renewData: any, setRenewData: any }) => (
+    <div className="grid gap-4 py-4">
+        <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Sigorta Şirketi</label>
+                <Input
+                    value={renewData.sirket}
+                    onChange={e => setRenewData({ ...renewData, sirket: e.target.value })}
+                    placeholder="Örn: Allianz"
+                    className="h-9"
+                />
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Acente</label>
+                <Input
+                    value={renewData.acente}
+                    onChange={e => setRenewData({ ...renewData, acente: e.target.value })}
+                    placeholder="Örn: ABC Acente"
+                    className="h-9"
+                />
+            </div>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Poliçe No</label>
+            <Input
+                value={renewData.policeNo}
+                onChange={e => setRenewData({ ...renewData, policeNo: e.target.value })}
+                placeholder="12345/0"
+                className="h-9"
+            />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Yenileme Tarihi</label>
+                <Input
+                    type="date"
+                    value={renewData.yenilemeTarihi}
+                    onChange={e => setRenewData({
+                        ...renewData,
+                        yenilemeTarihi: e.target.value,
+                        bitisTarihi: oneYearAfter(e.target.value)
+                    })}
+                    className="h-9"
+                />
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Yeni Bitiş Tarihi</label>
+                <Input
+                    type="date"
+                    value={renewData.bitisTarihi}
+                    onChange={e => setRenewData({ ...renewData, bitisTarihi: e.target.value })}
+                    className="h-9"
+                />
+            </div>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Yeni Poliçe Tutarı (₺)</label>
+            <Input
+                type="number"
+                value={renewData.tutar}
+                onChange={e => setRenewData({ ...renewData, tutar: e.target.value })}
+                placeholder="0.00"
+                className="h-9"
+            />
+        </div>
+    </div>
 );
 
-export default function KaskoClient({ initialKaskolar, araclar }: { initialKaskolar: KaskoRow[], araclar: { id: string, plaka: string }[] }) {
+export default function KaskoClient({ initialKaskolar, araclar }: { initialKaskolar: KaskoRow[], araclar: AracOption[] }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
+    const pathname = usePathname();
+    const searchParams = useSearchParams();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<KaskoRow | null>(null);
+    const [renewRow, setRenewRow] = useState<KaskoRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
+    const [renewData, setRenewData] = useState({
+        sirket: '',
+        acente: '',
+        policeNo: '',
+        yenilemeTarihi: getTodayDate(),
+        bitisTarihi: oneYearAfter(getTodayDate()),
+        tutar: ''
+    });
     const [loading, setLoading] = useState(false);
 
     const handleCreate = async () => {
@@ -119,6 +235,7 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
         setFormData({
             aracId: row.arac.id,
             sirket: row.sirket || '',
+            acente: row.acente || '',
             policeNo: row.policeNo || '',
             baslangicTarihi: new Date(row.baslangicTarihi).toISOString().split('T')[0],
             bitisTarihi: new Date(row.bitisTarihi).toISOString().split('T')[0],
@@ -128,6 +245,70 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
         setEditRow(row);
     };
 
+    const openRenew = (row: KaskoRow) => {
+        const yenilemeTarihi = getTodayDate();
+        setRenewData({
+            sirket: row.sirket || '',
+            acente: row.acente || '',
+            policeNo: row.policeNo || '',
+            yenilemeTarihi,
+            bitisTarihi: oneYearAfter(yenilemeTarihi),
+            tutar: String(row.tutar || ''),
+        });
+        setRenewRow(row);
+    };
+
+    const handleRenew = async () => {
+        if (!renewRow) return;
+        if (!renewData.yenilemeTarihi || !renewData.bitisTarihi) {
+            return toast.warning("Eksik Tarih Bilgisi", { description: "Yenileme ve bitiş tarihi alanlarını doldurun." });
+        }
+        if (new Date(renewData.bitisTarihi) <= new Date(renewData.yenilemeTarihi)) {
+            return toast.warning("Tarih Hatası", { description: "Bitiş tarihi, yenileme tarihinden sonra olmalıdır." });
+        }
+        setLoading(true);
+        const res = await renewKasko(renewRow.id, {
+            sirket: renewData.sirket,
+            acente: renewData.acente,
+            policeNo: renewData.policeNo,
+            yenilemeTarihi: renewData.yenilemeTarihi,
+            bitisTarihi: renewData.bitisTarihi,
+            tutar: renewData.tutar ? parseFloat(renewData.tutar) : undefined,
+        });
+
+        if (res.success) {
+            setRenewRow(null);
+            toast.success("Kasko Yenilendi", { description: "Yeni dönem poliçesi başarıyla oluşturuldu." });
+            router.refresh();
+        } else {
+            toast.error("Yenileme Hatası", { description: res.error });
+        }
+        setLoading(false);
+    };
+
+    useEffect(() => {
+        const renewAracId = searchParams.get("yenileAracId");
+        if (!renewAracId) return;
+
+        const adaylar = initialKaskolar
+            .filter((item) => item.arac.id === renewAracId)
+            .sort((a, b) => new Date(b.bitisTarihi).getTime() - new Date(a.bitisTarihi).getTime());
+        const hedefKayit = adaylar.find((item) => item.aktifMi) || adaylar[0];
+
+        if (hedefKayit) {
+            openRenew(hedefKayit);
+        } else {
+            setCreateOpen(true);
+            setFormData((prev) => ({ ...prev, aracId: renewAracId }));
+            toast.warning("Mevcut poliçe bulunamadı", { description: "Araç için doğrudan yeni poliçe giriş ekranı açıldı." });
+        }
+
+        const params = new URLSearchParams(searchParams.toString());
+        params.delete("yenileAracId");
+        const nextQuery = params.toString();
+        router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname);
+    }, [initialKaskolar, pathname, router, searchParams]);
+
 
     const columnsWithActions = [
         ...getColumns(canAccessAllCompanies),
@@ -136,6 +317,9 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
             header: 'İşlemler',
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
+                    <button onClick={() => openRenew(row.original)} className="p-1.5 rounded-md hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-colors">
+                        <RefreshCw size={15} />
+                    </button>
                     <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors">
                         <Pencil size={15} />
                     </button>
@@ -196,11 +380,27 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
                 </DialogContent>
             </Dialog>
 
+            <Dialog open={!!renewRow} onOpenChange={(o) => !o && setRenewRow(null)}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>Kasko Yenile</DialogTitle>
+                        <DialogDescription>{renewRow?.arac.plaka} plakalı araç için yeni dönem poliçe bilgilerini girin.</DialogDescription>
+                    </DialogHeader>
+                    <RenewFields renewData={renewData} setRenewData={setRenewData} />
+                    <DialogFooter>
+                        <button onClick={handleRenew} disabled={loading} className="bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                            {loading ? 'Yenileniyor...' : 'Yenile'}
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <DataTable
                 columns={columnsWithActions as any}
                 data={initialKaskolar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Kasko poliçesi için araç plakası ara..."
+                excelEntity="kasko"
             />
         </div>
     );

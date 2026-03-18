@@ -28,7 +28,6 @@ function getCompanyModelFilter(modelName: string, sirketId: string | null) {
         case "yakit":
         case "ceza":
         case "masraf":
-        case "ariza":
         case "bakim":
         case "muayene":
         case "kasko":
@@ -92,7 +91,7 @@ export async function getModelFilter(modelName: string, selectedSirketId?: strin
 
     // Şoför kısıtlamaları
     if (rol === 'SOFOR') {
-        const aracRelatedModels = ['yakit', 'ceza', 'masraf', 'ariza', 'bakim', 'muayene', 'kasko', 'trafikSigortasi', 'dokuman', 'kullaniciZimmet', 'zimmet'];
+        const aracRelatedModels = ['yakit', 'ceza', 'masraf', 'bakim', 'muayene', 'kasko', 'trafikSigortasi', 'dokuman', 'kullaniciZimmet', 'zimmet'];
         if (aracRelatedModels.includes(modelName)) {
             return { arac: { kullaniciId: userId } };
         }

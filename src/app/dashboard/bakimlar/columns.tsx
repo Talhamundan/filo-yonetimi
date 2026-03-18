@@ -14,6 +14,7 @@ export type BakimRow = {
     servisAdi: string | null;
     yapilanIslemler: string | null;
     tutar: number;
+    kategori?: "PERIYODIK_BAKIM" | "ARIZA";
     tur?: string;
     arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
 }
@@ -34,11 +35,23 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => [
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
             return <VehicleIdentityCell
+                aracId={row.original.arac.id}
                 plaka={row.original.arac.plaka}
                 subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
                 companyName={row.original.arac.sirket?.ad}
                 showCompanyInfo={showCompanyInfo}
             />
+        },
+    },
+    {
+        accessorKey: "kategori",
+        header: "Kategori",
+        cell: ({ row }) => {
+            const kategori = row.original.kategori || (row.original.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM");
+            if (kategori === "ARIZA") {
+                return <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none font-semibold">Arıza</Badge>;
+            }
+            return <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none font-semibold">Periyodik Bakım</Badge>;
         },
     },
     {
@@ -58,14 +71,14 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => [
     },
     {
         accessorKey: "yapilanKm",
-        header: "Bakım KM",
+        header: "İşlem KM",
         cell: ({ row }) => {
             return <div className="text-slate-700 font-medium">{row.original.yapilanKm.toLocaleString()} km</div>
         },
     },
     {
         accessorKey: "sonrakiBakimKm",
-        header: "Sonraki Bakım",
+        header: "Sonraki Bakım KM",
         cell: ({ row }) => {
             const snr = row.original.sonrakiBakimKm;
             return snr

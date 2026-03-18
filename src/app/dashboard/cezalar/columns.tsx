@@ -1,91 +1,62 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { AlertTriangle, User } from "lucide-react"
-import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { AracLink, PersonelLink } from "@/components/links/RecordLinks"
 
 export type CezaRow = {
     id: string;
+    aracId: string;
+    plaka: string;
+    soforId: string | null;
+    soforAdSoyad: string;
     tarih: string;
-    arac: string;
-    aracMarka?: string;
-    sirketAd?: string | null;
-    sofor: string;
+    cezaMaddesi: string;
+    aciklama?: string | null;
     tutar: number;
-    km: number | null;
-    aciklama: string;
-    odendiMi: boolean;
-    sonOdemeTarihi?: string | null;
 }
 
-export const getColumns = (showCompanyInfo = false): ColumnDef<CezaRow>[] => [
+export const getColumns = (): ColumnDef<CezaRow>[] => [
     {
-        accessorKey: "arac",
-        header: "Araç Plaka",
+        accessorKey: "plaka",
+        header: "Plaka",
         cell: ({ row }) => (
-            <VehicleIdentityCell
-                plaka={row.original.arac}
-                subtitle={row.original.aracMarka}
-                companyName={row.original.sirketAd}
-                showCompanyInfo={showCompanyInfo}
-            />
+            <AracLink
+                aracId={row.original.aracId}
+                className="font-bold text-slate-900 font-mono hover:text-indigo-600 hover:underline"
+            >
+                {row.original.plaka}
+            </AracLink>
         )
     },
     {
-        accessorKey: "sofor",
-        header: "Şoför",
+        accessorKey: "soforAdSoyad",
+        header: "Şoför (Ad Soyad)",
         cell: ({ row }) => (
-            <div className="flex items-center gap-2">
-                <User size={14} className="text-slate-500" />
-                <span>{row.getValue("sofor")}</span>
-            </div>
+            <PersonelLink
+                personelId={row.original.soforId}
+                className="text-slate-700 font-medium hover:text-indigo-600 hover:underline"
+            >
+                {row.original.soforAdSoyad || "-"}
+            </PersonelLink>
         )
     },
     {
         accessorKey: "tarih",
         header: "Ceza Tarihi",
-        cell: ({ row }) => new Date(row.getValue("tarih")).toLocaleDateString("tr-TR")
+        cell: ({ row }) => new Date(row.original.tarih).toLocaleDateString("tr-TR")
     },
     {
-        accessorKey: "sonOdemeTarihi",
-        header: "Son Ödeme",
-        cell: ({ row }) => {
-            const date = row.original.sonOdemeTarihi;
-            return date ? new Date(date).toLocaleDateString("tr-TR") : '-';
-        }
+        accessorKey: "cezaMaddesi",
+        header: "Ceza Maddesi",
+        cell: ({ row }) => <span className="text-slate-700">{row.original.cezaMaddesi}</span>
     },
     {
         accessorKey: "tutar",
-        header: "Tutar",
-        cell: ({ row }) => {
-            const amount = parseFloat(row.getValue("tutar"));
-            return <span className="font-medium text-rose-600">₺{amount.toLocaleString("tr-TR")}</span>;
-        }
-    },
-    {
-        accessorKey: "km",
-        header: "İşlem KM",
-        cell: ({ row }) => {
-            const km = row.original.km;
-            return <span className="text-slate-600 font-medium">{km ? `${km.toLocaleString("tr-TR")} km` : '-'}</span>;
-        }
-    },
-    {
-        accessorKey: "aciklama",
-        header: "Açıklama",
-    },
-    {
-        accessorKey: "odendiMi",
-        header: "Durum",
-        cell: ({ row }) => {
-            const odendi = row.getValue("odendiMi") as boolean;
-            return odendi ? (
-                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700">Ödendi</span>
-            ) : (
-                <span className="px-2 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 flex items-center gap-1 w-max">
-                    <AlertTriangle size={12} /> Ödenmedi
-                </span>
-            )
-        }
+        header: () => <div className="text-right">Tutar (₺)</div>,
+        cell: ({ row }) => (
+            <div className="text-right font-semibold text-rose-600">
+                ₺{row.original.tutar.toLocaleString("tr-TR")}
+            </div>
+        )
     }
 ]

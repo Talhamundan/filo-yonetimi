@@ -11,6 +11,7 @@ import { getColumns, HgsRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createHgs, updateHgs, deleteHgs } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const EMPTY = {
     aracId: '',
@@ -20,7 +21,18 @@ const EMPTY = {
     km: '',
 };
 
-const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: any[] }) => (
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string | null;
+    model?: string | null;
+    bulunduguIl?: string | null;
+};
+
+const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
+
+    return (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
@@ -30,8 +42,9 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Seçiniz...</option>
-                {araclar.map((a: any) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                {araclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
             </select>
+            <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">HGS Etiket No</label>
@@ -52,14 +65,15 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             </div>
         </div>
     </div>
-);
+    );
+};
 
 export default function HgsClient({
     initialHgs,
     araclar
 }: {
     initialHgs: HgsRow[];
-    araclar: { id: string; plaka: string }[];
+    araclar: AracOption[];
 }) {
     const router = useRouter();
     const { confirmModal, openConfirm } = useConfirm();
@@ -171,7 +185,7 @@ export default function HgsClient({
                     </Dialog>
                 </div>
 
-                <DataTable columns={[actionsCol, ...getColumns(canAccessAllCompanies)]} data={initialHgs} />
+                <DataTable columns={[actionsCol, ...getColumns(canAccessAllCompanies)]} data={initialHgs} excelEntity="hgs" />
 
                 {/* Edit Dialog */}
                 <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

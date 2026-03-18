@@ -5,6 +5,14 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 
 const PATH = '/dashboard/masraflar';
+const ARACLAR_PATH = '/dashboard/araclar';
+
+function revalidateMasrafPages(aracId?: string) {
+    revalidatePath(PATH);
+    revalidatePath('/dashboard');
+    revalidatePath(ARACLAR_PATH);
+    if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
+}
 
 export async function createMasraf(data: {
     aracId: string;
@@ -30,8 +38,7 @@ export async function createMasraf(data: {
                 aciklama: data.aciklama || null,
             }
         });
-        revalidatePath(PATH);
-        revalidatePath('/dashboard'); // Dashboard stats might change
+        revalidateMasrafPages(arac.id);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -64,7 +71,7 @@ export async function updateMasraf(id: string, data: any) {
                 tutar: data.tutar ? Number(data.tutar) : undefined,
             }
         });
-        revalidatePath(PATH);
+        revalidateMasrafPages(arac.id);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -75,15 +82,16 @@ export async function updateMasraf(id: string, data: any) {
 export async function deleteMasraf(id: string) {
     try {
         await assertAuthenticatedUser();
-        await getScopedRecordOrThrow({
+        const kayit = await getScopedRecordOrThrow({
             prismaModel: "masraf",
             filterModel: "masraf",
             id,
+            select: { aracId: true },
             errorMessage: "Masraf kaydi bulunamadi veya yetkiniz yok.",
         });
 
         await prisma.masraf.delete({ where: { id } });
-        revalidatePath(PATH);
+        revalidateMasrafPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (e) {
         console.error(e);

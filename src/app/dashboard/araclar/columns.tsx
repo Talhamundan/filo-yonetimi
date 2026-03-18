@@ -2,8 +2,9 @@
 
 import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "../../../components/ui/badge"
-import { differenceInDays } from "date-fns"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status"
+import { PersonelLink } from "@/components/links/RecordLinks"
 
 export type AracRow = {
     id: string;
@@ -16,30 +17,39 @@ export type AracRow = {
     durum: string;
     kategori: string;
     hgsNo?: string | null;
-    kullanici?: { ad: string, soyad: string } | null;
+    saseNo?: string | null;
+    kullanici?: { id: string; ad: string, soyad: string } | null;
     kullaniciId?: string | null;
     sirket?: { ad: string } | null;
     muayene?: { gecerlilikTarihi: Date }[];
     kasko?: { bitisTarihi: Date }[];
     trafikSigortasi?: { bitisTarihi: Date }[];
+    maliyetKalemleri?: {
+        yakit: number;
+        bakim: number;
+        muayene: number;
+        hgs: number;
+        ceza: number;
+        kasko: number;
+        trafik: number;
+        diger: number;
+    };
+    toplamMaliyet?: number;
+}
+
+function formatCurrency(value: number) {
+    return `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
 }
 
 function renderGecerlilikDurumu(tarih: Date) {
-    const kalan = differenceInDays(new Date(tarih), new Date());
+    const kalan = getDaysLeft(tarih);
 
-    if (kalan < 0) {
-        return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">Gecikti</Badge>;
+    if (kalan == null) {
+        return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">Belirsiz</Badge>;
     }
 
-    if (kalan <= 15) {
-        return <Badge className="bg-red-500 text-white hover:bg-red-600 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün (Kritik)</Badge>;
-    }
-
-    if (kalan <= 30) {
-        return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-sm px-2 py-0.5 text-[10px]">{kalan} Gün</Badge>;
-    }
-
-    return <span className="text-emerald-600 font-semibold text-xs">{kalan} Gün</span>;
+    const badge = getDeadlineBadgeConfig(kalan);
+    return <Badge className={`${badge.className} border-0 shadow-sm px-2 py-0.5 text-[10px] ${badge.status === "GECERLI" ? "font-semibold" : "font-bold"}`}>{badge.label}</Badge>;
 }
 
 export const getColumns = (showCompanyInfo = false): ColumnDef<AracRow>[] => [
@@ -71,6 +81,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<AracRow>[] => [
         cell: ({ row }) => {
             return (
                 <VehicleIdentityCell
+                    aracId={row.original.id}
                     plaka={row.original.plaka}
                     subtitle={`${row.original.marka} ${row.original.model}`}
                     companyName={row.original.sirket?.ad}
@@ -117,7 +128,12 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<AracRow>[] => [
         cell: ({ row }) => {
             const kullanici = row.original.kullanici
             return kullanici ? (
-                <span className="font-medium text-slate-700">{kullanici.ad} {kullanici.soyad}</span>
+                <PersonelLink
+                    personelId={row.original.kullaniciId || kullanici.id}
+                    className="font-medium text-slate-700 hover:text-indigo-600 hover:underline"
+                >
+                    {kullanici.ad} {kullanici.soyad}
+                </PersonelLink>
             ) : (
                 <span className="text-slate-400 italic text-xs">Atanmamış</span>
             )
@@ -164,6 +180,46 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<AracRow>[] => [
             if (!sigortaList || sigortaList.length === 0) return <span className="text-slate-400 text-xs italic">Yok</span>;
 
             return renderGecerlilikDurumu(sigortaList[0].bitisTarihi);
+        },
+    },
+    {
+        accessorKey: "toplamMaliyet",
+        header: "Maliyet Özeti",
+        cell: ({ row }) => {
+            const toplam = row.original.toplamMaliyet || 0;
+            const kalemler = row.original.maliyetKalemleri || {
+                yakit: 0, bakim: 0, muayene: 0, hgs: 0, ceza: 0, kasko: 0, trafik: 0, diger: 0,
+            };
+            const nonZero = [
+                { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+                { key: "Bakım", value: kalemler.bakim, className: "bg-amber-50 text-amber-700 border-amber-200" },
+                { key: "Muayene", value: kalemler.muayene, className: "bg-sky-50 text-sky-700 border-sky-200" },
+                { key: "HGS", value: kalemler.hgs, className: "bg-violet-50 text-violet-700 border-violet-200" },
+                { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
+                { key: "Kasko", value: kalemler.kasko, className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
+                { key: "Trafik", value: kalemler.trafik, className: "bg-cyan-50 text-cyan-700 border-cyan-200" },
+                { key: "Diğer", value: kalemler.diger, className: "bg-slate-100 text-slate-700 border-slate-200" },
+            ].filter((item) => item.value > 0);
+
+            return (
+                <div className="min-w-[220px] max-w-[300px]">
+                    <div className="text-sm font-bold text-slate-900">{formatCurrency(toplam)}</div>
+                    {nonZero.length > 0 ? (
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                            {nonZero.map((item) => (
+                                <span
+                                    key={item.key}
+                                    className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${item.className}`}
+                                >
+                                    {item.key}: {formatCurrency(item.value)}
+                                </span>
+                            ))}
+                        </div>
+                    ) : (
+                        <span className="text-slate-400 text-xs italic">Kayıt yok</span>
+                    )}
+                </div>
+            );
         },
     },
 ]

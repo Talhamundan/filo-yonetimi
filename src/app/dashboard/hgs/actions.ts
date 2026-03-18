@@ -3,6 +3,16 @@
 import { prisma } from "@/lib/prisma"
 import { revalidatePath } from "next/cache"
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope"
+import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency"
+
+const PATH = "/dashboard/hgs";
+const ARACLAR_PATH = "/dashboard/araclar";
+
+function revalidateHgsPages(aracId?: string) {
+    revalidatePath(PATH);
+    revalidatePath(ARACLAR_PATH);
+    if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
+}
 
 export async function createHgs(data: {
     aracId: string;
@@ -16,8 +26,16 @@ export async function createHgs(data: {
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             sirketId: true,
-            guncelKm: true,
         });
+        const normalizedKm =
+            data.km !== undefined
+                ? await assertKmWriteConsistency({
+                    aracId: arac.id,
+                    km: data.km,
+                    fieldLabel: "HGS KM",
+                    tx: prisma,
+                })
+                : null;
 
         await (prisma as any).hgsYukleme.create({
             data: {
@@ -25,22 +43,14 @@ export async function createHgs(data: {
                 tarih: new Date(data.tarih),
                 etiketNo: data.etiketNo || null,
                 tutar: Number(data.tutar),
-                km: data.km ? Number(data.km) : null,
+                km: normalizedKm,
                 sirketId: arac.sirketId
             }
         });
 
-        // Araç KM güncelleme mantığı
-        if (data.km) {
-            if (Number(data.km) > arac.guncelKm) {
-                await (prisma as any).arac.update({
-                    where: { id: arac.id },
-                    data: { guncelKm: Number(data.km) }
-                });
-            }
-        }
+        await syncAracGuncelKm(arac.id, prisma);
 
-        revalidatePath("/dashboard/hgs");
+        revalidateHgsPages(arac.id);
         return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -60,12 +70,28 @@ export async function updateHgs(id: string, data: {
             prismaModel: "hgsYukleme",
             filterModel: "hgs",
             id,
-            select: { aracId: true, sirketId: true },
+            select: { aracId: true, sirketId: true, km: true },
             errorMessage: "HGS kaydi bulunamadi veya yetkiniz yok.",
         });
         const arac = data.aracId
-            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true, guncelKm: true })
-            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true, guncelKm: true });
+            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
+            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+        const kmInput =
+            data.km !== undefined
+                ? data.km
+                : data.aracId && data.aracId !== mevcutKayit.aracId
+                    ? mevcutKayit.km
+                    : undefined;
+        const normalizedKm =
+            kmInput !== undefined
+                ? await assertKmWriteConsistency({
+                    aracId: arac.id,
+                    km: kmInput,
+                    fieldLabel: "HGS KM",
+                    currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
+                    tx: prisma,
+                })
+                : null;
 
         await (prisma as any).hgsYukleme.update({
             where: { id },
@@ -74,22 +100,14 @@ export async function updateHgs(id: string, data: {
                 tarih: new Date(data.tarih),
                 etiketNo: data.etiketNo || null,
                 tutar: Number(data.tutar),
-                km: data.km ? Number(data.km) : null,
+                km: data.km !== undefined ? normalizedKm : undefined,
                 sirketId: arac.sirketId || mevcutKayit.sirketId,
             }
         });
 
-        // Araç KM güncelleme mantığı (eğer güncellenen KM mevcut olandan büyükse)
-        if (data.km && data.aracId) {
-            if (Number(data.km) > arac.guncelKm) {
-                await (prisma as any).arac.update({
-                    where: { id: arac.id },
-                    data: { guncelKm: Number(data.km) }
-                });
-            }
-        }
+        await syncAracGuncelKm(arac.id, prisma);
 
-        revalidatePath("/dashboard/hgs");
+        revalidateHgsPages(arac.id);
         return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message };
@@ -99,15 +117,16 @@ export async function updateHgs(id: string, data: {
 export async function deleteHgs(id: string) {
     try {
         await assertAuthenticatedUser();
-        await getScopedRecordOrThrow({
+        const kayit = await getScopedRecordOrThrow({
             prismaModel: "hgsYukleme",
             filterModel: "hgs",
             id,
+            select: { aracId: true },
             errorMessage: "HGS kaydi bulunamadi veya yetkiniz yok.",
         });
 
         await (prisma as any).hgsYukleme.delete({ where: { id } });
-        revalidatePath("/dashboard/hgs");
+        revalidateHgsPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (e: any) {
         return { success: false, error: e.message };

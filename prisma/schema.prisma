@@ -27,6 +27,7 @@ model Arac {
   guncelKm     Int          @default(0)
   hgsNo        String?
   ruhsatSeriNo String?
+  saseNo       String?
   durum        AracDurumu   @default(AKTIF)
   kategori     AracKategori @default(BINEK)
 
@@ -43,7 +44,8 @@ model Arac {
   kasko            Kasko[]
   muayene          Muayene[]
   bakimlar         Bakim[]
-  cezalar          Ceza[]
+  cezalar          Ceza[]            @relation("CezaPlakaRelation")
+  cezalarByAracId  Ceza[]            @relation("CezaAracIdRelation")
   masraflar        Masraf[]
   kullaniciGecmisi KullaniciZimmet[]
   yakitlar         Yakit[]
@@ -77,7 +79,7 @@ model Kullanici {
 
   arac      Arac? // Mevcut zimmetli araç
   zimmetler KullaniciZimmet[] // Geçmiş tüm zimmet kayıtları
-  cezalar   Ceza[]
+  cezalar   Ceza[]            @relation("CezaSoforRelation")
 
   @@index([sirketId])
 }
@@ -86,6 +88,7 @@ model KullaniciZimmet {
   id          String    @id @default(cuid())
   arac        Arac      @relation(fields: [aracId], references: [id])
   aracId      String
+  saseNo      String?
   kullanici   Kullanici @relation(fields: [kullaniciId], references: [id])
   kullaniciId String
   baslangic   DateTime  @default(now())
@@ -101,6 +104,7 @@ model KullaniciZimmet {
 model TrafikSigortasi {
   id              String   @id @default(cuid())
   sirket          String?
+  acente          String?
   policeNo        String?
   baslangicTarihi DateTime
   bitisTarihi     DateTime
@@ -109,6 +113,7 @@ model TrafikSigortasi {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -118,6 +123,7 @@ model TrafikSigortasi {
 model Kasko {
   id              String   @id @default(cuid())
   sirket          String?
+  acente          String?
   policeNo        String?
   baslangicTarihi DateTime
   bitisTarihi     DateTime
@@ -126,6 +132,7 @@ model Kasko {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -136,12 +143,14 @@ model Muayene {
   id               String   @id @default(cuid())
   muayeneTarihi    DateTime
   gecerlilikTarihi DateTime
-  istasyon         String?
+  tutar            Float?
+  gectiMi          Boolean  @default(true)
   km               Int? // Muayene anındaki KM
   aktifMi          Boolean  @default(true)
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -149,17 +158,19 @@ model Muayene {
 }
 
 model Bakim {
-  id              String    @id @default(cuid())
+  id              String         @id @default(cuid())
   bakimTarihi     DateTime
   yapilanKm       Int
   sonrakiBakimKm  Int?
   servisAdi       String?
-  yapilanIslemler String?   @db.Text
-  tutar           Float     @default(0)
-  tur             BakimTuru @default(PERIYODIK)
+  yapilanIslemler String?        @db.Text
+  tutar           Float          @default(0)
+  kategori        ServisKategori @default(PERIYODIK_BAKIM)
+  tur             BakimTuru      @default(PERIYODIK)
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -168,22 +179,26 @@ model Bakim {
 
 model Ceza {
   id             String    @id @default(cuid())
-  cezaTarihi     DateTime
-  sonOdemeTarihi DateTime?
+  plaka          String
+  soforId        String?   @map("kullaniciId")
+  tarih          DateTime  @map("cezaTarihi")
   tutar          Float
-  km             Int? // Ceza anındaki KM (Opsiyonel)
+  cezaMaddesi    String    @default("Belirtilmedi")
   aciklama       String?
+  km             Int? // Ceza anındaki KM (Opsiyonel)
+  sonOdemeTarihi DateTime?
   odendiMi       Boolean   @default(false)
+  aracId         String
+  saseNo         String?
+  sirketId       String?
 
-  arac   Arac   @relation(fields: [aracId], references: [id])
-  aracId String
+  kullanici Kullanici? @relation("CezaSoforRelation", fields: [soforId], references: [id])
+  arac      Arac       @relation("CezaPlakaRelation", fields: [plaka], references: [plaka])
+  aracById  Arac       @relation("CezaAracIdRelation", fields: [aracId], references: [id])
 
-  kullanici   Kullanici? @relation(fields: [kullaniciId], references: [id])
-  kullaniciId String?
-  sirketId    String?
-
+  @@index([plaka])
+  @@index([soforId])
   @@index([aracId])
-  @@index([kullaniciId])
   @@index([sirketId])
 }
 
@@ -196,6 +211,7 @@ model Masraf {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -213,6 +229,7 @@ model Yakit {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -229,6 +246,7 @@ model HgsYukleme {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -246,6 +264,7 @@ model Ariza {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -261,6 +280,7 @@ model Dokuman {
 
   arac     Arac    @relation(fields: [aracId], references: [id])
   aracId   String
+  saseNo   String?
   sirketId String?
 
   @@index([aracId])
@@ -322,6 +342,11 @@ enum BakimTuru {
   PERIYODIK
   ARIZA
   KAPORTA
+}
+
+enum ServisKategori {
+  PERIYODIK_BAKIM
+  ARIZA
 }
 
 enum iller {

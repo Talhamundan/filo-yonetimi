@@ -2,9 +2,10 @@
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
-import { isAdmin, getCurrentSirketId } from "@/lib/auth-utils";
+import { isAdmin } from "@/lib/auth-utils";
 
 const PATH = "/dashboard/personel";
+const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 async function assertAdmin() {
     const session = await auth();
@@ -16,21 +17,21 @@ async function assertAdmin() {
 export async function createPersonel(data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
     try {
         await assertAdmin();
-        const currentSirketId = await getCurrentSirketId();
 
-        await prisma.kullanici.create({
+        const created = await prisma.kullanici.create({
             data: {
-                ad: data.ad,
-                soyad: data.soyad,
+                ad: forceUppercase(data.ad || ""),
+                soyad: forceUppercase(data.soyad || ""),
                 eposta: data.eposta || null,
                 telefon: data.telefon || null,
                 rol: data.rol as any,
-                sirketId: currentSirketId || data.sirketId || null,
+                sirketId: data.sirketId || null,
                 sehir: data.sehir as any || null,
                 tcNo: data.tcNo || null,
             }
         });
         revalidatePath(PATH);
+        revalidatePath(`${PATH}/${created.id}`);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -41,22 +42,22 @@ export async function createPersonel(data: { ad: string; soyad: string; eposta?:
 export async function updatePersonel(id: string, data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
     try {
         await assertAdmin();
-        const currentSirketId = await getCurrentSirketId();
 
         await prisma.kullanici.update({
             where: { id },
             data: {
-                ad: data.ad,
-                soyad: data.soyad,
+                ad: forceUppercase(data.ad || ""),
+                soyad: forceUppercase(data.soyad || ""),
                 eposta: data.eposta || null,
                 telefon: data.telefon || null,
                 rol: data.rol as any,
-                sirketId: currentSirketId || data.sirketId || null,
+                sirketId: data.sirketId || null,
                 sehir: data.sehir as any || null,
                 tcNo: data.tcNo || null,
             }
         });
         revalidatePath(PATH);
+        revalidatePath(`${PATH}/${id}`);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -70,6 +71,7 @@ export async function deletePersonel(id: string) {
 
         await prisma.kullanici.delete({ where: { id } });
         revalidatePath(PATH);
+        revalidatePath(`${PATH}/${id}`);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -133,4 +135,3 @@ export async function araciBirak(personelId: string) {
         return { success: false, error: "Araç bırakma işlemi başarısız oldu." };
     }
 }
-

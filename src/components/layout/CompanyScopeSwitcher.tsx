@@ -43,14 +43,14 @@ export default function CompanyScopeSwitcher({ sirketler }: CompanyScopeSwitcher
     };
 
     return (
-        <div className="relative w-full max-w-[156px]">
+        <div className="relative w-[136px] md:w-[168px]">
             <select
                 aria-label="Sirket filtresi"
                 title={`Aktif kapsam: ${selectedLabel}`}
                 value={selectedSirketId}
                 onChange={handleChange}
                 disabled={pending}
-                className="h-11 w-full appearance-none rounded-full border border-slate-200 bg-white pl-3 pr-8 text-left text-[13px] font-semibold text-slate-700 shadow-sm outline-none transition hover:border-slate-300 focus:border-indigo-500 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-10 md:h-11 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-8 text-left text-[12px] md:text-[13px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
                 <option value="__ALL__">Tum Sirketler</option>
                 {sirketler.map((sirket) => (
@@ -59,7 +59,7 @@ export default function CompanyScopeSwitcher({ sirketler }: CompanyScopeSwitcher
                     </option>
                 ))}
             </select>
-            <ChevronsUpDown size={14} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <ChevronsUpDown size={13} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
         </div>
     );
 }

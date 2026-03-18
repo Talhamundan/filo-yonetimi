@@ -2,16 +2,55 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import PersonelClient from "./Client";
 import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+
+function getMonthDateRange(yil: number, ay: number) {
+    const start = new Date(yil, ay - 1, 1, 0, 0, 0, 0);
+    const end = new Date(yil, ay, 0, 23, 59, 59, 999);
+    return { start, end };
+}
+
+function toNumber(value: unknown) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+}
+
+function findDriverAtDate(
+    zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>>,
+    aracId: string,
+    date: Date
+) {
+    const rows = zimmetByAracId[aracId];
+    if (!rows?.length) return null;
+    const target = date.getTime();
+
+    for (let i = rows.length - 1; i >= 0; i -= 1) {
+        const row = rows[i];
+        if (row.baslangic <= target && (row.bitis === null || row.bitis >= target)) {
+            return row.kullaniciId;
+        }
+    }
+
+    return null;
+}
 
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const selectedSirketId = await getSelectedSirketId(props.searchParams);
-    const [filter, sirketListFilter] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy] = await Promise.all([
+        getSelectedSirketId(props.searchParams),
+        getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
+    ]);
+    const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
+
+    const [filter, sirketListFilter, cezaFilter, yakitFilter, bakimFilter, zimmetFilter] = await Promise.all([
         getModelFilter('personel', selectedSirketId),
-        getSirketListFilter()
+        getSirketListFilter(),
+        getModelFilter("ceza", selectedSirketId),
+        getModelFilter("yakit", selectedSirketId),
+        getModelFilter("bakim", selectedSirketId),
+        getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
 
-    const [personeller, sirketler] = await Promise.all([
+    const [personeller, sirketler, cezaBySofor, yakitKayitlari, arizaKayitlari, tumZimmetler] = await Promise.all([
         (prisma as any).kullanici.findMany({
             where: {
                 ...(filter as any),
@@ -19,28 +58,117 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             orderBy: { ad: 'asc' },
             include: { 
                 sirket: true,
-                arac: { select: { plaka: true, marka: true, model: true } }
+                arac: { select: { id: true, plaka: true, marka: true, model: true } }
             }
         }),
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
-            select: { id: true, ad: true },
+            select: { id: true, ad: true, bulunduguIl: true },
             orderBy: { ad: 'asc' }
-        })
+        }),
+        (prisma as any).ceza.groupBy({
+            where: { ...(cezaFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
+            by: ["soforId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        (prisma as any).yakit.findMany({
+            where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
+            select: { aracId: true, tarih: true, tutar: true, soforId: true },
+        }).catch(async () => {
+            const fallbackRows = await (prisma as any).yakit.findMany({
+                where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
+                select: { aracId: true, tarih: true, tutar: true },
+            }).catch(() => []);
+            return (fallbackRows || []).map((row: any) => ({ ...row, soforId: null }));
+        }),
+        (prisma as any).bakim.findMany({
+            where: {
+                ...(bakimFilter as any),
+                bakimTarihi: { gte: rangeStart, lte: rangeEnd },
+                tur: "ARIZA",
+            },
+            select: { aracId: true, bakimTarihi: true, tutar: true },
+        }).catch(() => []),
+        (prisma as any).kullaniciZimmet.findMany({
+            where: {
+                ...(zimmetFilter as any),
+                baslangic: { lte: rangeEnd },
+                OR: [{ bitis: null }, { bitis: { gte: rangeStart } }],
+            },
+            select: { aracId: true, kullaniciId: true, baslangic: true, bitis: true },
+        }).catch(() => []),
     ]);
 
-    const formattedData = personeller.map((p: any) => ({
-        id: p.id,
-        adSoyad: `${p.ad} ${p.soyad}`,
-        tcNo: p.tcNo || "-",
-        telefon: p.telefon || "-",
-        eposta: p.eposta || "-",
-        rol: p.rol,
-        sirketAdi: p.sirket?.ad || "Bağımsız",
-        sirketId: p.sirketId || "",
-        sehir: p.sehir || "-",
-        zimmetliArac: p.arac ? `${p.arac.plaka} (${p.arac.marka} ${p.arac.model})` : null
-    }));
+    const zimmetByAracId: Record<
+        string,
+        Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>
+    > = {};
+    for (const z of tumZimmetler as Array<{ aracId: string; kullaniciId: string; baslangic: Date; bitis: Date | null }>) {
+        if (!zimmetByAracId[z.aracId]) {
+            zimmetByAracId[z.aracId] = [];
+        }
+        zimmetByAracId[z.aracId].push({
+            kullaniciId: z.kullaniciId,
+            baslangic: z.baslangic.getTime(),
+            bitis: z.bitis ? z.bitis.getTime() : null,
+        });
+    }
+    Object.values(zimmetByAracId).forEach((list) => {
+        list.sort((a, b) => a.baslangic - b.baslangic);
+    });
+
+    const costByPersonelId = new Map<string, { ceza: number; yakit: number; ariza: number; toplam: number }>();
+    const upsertCost = (kullaniciId: string | null, patch: Partial<{ ceza: number; yakit: number; ariza: number; toplam: number }>) => {
+        if (!kullaniciId) return;
+        const current = costByPersonelId.get(kullaniciId) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
+        const next = {
+            ceza: current.ceza + toNumber(patch.ceza),
+            yakit: current.yakit + toNumber(patch.yakit),
+            ariza: current.ariza + toNumber(patch.ariza),
+            toplam: current.toplam + toNumber(patch.toplam),
+        };
+        costByPersonelId.set(kullaniciId, next);
+    };
+
+    for (const ceza of cezaBySofor as Array<{ soforId: string | null; _sum: { tutar: number | null } }>) {
+        const tutar = toNumber(ceza?._sum?.tutar);
+        upsertCost(ceza.soforId, { ceza: tutar, toplam: tutar });
+    }
+
+    for (const yakit of yakitKayitlari as Array<{ aracId: string; tarih: Date; tutar: number; soforId: string | null }>) {
+        const soforId = yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
+        const tutar = toNumber(yakit.tutar);
+        upsertCost(soforId, { yakit: tutar, toplam: tutar });
+    }
+
+    for (const ariza of arizaKayitlari as Array<{ aracId: string; bakimTarihi: Date; tutar: number }>) {
+        const soforId = findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
+        const tutar = toNumber(ariza.tutar);
+        upsertCost(soforId, { ariza: tutar, toplam: tutar });
+    }
+
+    const formattedData = personeller.map((p: any) => {
+        const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
+        return {
+            id: p.id,
+            adSoyad: `${p.ad} ${p.soyad}`,
+            tcNo: p.tcNo || "-",
+            telefon: p.telefon || "-",
+            eposta: p.eposta || "-",
+            rol: p.rol,
+            sirketAdi: p.sirket?.ad || "Bağımsız",
+            sirketId: p.sirketId || "",
+            sehir: p.sehir || "-",
+            zimmetliArac: p.arac ? `${p.arac.plaka} (${p.arac.marka} ${p.arac.model})` : null,
+            zimmetliAracId: p.arac?.id || null,
+            maliyetKalemleri: {
+                ceza: maliyet.ceza,
+                yakit: maliyet.yakit,
+                ariza: maliyet.ariza,
+            },
+            toplamMaliyet: maliyet.toplam,
+        };
+    });
 
     return <PersonelClient initialData={formattedData} sirketler={sirketler} />;
 }

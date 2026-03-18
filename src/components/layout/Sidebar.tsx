@@ -17,7 +17,8 @@ import {
     FileText,
     FolderOpen,
     Building2,
-    CreditCard
+    CreditCard,
+    X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -27,12 +28,14 @@ const NavItem = ({
     label,
     badge,
     collapsed,
+    onNavigate,
 }: {
     href: string,
     icon: React.ElementType,
     label: string,
     badge?: number,
-    collapsed?: boolean
+    collapsed?: boolean,
+    onNavigate?: () => void,
 }) => {
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -44,13 +47,19 @@ const NavItem = ({
     }
     const active = isActive(href);
     const selectedSirketId = searchParams.get("sirket");
-    const scopedHref = selectedSirketId ? `${href}?sirket=${selectedSirketId}` : href;
+    const selectedYil = searchParams.get("yil");
+    const scopedParams = new URLSearchParams();
+    if (selectedSirketId) scopedParams.set("sirket", selectedSirketId);
+    if (selectedYil) scopedParams.set("yil", selectedYil);
+    const scopedQuery = scopedParams.toString();
+    const scopedHref = scopedQuery ? `${href}?${scopedQuery}` : href;
     const collapsedNavClass = "mx-auto h-11 w-11 justify-center rounded-[18px]";
 
     return (
         <Link
             href={scopedHref}
             title={collapsed ? label : undefined}
+            onClick={() => onNavigate?.()}
             className={`flex items-center font-semibold transition-all duration-300 ease-out
                 ${active
                     ? 'text-slate-900'
@@ -115,71 +124,90 @@ const SectionTitle = ({ title, collapsed }: { title: string; collapsed?: boolean
     </div>
 )
 
-export default function Sidebar({ collapsed = false }: { collapsed?: boolean }) {
-    const pathname = usePathname()
-    const sidebarRef = React.useRef<HTMLElement>(null)
+type SidebarProps = {
+    collapsed?: boolean;
+    mobile?: boolean;
+    mobileOpen?: boolean;
+    onMobileClose?: () => void;
+};
 
-    React.useEffect(() => {
-        sidebarRef.current?.scrollTo({ top: 0, behavior: "auto" })
-    }, [pathname, collapsed])
+export default function Sidebar({ collapsed = false, mobile = false, mobileOpen = false, onMobileClose }: SidebarProps) {
+    const sidebarRef = React.useRef<HTMLElement>(null)
+    const effectiveCollapsed = mobile ? false : collapsed
 
     return (
         <aside
             ref={sidebarRef}
             className={cn(
-                "hidden lg:flex h-full flex-col border-r border-[#E2E8F0] bg-gradient-to-b from-white via-white to-slate-50/30 pt-4 pb-6 overflow-y-auto overscroll-contain transition-all duration-300 ease-out",
-                collapsed ? "w-[72px] px-2" : "w-[260px] px-4"
+                mobile
+                    ? "fixed inset-y-0 left-0 z-50 flex w-[272px] flex-col border-r border-[#E2E8F0] bg-white px-4 pt-4 pb-6 overflow-y-auto overscroll-contain transition-transform duration-300 ease-out lg:hidden"
+                    : "hidden lg:flex h-full flex-col border-r border-[#E2E8F0] bg-gradient-to-b from-white via-white to-slate-50/30 pt-4 pb-6 overflow-y-auto overscroll-contain transition-all duration-300 ease-out",
+                mobile ? (mobileOpen ? "translate-x-0" : "-translate-x-full") : (effectiveCollapsed ? "w-[72px] px-2" : "w-[260px] px-4")
             )}
         >
+            {mobile ? (
+                <div className="mb-3 flex items-center justify-between px-1">
+                    <span className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Menü</span>
+                    <button
+                        type="button"
+                        onClick={onMobileClose}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
+                        aria-label="Menüyü kapat"
+                    >
+                        <X size={16} />
+                    </button>
+                </div>
+            ) : null}
+
             <div className="min-h-full">
                 {/* Fleet Overview */}
-                <SectionTitle title="Genel Bakış" collapsed={collapsed} />
+                <SectionTitle title="Genel Bakış" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" collapsed={collapsed} />
+                    <NavItem href="/dashboard" icon={LayoutDashboard} label="Dashboard" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Organization Management */}
-                <SectionTitle title="Sistem Yönetimi" collapsed={collapsed} />
+                <SectionTitle title="Sistem Yönetimi" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard/sirketler" icon={Building2} label="Şirket Yönetimi" collapsed={collapsed} />
-                    <NavItem href="/dashboard/personel" icon={Users} label="Personel & Yetkiler" collapsed={collapsed} />
+                    <NavItem href="/dashboard/sirketler" icon={Building2} label="Şirket Yönetimi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/personel" icon={Users} label="Personel & Yetkiler" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Fleet Management */}
-                <SectionTitle title="Filo Yönetimi" collapsed={collapsed} />
+                <SectionTitle title="Filo Yönetimi" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard/araclar" icon={Car} label="Araçlar" collapsed={collapsed} />
-                    <NavItem href="/dashboard/zimmetler" icon={ClipboardList} label="Zimmet Kayıtları" collapsed={collapsed} />
+                    <NavItem href="/dashboard/araclar" icon={Car} label="Araçlar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/zimmetler" icon={ClipboardList} label="Zimmet Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Operations */}
-                <SectionTitle title="Operasyonlar" collapsed={collapsed} />
+                <SectionTitle title="Operasyonlar" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard/bakimlar" icon={Wrench} label="Bakım Kayıtları" collapsed={collapsed} />
-                    <NavItem href="/dashboard/arizalar" icon={AlertTriangle} label="Arıza Bildirimleri" collapsed={collapsed} />
-                    <NavItem href="/dashboard/muayeneler" icon={CheckCircle} label="Muayene Takibi" collapsed={collapsed} />
+                    <NavItem href="/dashboard/bakimlar" icon={Wrench} label="Servis Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/muayeneler" icon={CheckCircle} label="Muayene Takibi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Finance */}
-                <SectionTitle title="Finans" collapsed={collapsed} />
+                <SectionTitle title="Finans" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard/yakitlar" icon={Fuel} label="Yakıt Harcamaları" collapsed={collapsed} />
-                    <NavItem href="/dashboard/hgs" icon={CreditCard} label="HGS Yüklemeleri" collapsed={collapsed} />
-                    <NavItem href="/dashboard/masraflar" icon={Receipt} label="Genel Masraflar" collapsed={collapsed} />
+                    <NavItem href="/dashboard/yakitlar" icon={Fuel} label="Yakıt Harcamaları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/hgs" icon={CreditCard} label="HGS Yüklemeleri" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/ceza-masraflari" icon={AlertTriangle} label="Ceza Masrafları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/masraflar" icon={Receipt} label="Genel Masraflar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Insurance */}
-                <SectionTitle title="Sigorta Departmanı" collapsed={collapsed} />
+                <SectionTitle title="Sigorta Departmanı" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-5">
-                    <NavItem href="/dashboard/trafik-sigortasi" icon={ShieldCheck} label="Trafik Sigortaları" collapsed={collapsed} />
-                    <NavItem href="/dashboard/kasko" icon={FileText} label="Kasko Poliçeleri" collapsed={collapsed} />
-                    <NavItem href="/dashboard/evrak-takip" icon={AlertTriangle} label="Evrak & Sigorta Takibi" collapsed={collapsed} />
+                    <NavItem href="/dashboard/trafik-sigortasi" icon={ShieldCheck} label="Trafik Sigortaları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/kasko" icon={FileText} label="Kasko Poliçeleri" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/evrak-takip" icon={AlertTriangle} label="Evrak Takibi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Documents */}
-                <SectionTitle title="Evrak Yönetimi" collapsed={collapsed} />
+                <SectionTitle title="Evrak Yönetimi" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-1 mb-2">
-                    <NavItem href="/dashboard/dokumanlar" icon={FolderOpen} label="Araç Evrakları" collapsed={collapsed} />
+                    <NavItem href="/dashboard/dokumanlar" icon={FolderOpen} label="Araç Evrakları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
             </div>
         </aside>

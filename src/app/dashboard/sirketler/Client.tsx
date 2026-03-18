@@ -159,7 +159,7 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
                 </DialogContent>
             </Dialog>
 
-            <DataTable columns={columnsWithActions as any} data={initialData} searchKey="ad" searchPlaceholder="Şirket adı ara..." />
+            <DataTable columns={columnsWithActions as any} data={initialData} searchKey="ad" searchPlaceholder="Şirket adı ara..." excelEntity="sirket" />
         </div>
     );
 }

@@ -30,6 +30,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<MasrafRow>[] => [
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
             return <VehicleIdentityCell
+                aracId={row.original.arac.id}
                 plaka={row.original.arac.plaka}
                 subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
                 companyName={row.original.arac.sirket?.ad}

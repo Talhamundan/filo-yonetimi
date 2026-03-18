@@ -11,6 +11,7 @@ import { getColumns, MasrafRow } from "./columns";
 import { useRouter } from "next/navigation";
 import { createMasraf, updateMasraf, deleteMasraf } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
 const TUR_LIST = [
     'BAKIM_ONARIM',
@@ -29,7 +30,18 @@ const EMPTY = {
     aciklama: ''
 };
 
-const FormFields = ({ formData, setFormData, araclar, TUR_LIST }: { formData: any, setFormData: any, araclar: any[], TUR_LIST: string[] }) => (
+type AracOption = {
+    id: string;
+    plaka: string;
+    marka?: string | null;
+    model?: string | null;
+    bulunduguIl?: string | null;
+};
+
+const FormFields = ({ formData, setFormData, araclar, TUR_LIST }: { formData: any, setFormData: any, araclar: AracOption[], TUR_LIST: string[] }) => {
+    const selectedArac = araclar.find((a) => a.id === formData.aracId);
+
+    return (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">İlgili Araç <span className="text-red-500">*</span></label>
@@ -39,8 +51,9 @@ const FormFields = ({ formData, setFormData, araclar, TUR_LIST }: { formData: an
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Seçiniz...</option>
-                {araclar.map((a: any) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
+                {araclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
             </select>
+            <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -67,9 +80,10 @@ const FormFields = ({ formData, setFormData, araclar, TUR_LIST }: { formData: an
             <Input value={formData.aciklama} onChange={e => setFormData({...formData, aciklama: e.target.value})} placeholder="Örn: Yağ değişimi, otopark ücreti vb." className="h-9" />
         </div>
     </div>
-);
+    );
+};
 
-export default function MasraflarClient({ initialMasraflar, araclar }: { initialMasraflar: MasrafRow[], araclar: { id: string, plaka: string }[] }) {
+export default function MasraflarClient({ initialMasraflar, araclar }: { initialMasraflar: MasrafRow[], araclar: AracOption[] }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
@@ -190,6 +204,7 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
                 data={initialMasraflar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Gider kaydı için araç plakası ara..."
+                excelEntity="masraf"
             />
 
             <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
