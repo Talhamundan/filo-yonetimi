@@ -40,6 +40,7 @@ export async function createZimmet(data: {
             aracId: arac.id,
             km: data.baslangicKm,
             fieldLabel: "Zimmet Teslim KM",
+            enforceMaxKnownKm: false,
         });
 
         // 1. Önce bu araçtaki mevcut aktif zimmetleri kapat
@@ -143,6 +144,7 @@ export async function updateZimmet(id: string, data: {
             km: baslangicKm,
             fieldLabel: "Zimmet Teslim KM",
             currentRecord: { aracId: kayit.aracId, km: kayit.baslangicKm },
+            enforceMaxKnownKm: false,
         });
         const normalizedBitisKm =
             bitisKm !== null
@@ -151,6 +153,7 @@ export async function updateZimmet(id: string, data: {
                     km: bitisKm,
                     fieldLabel: "Zimmet Iade KM",
                     currentRecord: { aracId: kayit.aracId, km: kayit.bitisKm },
+                    enforceMaxKnownKm: false,
                 })
                 : null;
         if (

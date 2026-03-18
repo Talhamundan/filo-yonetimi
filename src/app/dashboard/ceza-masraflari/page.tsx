@@ -3,6 +3,7 @@ import CezaMasraflariClient from "./client";
 import { CezaMasrafRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 
 async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
     try {
@@ -56,9 +57,10 @@ async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
 }
 
 export default async function CezaMasraflariPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil] = await Promise.all([
+    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getCommonListFilters(props.searchParams),
     ]);
     const [cezaFilter, aracFilter, kullaniciFilter] = await Promise.all([
         getModelFilter("ceza", selectedSirketId),
@@ -66,9 +68,57 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
         getModelFilter("kullanici", selectedSirketId),
     ]);
     const cezaWhere = withYilDateFilter((cezaFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const soonDate = new Date(now);
+    soonDate.setDate(soonDate.getDate() + 30);
+    const whereParts: Record<string, unknown>[] = [cezaWhere as Record<string, unknown>];
+
+    if (commonFilters.q) {
+        const q = commonFilters.q;
+        whereParts.push({
+            OR: [
+                { plaka: { contains: q, mode: "insensitive" } },
+                { cezaMaddesi: { contains: q, mode: "insensitive" } },
+                { aciklama: { contains: q, mode: "insensitive" } },
+                { arac: { plaka: { contains: q, mode: "insensitive" } } },
+                {
+                    kullanici: {
+                        OR: [
+                            { ad: { contains: q, mode: "insensitive" } },
+                            { soyad: { contains: q, mode: "insensitive" } },
+                        ],
+                    },
+                },
+            ],
+        });
+    }
+    if (commonFilters.status) {
+        switch (commonFilters.status) {
+            case "ODENDI":
+                whereParts.push({ odendiMi: true });
+                break;
+            case "ODENMEDI":
+                whereParts.push({ odendiMi: false });
+                break;
+            case "GECIKTI":
+                whereParts.push({ odendiMi: false, sonOdemeTarihi: { lt: now } });
+                break;
+            case "YAKLASIYOR":
+                whereParts.push({ odendiMi: false, sonOdemeTarihi: { gte: now, lte: soonDate } });
+                break;
+            default:
+                break;
+        }
+    }
+    if (dateRange) {
+        whereParts.push({ tarih: dateRange });
+    }
+    const scopedCezaWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
 
     const [cezalarRaw, araclarRaw, soforlerRaw] = await Promise.all([
-        getSafeCezalar(cezaWhere as any),
+        getSafeCezalar(scopedCezaWhere as any),
         (prisma as any).arac
             .findMany({
                 where: aracFilter as any,

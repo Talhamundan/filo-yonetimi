@@ -297,6 +297,14 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                 data={initialBakimlar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Gösterilecek servis kaydı için plaka arayın..."
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    typeOptions: [
+                        { value: "PERIYODIK_BAKIM", label: "Periyodik Bakım" },
+                        { value: "ARIZA", label: "Arıza" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="bakim"
             />
         </div>

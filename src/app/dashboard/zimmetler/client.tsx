@@ -223,6 +223,7 @@ export default function ZimmetlerClient({
                 data={initialZimmetler}
                 searchKey="arac_plaka"
                 searchPlaceholder="Araç plakasına göre ara..."
+                toolbarArrangement="report-right-scroll"
                 excelEntity="zimmet"
             />
 

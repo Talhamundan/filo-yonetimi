@@ -2,6 +2,7 @@
 
 import prisma from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import {
     assertAuthenticatedUser,
     getScopedAracOrThrow,
@@ -10,6 +11,8 @@ import {
 } from "@/lib/action-scope";
 import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
 import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
+import { logEntityActivity } from "@/lib/activity-log";
+import { softDeleteEntity } from "@/lib/soft-delete";
 
 const PATH = "/dashboard/ceza-masraflari";
 
@@ -33,7 +36,7 @@ function revalidateCezaPages() {
 
 export async function createCezaMasraf(data: CezaMasrafPayload) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             plaka: true,
@@ -49,6 +52,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
                     aracId: arac.id,
                     km: data.km,
                     fieldLabel: "Ceza KM",
+                    enforceMaxKnownKm: false,
                     tx: prisma,
                 })
                 : null;
@@ -63,9 +67,10 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
             aciklama: data.aciklama?.trim() || null,
             sirketId: arac.sirketId,
         };
+        let created: { id: string; plaka: string | null; sirketId: string | null; cezaMaddesi: string; tutar: number; tarih: Date; aracId: string; soforId?: string | null } | null = null;
 
         try {
-            await (prisma as any).ceza.create({
+            created = await (prisma as any).ceza.create({
                 data: {
                     ...baseData,
                     km: normalizedKm,
@@ -76,7 +81,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
         } catch (error) {
             if (isCezaSchemaCompatibilityError(error)) {
                 await ensureCezaFineTrackingColumns();
-                await (prisma as any).ceza.create({
+                created = await (prisma as any).ceza.create({
                     data: {
                         ...baseData,
                         km: normalizedKm,
@@ -86,8 +91,26 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
                 });
             } else {
             console.warn("Ceza kaydi genis alanlarla olusturulamadi, temel alanlarla yeniden deneniyor.", error);
-            await (prisma as any).ceza.create({ data: baseData });
+            created = await (prisma as any).ceza.create({ data: baseData });
             }
+        }
+
+        if (created) {
+            await logEntityActivity({
+                actionType: ActivityActionType.CREATE,
+                entityType: ActivityEntityType.CEZA,
+                entityId: created.id,
+                summary: `${created.plaka || "Bilinmeyen plaka"} için ceza kaydı eklendi.`,
+                actor,
+                companyId: created.sirketId || actor.sirketId || null,
+                metadata: {
+                    cezaMaddesi: created.cezaMaddesi,
+                    tutar: created.tutar,
+                    tarih: created.tarih,
+                    aracId: created.aracId,
+                    soforId: created.soforId || null,
+                },
+            });
         }
 
         await syncAracGuncelKm(arac.id, prisma);
@@ -101,7 +124,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
 
 export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "ceza",
             filterModel: "ceza",
@@ -132,6 +155,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
                     km: kmInput,
                     fieldLabel: "Ceza KM",
                     currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
+                    enforceMaxKnownKm: false,
                     tx: prisma,
                 })
                 : null;
@@ -146,9 +170,10 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
             aciklama: data.aciklama?.trim() || null,
             sirketId: arac.sirketId,
         };
+        let updated: { id: string; plaka: string | null; sirketId: string | null; cezaMaddesi: string; tutar: number; tarih: Date; aracId: string; soforId?: string | null } | null = null;
 
         try {
-            await (prisma as any).ceza.update({
+            updated = await (prisma as any).ceza.update({
                 where: { id },
                 data: {
                     ...baseData,
@@ -160,7 +185,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
         } catch (error) {
             if (isCezaSchemaCompatibilityError(error)) {
                 await ensureCezaFineTrackingColumns();
-                await (prisma as any).ceza.update({
+                updated = await (prisma as any).ceza.update({
                     where: { id },
                     data: {
                         ...baseData,
@@ -171,11 +196,29 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
                 });
             } else {
             console.warn("Ceza kaydi genis alanlarla guncellenemedi, temel alanlarla yeniden deneniyor.", error);
-            await (prisma as any).ceza.update({
+            updated = await (prisma as any).ceza.update({
                 where: { id },
                 data: baseData,
             });
             }
+        }
+
+        if (updated) {
+            await logEntityActivity({
+                actionType: ActivityActionType.UPDATE,
+                entityType: ActivityEntityType.CEZA,
+                entityId: updated.id,
+                summary: `${updated.plaka || "Bilinmeyen plaka"} için ceza kaydı güncellendi.`,
+                actor,
+                companyId: updated.sirketId || actor.sirketId || null,
+                metadata: {
+                    cezaMaddesi: updated.cezaMaddesi,
+                    tutar: updated.tutar,
+                    tarih: updated.tarih,
+                    aracId: updated.aracId,
+                    soforId: updated.soforId || null,
+                },
+            });
         }
 
         await syncAracGuncelKm(arac.id, prisma);
@@ -189,19 +232,20 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
 
 export async function deleteCezaMasraf(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         await getScopedRecordOrThrow({
             prismaModel: "ceza",
             filterModel: "ceza",
             id,
+            select: { plaka: true, sirketId: true, cezaMaddesi: true, tutar: true, tarih: true, aracId: true },
             errorMessage: "Ceza kaydi bulunamadi veya yetkiniz yok.",
         });
 
-        await (prisma as any).ceza.delete({ where: { id } });
+        await softDeleteEntity("ceza", id, actor.id);
         revalidateCezaPages();
         return { success: true };
     } catch (error: any) {
         console.error(error);
-        return { success: false, error: error?.message || "Ceza kaydi silinemedi." };
+        return { success: false, error: error?.message || "Ceza kaydı çöp kutusuna taşınamadı." };
     }
 }

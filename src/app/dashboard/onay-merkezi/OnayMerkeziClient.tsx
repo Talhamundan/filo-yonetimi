@@ -1,9 +1,11 @@
 "use client"
 
 import React, { useState } from "react";
+import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { updateUserStatus } from "./actions";
 import { toast } from "sonner";
-import { Check, X, Building2, Mail, ShieldCheck } from "lucide-react";
+import { Check, X, Building2, Mail, ShieldCheck, History, Trash2 } from "lucide-react";
 import type { OnayDurumu, Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 
@@ -16,8 +18,42 @@ type OnayKullanici = {
     sirket?: { ad: string } | null;
 };
 
-export default function OnayMerkeziClient({ initialUsers }: { initialUsers: OnayKullanici[] }) {
+type DeletedDataStats = {
+    total: number;
+    pendingPermanentDelete: number;
+    oldestDeletedAt: string | null;
+    byEntity: {
+        arac: number;
+        masraf: number;
+        bakim: number;
+        dokuman: number;
+        ceza: number;
+        kullanici: number;
+    };
+};
+
+export default function OnayMerkeziClient({
+    initialUsers,
+    deletedStats,
+}: {
+    initialUsers: OnayKullanici[];
+    deletedStats: DeletedDataStats;
+}) {
     const [loading, setLoading] = useState<string | null>(null);
+    const searchParams = useSearchParams();
+
+    const scopedQuery = new URLSearchParams();
+    ["yil", "ay", "sirket"].forEach((key) => {
+        const value = searchParams.get(key);
+        if (value) scopedQuery.set(key, value);
+    });
+    const withScope = (path: string) => {
+        const query = scopedQuery.toString();
+        return query ? `${path}?${query}` : path;
+    };
+    const oldestDeletedText = deletedStats.oldestDeletedAt
+        ? new Date(deletedStats.oldestDeletedAt).toLocaleDateString("tr-TR")
+        : "-";
 
     const handleUpdate = async (userId: string, status: OnayDurumu, role?: Rol) => {
         setLoading(userId);
@@ -41,6 +77,70 @@ export default function OnayMerkeziClient({ initialUsers }: { initialUsers: Onay
                 </div>
                 <ExcelTransferToolbar options={[{ entity: "personel", label: "Personel" }]} />
             </header>
+            <div className="mb-6 flex flex-wrap items-center gap-2">
+                <Link
+                    href={withScope("/dashboard/aktivite-gecmisi")}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                    <History size={15} />
+                    Aktivite Geçmişi
+                </Link>
+                <Link
+                    href={withScope("/dashboard/cop-kutusu")}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                    <Trash2 size={15} />
+                    Silinen Veriler
+                </Link>
+            </div>
+            <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Silinen Veriler Özeti</h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                            Çöp kutusundaki toplam kayıt: <span className="font-semibold text-slate-900">{deletedStats.total}</span>
+                        </p>
+                        <p className="text-sm text-slate-600">
+                            30+ gün dolduğu için kalıcı silinmeye aday kayıt:{" "}
+                            <span className="font-semibold text-amber-700">{deletedStats.pendingPermanentDelete}</span>
+                        </p>
+                        <p className="text-xs text-slate-500">En eski silinme tarihi: {oldestDeletedText}</p>
+                    </div>
+                    <Link
+                        href={withScope("/dashboard/cop-kutusu")}
+                        className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-amber-300 bg-white px-4 text-sm font-semibold text-amber-800 hover:bg-amber-100"
+                    >
+                        <Trash2 size={15} />
+                        Çöp Kutusunu Yönet
+                    </Link>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Araç</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.arac}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Masraf</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.masraf}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Bakım</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.bakim}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Doküman</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.dokuman}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Ceza</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.ceza}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Kullanıcı</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.kullanici}</p>
+                    </div>
+                </div>
+            </div>
 
             <div className="grid grid-cols-1 gap-6">
                 {initialUsers.length === 0 ? (

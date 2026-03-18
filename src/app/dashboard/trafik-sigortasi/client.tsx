@@ -401,6 +401,18 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
                 data={initialSigortalar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Trafik poliçesi için araç plakası ara..."
+                toolbarLayout="compact"
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "GECERLI", label: "Geçerli" },
+                        { value: "YAKLASIYOR", label: "Yaklaşıyor" },
+                        { value: "KRITIK", label: "Kritik" },
+                        { value: "GECIKTI", label: "Gecikti" },
+                        { value: "PASIF", label: "Geçmiş Kayıt" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="trafikSigortasi"
             />
         </div>

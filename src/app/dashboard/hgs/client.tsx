@@ -185,7 +185,12 @@ export default function HgsClient({
                     </Dialog>
                 </div>
 
-                <DataTable columns={[actionsCol, ...getColumns(canAccessAllCompanies)]} data={initialHgs} excelEntity="hgs" />
+                <DataTable
+                    columns={[actionsCol, ...getColumns(canAccessAllCompanies)]}
+                    data={initialHgs}
+                    toolbarArrangement="report-right-scroll"
+                    excelEntity="hgs"
+                />
 
                 {/* Edit Dialog */}
                 <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>

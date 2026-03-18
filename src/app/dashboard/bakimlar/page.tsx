@@ -3,11 +3,13 @@ import BakimlarClient from "./client";
 import { BakimRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 
 export default async function BakimlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil] = await Promise.all([
+    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getCommonListFilters(props.searchParams),
     ]);
     const filter = await getModelFilter('bakim', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
@@ -25,10 +27,34 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         }
         : rawFilter;
     const bakimYearWhere = withYilDateFilter((bakimWhere || {}) as Record<string, unknown>, "bakimTarihi", selectedYil);
+    const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+    const whereParts: Record<string, unknown>[] = [bakimYearWhere as Record<string, unknown>];
+
+    if (commonFilters.q) {
+        const q = commonFilters.q;
+        whereParts.push({
+            OR: [
+                { servisAdi: { contains: q, mode: "insensitive" } },
+                { yapilanIslemler: { contains: q, mode: "insensitive" } },
+                { arac: { plaka: { contains: q, mode: "insensitive" } } },
+                { arac: { marka: { contains: q, mode: "insensitive" } } },
+                { arac: { model: { contains: q, mode: "insensitive" } } },
+            ],
+        });
+    }
+    if (commonFilters.type) {
+        whereParts.push({ kategori: commonFilters.type });
+    } else if (commonFilters.status) {
+        whereParts.push({ kategori: commonFilters.status });
+    }
+    if (dateRange) {
+        whereParts.push({ bakimTarihi: dateRange });
+    }
+    const scopedBakimWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
 
     const [bakimlar, araclar] = await Promise.all([
         (prisma as any).bakim.findMany({
-            where: bakimYearWhere as any,
+            where: scopedBakimWhere as any,
             orderBy: { bakimTarihi: 'desc' },
             include: {
                 arac: {

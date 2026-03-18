@@ -2,7 +2,10 @@
 
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
+import { logEntityActivity } from "@/lib/activity-log";
+import { softDeleteEntity } from "@/lib/soft-delete";
 
 const PATH = '/dashboard/masraflar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -22,13 +25,14 @@ export async function createMasraf(data: {
     aciklama?: string;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
+            plaka: true,
             sirketId: true,
         });
 
-        await prisma.masraf.create({
+        const created = await prisma.masraf.create({
             data: {
                 aracId: arac.id,
                 sirketId: arac.sirketId,
@@ -38,6 +42,23 @@ export async function createMasraf(data: {
                 aciklama: data.aciklama || null,
             }
         });
+
+        await logEntityActivity({
+            actionType: ActivityActionType.CREATE,
+            entityType: ActivityEntityType.MASRAF,
+            entityId: created.id,
+            summary: `${arac.plaka} için masraf kaydı eklendi.`,
+            actor,
+            companyId: created.sirketId || actor.sirketId || null,
+            metadata: {
+                tur: created.tur,
+                tutar: created.tutar,
+                tarih: created.tarih,
+                aciklama: created.aciklama,
+                aracId: created.aracId,
+            },
+        });
+
         revalidateMasrafPages(arac.id);
         return { success: true };
     } catch (e) {
@@ -48,7 +69,7 @@ export async function createMasraf(data: {
 
 export async function updateMasraf(id: string, data: any) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "masraf",
             filterModel: "masraf",
@@ -60,17 +81,33 @@ export async function updateMasraf(id: string, data: any) {
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
 
-        await prisma.masraf.update({
+        const updated = await prisma.masraf.update({
             where: { id },
             data: {
-                ...data,
                 aracId: arac.id,
                 sirketId: arac.sirketId || mevcutKayit.sirketId,
-                tur: data.tur ? (data.tur as any) : undefined,
-                tarih: data.tarih ? new Date(data.tarih) : undefined,
-                tutar: data.tutar ? Number(data.tutar) : undefined,
+                tur: data.tur !== undefined ? (data.tur as any) : undefined,
+                tarih: data.tarih !== undefined ? new Date(data.tarih) : undefined,
+                tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
+                aciklama: data.aciklama !== undefined ? data.aciklama || null : undefined,
             }
         });
+
+        await logEntityActivity({
+            actionType: ActivityActionType.UPDATE,
+            entityType: ActivityEntityType.MASRAF,
+            entityId: updated.id,
+            summary: "Masraf kaydı güncellendi.",
+            actor,
+            companyId: updated.sirketId || actor.sirketId || null,
+            metadata: {
+                tur: updated.tur,
+                tutar: updated.tutar,
+                tarih: updated.tarih,
+                aracId: updated.aracId,
+            },
+        });
+
         revalidateMasrafPages(arac.id);
         return { success: true };
     } catch (e) {
@@ -81,20 +118,20 @@ export async function updateMasraf(id: string, data: any) {
 
 export async function deleteMasraf(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const kayit = await getScopedRecordOrThrow({
             prismaModel: "masraf",
             filterModel: "masraf",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true, tur: true, tutar: true, tarih: true },
             errorMessage: "Masraf kaydi bulunamadi veya yetkiniz yok.",
         });
 
-        await prisma.masraf.delete({ where: { id } });
+        await softDeleteEntity("masraf", id, actor.id);
         revalidateMasrafPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (e) {
         console.error(e);
-        return { success: false, error: "Masraf kaydı silinemedi." };
+        return { success: false, error: "Masraf kaydı çöp kutusuna taşınamadı." };
     }
 }

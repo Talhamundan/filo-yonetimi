@@ -1,15 +1,15 @@
 "use client"
 
 import { useConfirm } from "@/components/ui/confirm-modal";
-import React, { useMemo, useRef, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, FileUp, Trash2, Pencil, Car, Building2, User } from "lucide-react";
+import { Plus, Trash2, Pencil, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, AracRow } from "./columns";
-import { importAraclarFromExcel, createArac, updateArac, deleteArac } from "./actions";
+import { createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 
@@ -184,40 +184,11 @@ export default function AraclarClient({
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
-    const searchParams = useSearchParams();
-    const fileInputRef = useRef<HTMLInputElement>(null);
-    const [uploading, setUploading] = useState(false);
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<AracRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
     const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (u) => u.adSoyad), [kullanicilar]);
-
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
-        setUploading(true);
-        const formData = new FormData();
-        formData.append('file', file);
-        const selectedSirketId = searchParams.get("sirket");
-        if (selectedSirketId) {
-            formData.append("sirketId", selectedSirketId);
-        }
-
-        const res = await importAraclarFromExcel(formData);
-        
-        if (res.success) {
-            toast.success(`Excel Aktarımı Başarılı`, {
-                description: `${res.count} araç sisteme başarıyla aktarıldı.`
-            });
-            if (fileInputRef.current) fileInputRef.current.value = '';
-            router.refresh();
-        } else {
-            toast.error("Aktarım Başarısız", { description: res.error });
-        }
-        setUploading(false);
-    };
 
     const handleCreate = async () => {
         if (!formData.plaka || !formData.marka) {
@@ -342,22 +313,6 @@ export default function AraclarClient({
                     <p className="text-slate-500 text-sm mt-1">Sistemdeki tüm araçların detaylı listesi. Durumlarını, güncel KM ve şoför bilgilerini buradan yönetin.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileUpload} 
-                        accept=".xlsx, .xls" 
-                        className="hidden" 
-                    />
-                    <button 
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={uploading}
-                        className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2 disabled:opacity-50"
-                    >
-                        <FileUp size={16} />
-                        {uploading ? 'Aktarılıyor...' : "Excel'den Aktar"}
-                    </button>
-                    
                     <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                         <DialogTrigger asChild>
                             <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
@@ -413,6 +368,21 @@ export default function AraclarClient({
                 data={initialAraclar}
                 searchKey="plaka"
                 searchPlaceholder="Plaka ara..."
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "AKTIF", label: "Aktif" },
+                        { value: "BOSTA", label: "Boşta" },
+                        { value: "SERVISTE", label: "Serviste" },
+                        { value: "YEDEK", label: "Yedek" },
+                        { value: "ARIZALI", label: "Arızalı" },
+                    ],
+                    typeOptions: [
+                        { value: "BINEK", label: "Binek" },
+                        { value: "KAMYON_TIR", label: "Kamyon / Tır" },
+                        { value: "IS_MAKINESI", label: "İş Makinesi" },
+                    ],
+                    showDateRange: true,
+                }}
                 tableClassName="min-w-[1560px]"
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
                 excelEntity="arac"

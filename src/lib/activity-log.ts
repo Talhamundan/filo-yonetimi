@@ -20,6 +20,11 @@ export type ActivityLogFilters = {
     to?: Date | null;
 };
 
+export type ActivityActor = {
+    id?: string | null;
+    sirketId?: string | null;
+};
+
 const DEFAULT_PAGE_SIZE = 30;
 
 function toJsonValue(metadata: unknown): Prisma.InputJsonValue | undefined {
@@ -49,6 +54,26 @@ export async function logActivity(input: ActivityLogInput) {
     } catch (error) {
         console.warn("Activity log yazilamadi.", error);
     }
+}
+
+export async function logEntityActivity(input: {
+    actionType: ActivityActionType;
+    entityType: ActivityEntityType;
+    entityId: string;
+    summary: string;
+    actor?: ActivityActor | null;
+    companyId?: string | null;
+    metadata?: unknown;
+}) {
+    await logActivity({
+        actionType: input.actionType,
+        entityType: input.entityType,
+        entityId: input.entityId,
+        summary: input.summary,
+        userId: input.actor?.id || null,
+        companyId: input.companyId ?? input.actor?.sirketId ?? null,
+        metadata: input.metadata,
+    });
 }
 
 export async function getActivityLogs(params: {

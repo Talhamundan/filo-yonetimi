@@ -3,9 +3,12 @@
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as xlsx from "xlsx";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { getSirketFilter } from "@/lib/auth-utils";
 import { assertAuthenticatedUser, getScopedKullaniciOrThrow, resolveActionSirketId } from "@/lib/action-scope";
 import { assertKmWriteConsistency, normalizeKmInput, resolveAracGuncelKmForUpdate, syncAracGuncelKm } from "@/lib/km-consistency";
+import { logEntityActivity } from "@/lib/activity-log";
+import { softDeleteEntity } from "@/lib/soft-delete";
 
 const PATH = "/dashboard/araclar";
 const toUpperTr = (value: string) => value.toLocaleUpperCase("tr-TR");
@@ -26,7 +29,7 @@ export async function createArac(data: {
     kategori?: any;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const sirketId = await resolveActionSirketId(data.sirketId);
 
         if (!sirketId) {
@@ -86,6 +89,24 @@ export async function createArac(data: {
 
         await syncAracGuncelKm(arac.id);
 
+        await logEntityActivity({
+            actionType: ActivityActionType.CREATE,
+            entityType: ActivityEntityType.ARAC,
+            entityId: arac.id,
+            summary: `${arac.plaka} plakalı araç eklendi.`,
+            actor,
+            companyId: arac.sirketId || sirketId,
+            metadata: {
+                plaka: arac.plaka,
+                marka: arac.marka,
+                model: arac.model,
+                yil: arac.yil,
+                kategori: arac.kategori,
+                guncelKm: arac.guncelKm,
+                kullaniciId: arac.kullaniciId,
+            },
+        });
+
         revalidatePath(PATH);
         revalidatePath('/dashboard/muayeneler');
         revalidatePath('/dashboard/zimmetler');
@@ -99,12 +120,12 @@ export async function createArac(data: {
 
 export async function updateArac(id: string, data: any) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const sirketFilter = await getSirketFilter();
 
         const oldArac = await prisma.arac.findFirst({
             where: { id, ...(sirketFilter as any) },
-            select: { kullaniciId: true, guncelKm: true, sirketId: true }
+            select: { plaka: true, kullaniciId: true, guncelKm: true, sirketId: true }
         });
 
         if (!oldArac) {
@@ -167,6 +188,23 @@ export async function updateArac(id: string, data: any) {
 
         await syncAracGuncelKm(id);
 
+        const nextPlaka = data.plaka?.replace(/\s+/g, "").toUpperCase() || oldArac.plaka;
+        await logEntityActivity({
+            actionType: ActivityActionType.UPDATE,
+            entityType: ActivityEntityType.ARAC,
+            entityId: id,
+            summary: `${nextPlaka} plakalı araç güncellendi.`,
+            actor,
+            companyId: oldArac.sirketId || actor.sirketId || null,
+            metadata: {
+                plaka: nextPlaka,
+                oncekiKullaniciId: oldArac.kullaniciId,
+                yeniKullaniciId: kullanici?.id || null,
+                guncelKm: resolvedGuncelKm,
+                kategori: data.kategori || null,
+            },
+        });
+
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${id}`);
         revalidatePath('/dashboard/zimmetler');
@@ -179,12 +217,12 @@ export async function updateArac(id: string, data: any) {
 
 export async function unassignArac(id: string, bitisKm?: number) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const sirketFilter = await getSirketFilter();
 
         const arac = await (prisma.arac as any).findFirst({
             where: { id, ...(sirketFilter as any) },
-            select: { kullaniciId: true, guncelKm: true }
+            select: { plaka: true, kullaniciId: true, guncelKm: true, sirketId: true }
         });
 
         if (!(arac as any)?.kullaniciId) {
@@ -216,6 +254,18 @@ export async function unassignArac(id: string, bitisKm?: number) {
 
         await syncAracGuncelKm(id);
 
+        await logEntityActivity({
+            actionType: ActivityActionType.STATUS_CHANGE,
+            entityType: ActivityEntityType.ARAC,
+            entityId: id,
+            summary: `${arac.plaka} aracının aktif şoför ataması kaldırıldı.`,
+            actor,
+            companyId: arac.sirketId || actor.sirketId || null,
+            metadata: {
+                ayrilmaKm: normalizedBitisKm ?? arac.guncelKm,
+            },
+        });
+
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${id}`);
         revalidatePath('/dashboard/zimmetler');
@@ -228,7 +278,7 @@ export async function unassignArac(id: string, bitisKm?: number) {
 
 export async function deleteArac(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const sirketFilter = await getSirketFilter();
 
         const arac = await prisma.arac.findFirst({
@@ -237,6 +287,7 @@ export async function deleteArac(id: string) {
                 id: true,
                 plaka: true,
                 durum: true,
+                sirketId: true,
                 kullaniciId: true,
                 kullanici: { select: { ad: true, soyad: true } },
             }
@@ -264,31 +315,33 @@ export async function deleteArac(id: string) {
             };
         }
 
-        await prisma.$transaction([
-            prisma.trafikSigortasi.deleteMany({ where: { aracId: id } }),
-            prisma.kasko.deleteMany({ where: { aracId: id } }),
-            prisma.muayene.deleteMany({ where: { aracId: id } }),
-            prisma.bakim.deleteMany({ where: { aracId: id } }),
-            prisma.ceza.deleteMany({ where: { aracId: id } }),
-            prisma.masraf.deleteMany({ where: { aracId: id } }),
-            prisma.kullaniciZimmet.deleteMany({ where: { aracId: id } }),
-            prisma.yakit.deleteMany({ where: { aracId: id } }),
-            prisma.dokuman.deleteMany({ where: { aracId: id } }),
-            (prisma as any).hgsYukleme.deleteMany({ where: { aracId: id } }),
-            prisma.arac.delete({ where: { id } })
-        ]);
+        await softDeleteEntity("arac", id, actor.id);
 
         revalidatePath(PATH);
+        revalidatePath("/dashboard");
+        revalidatePath("/dashboard/evrak-takip");
+        revalidatePath("/dashboard/finans");
+        revalidatePath("/dashboard/kasko");
+        revalidatePath("/dashboard/trafik-sigortasi");
+        revalidatePath("/dashboard/muayeneler");
+        revalidatePath("/dashboard/yakitlar");
+        revalidatePath("/dashboard/hgs");
+        revalidatePath("/dashboard/cezalar");
+        revalidatePath("/dashboard/ceza-masraflari");
+        revalidatePath("/dashboard/masraflar");
+        revalidatePath("/dashboard/dokumanlar");
+        revalidatePath("/dashboard/bakimlar");
+        revalidatePath("/dashboard/zimmetler");
         return { success: true };
     } catch (e) {
         console.error(e);
-        return { success: false, error: "Araç silinemedi. Sistemde bir hata oluştu." };
+        return { success: false, error: "Araç çöp kutusuna taşınamadı. Sistemde bir hata oluştu." };
     }
 }
 
 export async function importAraclarFromExcel(formData: FormData) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const file = formData.get('file') as File;
         if (!file) return { success: false, error: 'Dosya bulunamadı' };
         const sirketId = await resolveActionSirketId(String(formData.get("sirketId") || ""));
@@ -327,6 +380,22 @@ export async function importAraclarFromExcel(formData: FormData) {
             data: formattedData,
             skipDuplicates: true
         });
+
+        if (result.count > 0) {
+            await logEntityActivity({
+                actionType: ActivityActionType.CREATE,
+                entityType: ActivityEntityType.ARAC,
+                entityId: `BULK_IMPORT_${Date.now()}`,
+                summary: `Excel ile ${result.count} araç kaydı eklendi.`,
+                actor,
+                companyId: sirketId,
+                metadata: {
+                    importedCount: result.count,
+                    totalRows: formattedData.length,
+                    fileName: file.name,
+                },
+            });
+        }
         
         revalidatePath(PATH);
         return { success: true, count: result.count };

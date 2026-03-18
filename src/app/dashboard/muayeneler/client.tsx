@@ -218,6 +218,19 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
                 data={initialMuayeneler}
                 searchKey="arac_plaka"
                 searchPlaceholder="Muayene kaydı için araç plakası ara..."
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "GECTI", label: "Muayene Geçti" },
+                        { value: "GECMEDI", label: "Muayene Geçmedi" },
+                        { value: "GECERLI", label: "Geçerli" },
+                        { value: "YAKLASIYOR", label: "Yaklaşıyor" },
+                        { value: "KRITIK", label: "Kritik" },
+                        { value: "GECIKTI", label: "Gecikti" },
+                        { value: "PASIF", label: "Geçmiş Kayıt" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="muayene"
             />
 

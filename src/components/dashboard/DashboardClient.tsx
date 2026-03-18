@@ -156,11 +156,12 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     }, [calendarEvents]);
 
     const upcomingEvents = useMemo(() => {
+        const alertEventIds = new Set(alerts.map((alert) => alert.id));
         return [...calendarEvents]
-            .filter((event) => event.daysLeft >= 0)
+            .filter((event) => event.daysLeft >= 0 && !alertEventIds.has(event.id))
             .sort((a, b) => a.daysLeft - b.daysLeft)
             .slice(0, 6);
-    }, [calendarEvents]);
+    }, [alerts, calendarEvents]);
 
     const formatChangeText = (value: number) => `${value > 0 ? "+" : ""}${value}%`;
     const getChangeClassName = (value: number) => {

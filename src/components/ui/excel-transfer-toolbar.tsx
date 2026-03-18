@@ -132,7 +132,7 @@ export default function ExcelTransferToolbar({ options, className }: ExcelTransf
     };
 
     return (
-        <div className={`flex items-center gap-2 flex-wrap ${className || ""}`}>
+        <div className={`flex w-full items-center justify-end gap-2 overflow-x-auto pb-1 ${className || ""}`}>
             <input
                 ref={fileInputRef}
                 type="file"
@@ -143,7 +143,7 @@ export default function ExcelTransferToolbar({ options, className }: ExcelTransf
             <select
                 value={selectedEntity}
                 onChange={(e) => setSelectedEntity(e.target.value as ExcelEntityKey)}
-                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                className="h-10 min-w-[140px] shrink-0 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
             >
                 {options.map((option) => (
                     <option key={option.entity} value={option.entity}>
@@ -155,7 +155,7 @@ export default function ExcelTransferToolbar({ options, className }: ExcelTransf
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-10 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                className="h-10 min-w-[120px] shrink-0 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                 onClick={handleExport}
                 disabled={isExporting || isImporting}
             >
@@ -166,7 +166,7 @@ export default function ExcelTransferToolbar({ options, className }: ExcelTransf
                 type="button"
                 variant="outline"
                 size="sm"
-                className="h-10 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                className="h-10 min-w-[120px] shrink-0 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isImporting || isExporting}
             >

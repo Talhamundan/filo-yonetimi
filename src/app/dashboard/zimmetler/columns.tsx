@@ -96,7 +96,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[]
         cell: ({ row }) => {
             const toplam = row.original.toplamMaliyet || 0;
             const kalemler = row.original.maliyetKalemleri || { ceza: 0, yakit: 0, ariza: 0 };
-            const nonZero = [
+            const nonZeroItems = [
                 { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
                 { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
                 { key: "Arıza", value: kalemler.ariza, className: "bg-amber-50 text-amber-700 border-amber-200" },
@@ -105,9 +105,9 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<SoforZimmetRow>[]
             return (
                 <div className="min-w-[180px]">
                     <div className="text-sm font-bold text-slate-900">{formatCurrency(toplam)}</div>
-                    {nonZero.length > 0 ? (
+                    {nonZeroItems.length > 0 ? (
                         <div className="mt-1.5 flex flex-wrap gap-1">
-                            {nonZero.map((item) => (
+                            {nonZeroItems.map((item) => (
                                 <span
                                     key={item.key}
                                     className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${item.className}`}

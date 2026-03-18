@@ -400,6 +400,18 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
                 data={initialKaskolar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Kasko poliçesi için araç plakası ara..."
+                toolbarLayout="compact"
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "GECERLI", label: "Geçerli" },
+                        { value: "YAKLASIYOR", label: "Yaklaşıyor" },
+                        { value: "KRITIK", label: "Kritik" },
+                        { value: "GECIKTI", label: "Gecikti" },
+                        { value: "PASIF", label: "Geçmiş Kayıt" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="kasko"
             />
         </div>

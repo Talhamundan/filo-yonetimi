@@ -41,7 +41,7 @@ export async function createSigorta(data: {
                 policeNo: data.policeNo || null,
                 baslangicTarihi: new Date(data.baslangicTarihi),
                 bitisTarihi: new Date(data.bitisTarihi),
-                tutar: data.tutar ? Number(data.tutar) : null,
+                tutar: data.tutar !== undefined ? Number(data.tutar) : null,
                 aktifMi: data.aktifMi ?? true,
             };
             if (columns.has("sirketId")) createData.sirketId = arac.sirketId || null;
@@ -132,7 +132,7 @@ export async function renewSigorta(id: string, data: {
                 policeNo: data.policeNo || mevcutKayit.policeNo || null,
                 baslangicTarihi: yenilemeTarihi,
                 bitisTarihi,
-                tutar: data.tutar ? Number(data.tutar) : null,
+                tutar: data.tutar !== undefined ? Number(data.tutar) : null,
                 aktifMi: true,
             };
             if (columns.has("sirketId")) createData.sirketId = arac.sirketId || (mevcutKayit as any).sirketId || null;
@@ -201,7 +201,7 @@ export async function updateSigorta(id: string, data: any) {
             policeNo: data.policeNo ?? undefined,
             baslangicTarihi: data.baslangicTarihi ? new Date(data.baslangicTarihi) : undefined,
             bitisTarihi: data.bitisTarihi ? new Date(data.bitisTarihi) : undefined,
-            tutar: data.tutar ? Number(data.tutar) : undefined,
+            tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
             aktifMi: typeof data.aktifMi === "boolean" ? data.aktifMi : undefined,
         };
         if (columns.has("sirketId")) updateData.sirketId = arac.sirketId || (mevcutKayit as any).sirketId || null;

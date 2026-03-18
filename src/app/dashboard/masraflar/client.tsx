@@ -204,6 +204,11 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
                 data={initialMasraflar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Gider kaydı için araç plakası ara..."
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    typeOptions: TUR_LIST.map((item) => ({ value: item, label: item.replaceAll("_", " ") })),
+                    showDateRange: true,
+                }}
                 excelEntity="masraf"
             />
 

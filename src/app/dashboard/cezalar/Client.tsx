@@ -290,6 +290,7 @@ export default function CezalarClient({
                 data={filteredData}
                 searchKey="plaka"
                 searchPlaceholder="Plakaya göre ara..."
+                toolbarArrangement="report-right-scroll"
                 excelEntity="ceza"
             />
 

@@ -190,6 +190,17 @@ export default function DokumanlarClient({
                 data={initialDokumanlar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Evrak aramak için plaka giriniz..."
+                toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    typeOptions: [
+                        { value: "RUHSAT", label: "Ruhsat" },
+                        { value: "SIGORTA", label: "Sigorta" },
+                        { value: "KASKO", label: "Kasko" },
+                        { value: "SERVIS_FATURA", label: "Servis / Fatura" },
+                        { value: "DIGER", label: "Diğer" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="dokuman"
             />
         </div>

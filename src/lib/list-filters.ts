@@ -30,7 +30,9 @@ export async function getCommonListFilters(
     const status = normalizeString(resolved.status);
     const type = normalizeString(resolved.type);
     const from = parseDate(normalizeString(resolved.from));
+    if (from) from.setHours(0, 0, 0, 0);
     const to = parseDate(normalizeString(resolved.to));
+    if (to) to.setHours(23, 59, 59, 999);
     const trashed = normalizeString(resolved.trashed) === "1";
 
     return { q, status, type, from, to, trashed };

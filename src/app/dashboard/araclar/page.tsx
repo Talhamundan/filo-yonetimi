@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
 import { getModelFilter, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { sortByTextValue } from "@/lib/sort-utils";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT", "HGS_YUKLEME"] as const;
@@ -197,19 +198,55 @@ async function getAraclarWithTakipBilgileri(filter: Record<string, unknown>, ran
 }
 
 export default async function AraclarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, selectedAy] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
         getSelectedAy(props.searchParams),
+        getCommonListFilters(props.searchParams),
     ]);
     const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
 
-    const [filter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
+    const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
         getModelFilter('arac', selectedSirketId),
         getModelFilter('kullanici', selectedSirketId),
         getSirketListFilter(),
         getCurrentUserRole()
     ]);
+    const filterParts: Record<string, unknown>[] = [];
+    const createdAtRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+
+    if (commonFilters.q) {
+        const q = commonFilters.q;
+        filterParts.push({
+            OR: [
+                { plaka: { contains: q, mode: "insensitive" } },
+                { marka: { contains: q, mode: "insensitive" } },
+                { model: { contains: q, mode: "insensitive" } },
+                { hgsNo: { contains: q, mode: "insensitive" } },
+                { saseNo: { contains: q, mode: "insensitive" } },
+                {
+                    kullanici: {
+                        OR: [
+                            { ad: { contains: q, mode: "insensitive" } },
+                            { soyad: { contains: q, mode: "insensitive" } },
+                        ],
+                    },
+                },
+            ],
+        });
+    }
+    if (commonFilters.status) {
+        filterParts.push({ durum: commonFilters.status });
+    }
+    if (commonFilters.type) {
+        filterParts.push({ kategori: commonFilters.type });
+    }
+    if (createdAtRange) {
+        filterParts.push({ olusturmaTarihi: createdAtRange });
+    }
+    const filter = filterParts.length
+        ? { AND: [(rawFilter || {}) as Record<string, unknown>, ...filterParts] }
+        : ((rawFilter || {}) as Record<string, unknown>);
 
     const isSfr = rol === 'SOFOR';
 

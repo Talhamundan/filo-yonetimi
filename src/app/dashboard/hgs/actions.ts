@@ -33,6 +33,7 @@ export async function createHgs(data: {
                     aracId: arac.id,
                     km: data.km,
                     fieldLabel: "HGS KM",
+                    enforceMaxKnownKm: false,
                     tx: prisma,
                 })
                 : null;
@@ -89,6 +90,7 @@ export async function updateHgs(id: string, data: {
                     km: kmInput,
                     fieldLabel: "HGS KM",
                     currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
+                    enforceMaxKnownKm: false,
                     tx: prisma,
                 })
                 : null;

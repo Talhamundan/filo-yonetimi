@@ -4,6 +4,7 @@ import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -298,12 +299,12 @@ export default function CezaMasraflariClient({
         setEditRow(row);
     };
 
-    const columnsWithActions = [
+    const columnsWithActions: ColumnDef<CezaMasrafRow>[] = [
         ...getColumns(canAccessAllCompanies),
         {
             id: "islemler",
             header: "Islemler",
-            cell: ({ row }: any) => (
+            cell: ({ row }) => (
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => openEdit(row.original)}
@@ -347,7 +348,13 @@ export default function CezaMasraflariClient({
                                 <DialogTitle>Yeni Ceza Masraf Kaydi</DialogTitle>
                                 <DialogDescription>Arac, ceza ve odeme bilgilerini girerek kaydi olusturun.</DialogDescription>
                             </DialogHeader>
-                            <FormFields formData={formData} setFormData={setFormData} araclar={sortedAraclar} soforler={sortedSoforler} autoAssignFromArac />
+                            <FormFields
+                                formData={formData}
+                                setFormData={setFormData}
+                                araclar={sortedAraclar}
+                                soforler={sortedSoforler}
+                                autoAssignFromArac
+                            />
                             <DialogFooter>
                                 <button
                                     onClick={handleCreate}
@@ -362,10 +369,20 @@ export default function CezaMasraflariClient({
                 </header>
 
                 <DataTable
-                    columns={columnsWithActions as any}
+                    columns={columnsWithActions}
                     data={initialData}
                     searchKey="arac_plaka"
                     searchPlaceholder="Plakaya gore ceza kaydi ara..."
+                    toolbarArrangement="report-right-scroll"
+                    serverFiltering={{
+                        statusOptions: [
+                            { value: "ODENDI", label: "Ödendi" },
+                            { value: "ODENMEDI", label: "Ödenmedi" },
+                            { value: "YAKLASIYOR", label: "Yaklaşıyor" },
+                            { value: "GECIKTI", label: "Gecikti" },
+                        ],
+                        showDateRange: true,
+                    }}
                     excelEntity="ceza"
                 />
 

@@ -20,7 +20,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             where: yakitWhere as any,
             orderBy: { tarih: 'desc' }, 
             include: { 
-                kullanici: { select: { id: true, ad: true, soyad: true } },
+                sofor: { select: { id: true, ad: true, soyad: true } },
                 arac: {
                     include: {
                         sirket: { select: { ad: true } },

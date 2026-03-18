@@ -1,38 +1,51 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Download, FileText } from "lucide-react";
+import { Download } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type ReportExportToolbarProps = {
     report: "penalties" | "maintenance" | "document-expirations" | "vehicle-expenses" | "monthly-cost-summary";
     className?: string;
+    extraParams?: Record<string, string | null | undefined>;
 };
 
-function buildUrl(report: ReportExportToolbarProps["report"], format: "xlsx" | "pdf", searchParams: URLSearchParams) {
+function buildUrl(
+    report: ReportExportToolbarProps["report"],
+    searchParams: URLSearchParams,
+    extraParams?: Record<string, string | null | undefined>
+) {
     const params = new URLSearchParams();
-    const allowedKeys = ["sirket", "yil", "from", "to", "q", "status"] as const;
+    const allowedKeys = ["sirket", "yil", "ay", "from", "to", "q", "status", "type"] as const;
     for (const key of allowedKeys) {
         const value = searchParams.get(key);
         if (value) params.set(key, value);
     }
-    params.set("format", format);
+    if (extraParams) {
+        for (const key of allowedKeys) {
+            const value = extraParams[key];
+            if (value && value.length > 0) {
+                params.set(key, value);
+            }
+        }
+    }
+    params.set("format", "xlsx");
     return `/api/reports/${report}?${params.toString()}`;
 }
 
-export default function ReportExportToolbar({ report, className }: ReportExportToolbarProps) {
+export default function ReportExportToolbar({
+    report,
+    className,
+    extraParams,
+}: ReportExportToolbarProps) {
     const searchParams = useSearchParams();
+    const params = new URLSearchParams(searchParams.toString());
 
     return (
-        <div className={`flex items-center gap-2 ${className || ""}`}>
-            <a href={buildUrl(report, "xlsx", new URLSearchParams(searchParams.toString()))}>
-                <Button type="button" variant="outline" size="sm" className="h-10">
-                    <Download className="h-4 w-4" /> Excel Raporu
-                </Button>
-            </a>
-            <a href={buildUrl(report, "pdf", new URLSearchParams(searchParams.toString()))}>
-                <Button type="button" variant="outline" size="sm" className="h-10">
-                    <FileText className="h-4 w-4" /> PDF Raporu
+        <div className={`flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap ${className || ""}`}>
+            <a href={buildUrl(report, params, extraParams)} className="flex-1 sm:flex-none">
+                <Button type="button" variant="outline" size="sm" className="h-10 w-full">
+                    <Download className="h-4 w-4" /> Dışa Aktar
                 </Button>
             </a>
         </div>

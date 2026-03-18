@@ -40,6 +40,20 @@ const SOFT_DELETE_MODELS = new Set<PolicyModelName>([
     "ceza",
     "dokuman",
 ]);
+const VEHICLE_RELATION_MODELS = new Set<PolicyModelName>([
+    "yakit",
+    "ceza",
+    "masraf",
+    "bakim",
+    "muayene",
+    "kasko",
+    "trafikSigortasi",
+    "dokuman",
+    "hgs",
+    "hgsYukleme",
+    "kullaniciZimmet",
+    "zimmet",
+]);
 
 export function normalizeRole(role: string | null | undefined): Rol | null {
     if (!role) return null;
@@ -153,6 +167,23 @@ function withSoftDeleteFilter(modelName: PolicyModelName, where: Record<string, 
     return { ...where, deletedAt: null };
 }
 
+function withActiveVehicleFilter(modelName: PolicyModelName, where: Record<string, unknown>, includeDeleted = false) {
+    if (includeDeleted || !VEHICLE_RELATION_MODELS.has(modelName)) {
+        return where;
+    }
+    const existingAracFilter =
+        where.arac && typeof where.arac === "object" && !Array.isArray(where.arac)
+            ? (where.arac as Record<string, unknown>)
+            : {};
+    return {
+        ...where,
+        arac: {
+            ...existingAracFilter,
+            deletedAt: null,
+        },
+    };
+}
+
 export function getModelFilterByPolicy(params: {
     modelName: PolicyModelName;
     role: string | null | undefined;
@@ -169,17 +200,29 @@ export function getModelFilterByPolicy(params: {
     }
 
     if (canRoleAccessAllCompanies(normalizedRole)) {
-        return withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, requestedSirketId), includeDeleted);
-    }
-
-    if (normalizedRole === "SOFOR") {
-        if (!currentUserId) return getBlockedFilter(modelName);
-        return withSoftDeleteFilter(
+        return withActiveVehicleFilter(
             modelName,
-            getDriverModelFilter(modelName, currentUserId, currentSirketId || null),
+            withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, requestedSirketId), includeDeleted),
             includeDeleted
         );
     }
 
-    return withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, currentSirketId || null), includeDeleted);
+    if (normalizedRole === "SOFOR") {
+        if (!currentUserId) return getBlockedFilter(modelName);
+        return withActiveVehicleFilter(
+            modelName,
+            withSoftDeleteFilter(
+                modelName,
+                getDriverModelFilter(modelName, currentUserId, currentSirketId || null),
+                includeDeleted
+            ),
+            includeDeleted
+        );
+    }
+
+    return withActiveVehicleFilter(
+        modelName,
+        withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, currentSirketId || null), includeDeleted),
+        includeDeleted
+    );
 }

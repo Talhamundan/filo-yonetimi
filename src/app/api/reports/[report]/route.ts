@@ -3,7 +3,7 @@ import * as XLSX from "xlsx";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
 import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
-import { buildSimplePdf, formatCurrency } from "@/lib/simple-pdf";
+import { formatCurrency } from "@/lib/simple-pdf";
 
 const REPORT_NAMES = [
     "penalties",
@@ -35,10 +35,16 @@ function parseDateRange(searchParams: URLSearchParams) {
     const now = new Date();
     const currentYear = now.getFullYear();
     const yil = Number(searchParams.get("yil"));
+    const ay = Number(searchParams.get("ay"));
     const year = Number.isInteger(yil) && yil >= 2000 && yil <= 2100 ? yil : currentYear;
+    const month = Number.isInteger(ay) && ay >= 1 && ay <= 12 ? ay : null;
 
-    const defaultFrom = new Date(year, 0, 1, 0, 0, 0, 0);
-    const defaultTo = new Date(year, 11, 31, 23, 59, 59, 999);
+    const defaultFrom = month
+        ? new Date(year, month - 1, 1, 0, 0, 0, 0)
+        : new Date(year, 0, 1, 0, 0, 0, 0);
+    const defaultTo = month
+        ? new Date(year, month, 0, 23, 59, 59, 999)
+        : new Date(year, 11, 31, 23, 59, 59, 999);
 
     const from = parseDate(searchParams.get("from"), defaultFrom);
     const to = parseDate(searchParams.get("to"), defaultTo);
@@ -85,12 +91,28 @@ async function getPenaltiesReport(params: {
     from: Date;
     to: Date;
     q: string;
+    status: string | null;
 }): Promise<ReportResponse> {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const soonDate = new Date(now);
+    soonDate.setDate(soonDate.getDate() + 30);
     const cezaFilter = await getModelFilter("ceza", params.selectedSirketId);
+    const statusFilter: Prisma.CezaWhereInput =
+        params.status === "ODENDI"
+            ? { odendiMi: true }
+            : params.status === "ODENMEDI"
+                ? { odendiMi: false }
+                : params.status === "GECIKTI"
+                    ? { odendiMi: false, sonOdemeTarihi: { lt: now } }
+                    : params.status === "YAKLASIYOR"
+                        ? { odendiMi: false, sonOdemeTarihi: { gte: now, lte: soonDate } }
+                        : {};
     const where: Prisma.CezaWhereInput = {
         AND: [
             cezaFilter as Prisma.CezaWhereInput,
             { tarih: { gte: params.from, lte: params.to } },
+            statusFilter,
             params.q
                 ? {
                       OR: [
@@ -143,12 +165,20 @@ async function getMaintenanceReport(params: {
     from: Date;
     to: Date;
     q: string;
+    type: string | null;
 }): Promise<ReportResponse> {
     const bakimFilter = await getModelFilter("bakim", params.selectedSirketId);
+    const typeFilter: Prisma.BakimWhereInput =
+        params.type === "ARIZA" || params.type === "PERIYODIK_BAKIM"
+            ? { kategori: params.type }
+            : params.type === "PERIYODIK" || params.type === "KAPORTA"
+                ? { tur: params.type }
+                : {};
     const where: Prisma.BakimWhereInput = {
         AND: [
             bakimFilter as Prisma.BakimWhereInput,
             { bakimTarihi: { gte: params.from, lte: params.to } },
+            typeFilter,
             params.q
                 ? {
                       OR: [
@@ -204,6 +234,7 @@ async function getDocumentExpirationReport(params: {
     to: Date;
     q: string;
     status: string | null;
+    type: string | null;
 }): Promise<ReportResponse> {
     const [aracFilter, muayeneFilter, kaskoFilter, trafikFilter] = await Promise.all([
         getModelFilter("arac", params.selectedSirketId),
@@ -279,6 +310,7 @@ async function getDocumentExpirationReport(params: {
         })
         .filter((row) => row._rawDate.getTime() >= params.from.getTime() && row._rawDate.getTime() <= params.to.getTime())
         .filter((row) => (params.status ? row.Durum === params.status : true))
+        .filter((row) => (params.type ? row.Tur === params.type : true))
         .filter((row) =>
             params.q
                 ? row.Plaka.toLocaleLowerCase("tr-TR").includes(params.q) ||
@@ -286,7 +318,11 @@ async function getDocumentExpirationReport(params: {
                 : true
         )
         .sort((a, b) => a.KalanGun - b.KalanGun)
-        .map(({ _rawDate, ...rest }) => rest);
+        .map((row) => {
+            const { _rawDate: ignoredRawDate, ...rest } = row;
+            void ignoredRawDate;
+            return rest;
+        });
 
     return {
         title: "Yaklaşan Evrak Süreleri",
@@ -496,6 +532,7 @@ async function buildReport(report: ReportName, params: {
     to: Date;
     q: string;
     status: string | null;
+    type: string | null;
 }) {
     switch (report) {
         case "penalties":
@@ -527,35 +564,27 @@ export async function GET(req: NextRequest, context: { params: Promise<{ report:
         }
 
         const selectedSirketId = req.nextUrl.searchParams.get("sirket");
-        const format = req.nextUrl.searchParams.get("format") === "pdf" ? "pdf" : "xlsx";
+        if (req.nextUrl.searchParams.get("format") === "pdf") {
+            return NextResponse.json(
+                { error: "PDF rapor dışa aktarımı devre dışı bırakıldı." },
+                { status: 410 }
+            );
+        }
         const q = (req.nextUrl.searchParams.get("q") || "").trim().toLocaleLowerCase("tr-TR");
         const status = req.nextUrl.searchParams.get("status");
+        const type = req.nextUrl.searchParams.get("type");
         const { from, to } = parseDateRange(req.nextUrl.searchParams);
 
-        const report = await buildReport(rawReport, { selectedSirketId, from, to, q, status });
+        const report = await buildReport(rawReport, { selectedSirketId, from, to, q, status, type });
         const dateRangeText = `${formatDate(from)} - ${formatDate(to)}`;
-
-        if (format === "pdf") {
-            const pdfBuffer = buildSimplePdf(report.title, [
-                `Tarih Aralığı: ${dateRangeText}`,
-                `Kayıt Sayısı: ${report.rows.length}`,
-                "",
-                ...report.pdfLines,
-            ]);
-            return new NextResponse(new Uint8Array(pdfBuffer), {
-                status: 200,
-                headers: {
-                    "Content-Type": "application/pdf",
-                    "Content-Disposition": `attachment; filename=\"${getReportFileName(rawReport, "pdf")}\"`,
-                    "Cache-Control": "no-store",
-                },
-            });
-        }
+        const companyName = selectedSirketId
+            ? (await prisma.sirket.findUnique({ where: { id: selectedSirketId }, select: { ad: true } }))?.ad || selectedSirketId
+            : "Tüm Şirketler";
 
         const excelBuffer = createExcelBuffer(report.title, report.rows, {
             "Tarih Aralığı": dateRangeText,
             "Kayıt Sayısı": String(report.rows.length),
-            "Şirket": selectedSirketId || "Tüm Şirketler",
+            "Şirket": companyName,
         });
 
         return new NextResponse(new Uint8Array(excelBuffer), {

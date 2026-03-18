@@ -23,6 +23,18 @@ const EMPTY = {
     odemeYontemi: 'NAKIT'
 };
 
+function parseDecimal(value: string) {
+    const normalized = value.trim().replace(/\s/g, "").replace(",", ".");
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : NaN;
+}
+
+function parseKm(value: string) {
+    const numeric = value.trim().replace(/[^\d]/g, "");
+    const parsed = Number(numeric);
+    return Number.isFinite(parsed) ? Math.trunc(parsed) : NaN;
+}
+
 type AracOption = {
     id: string;
     plaka: string;
@@ -34,8 +46,8 @@ type AracOption = {
 };
 
 const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
-    const litre = parseFloat(formData.litre) || 0;
-    const litreFiyati = parseFloat(formData.litreFiyati) || 0;
+    const litre = parseDecimal(formData.litre);
+    const litreFiyati = parseDecimal(formData.litreFiyati);
     const toplamTutar = litre * litreFiyati;
     const seciliArac = araclar.find((a) => a.id === formData.aracId);
 
@@ -83,7 +95,7 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             <div className="space-y-1.5">
                 <label className="text-sm font-medium text-slate-500">Toplam Tutar (₺)</label>
                 <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-                    {toplamTutar > 0 ? toplamTutar.toFixed(2) : '—'}
+                    {Number.isFinite(toplamTutar) && toplamTutar > 0 ? toplamTutar.toFixed(2) : '—'}
                 </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -125,14 +137,19 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
             return toast.warning("Araç Seçilmedi", { description: "Lütfen yakıt alımı için bir araç seçin." });
         }
         setLoading(true);
-        const litre = parseFloat(formData.litre) || 0;
-        const litreFiyati = parseFloat(formData.litreFiyati) || 0;
+        const litre = parseDecimal(formData.litre);
+        const litreFiyati = parseDecimal(formData.litreFiyati);
+        const km = parseKm(formData.km);
+        if (!Number.isFinite(litre) || !Number.isFinite(litreFiyati) || !Number.isFinite(km)) {
+            setLoading(false);
+            return toast.error("Geçersiz değer", { description: "Litre, litre fiyatı veya KM alanını kontrol edin." });
+        }
         const tutar = litre * litreFiyati;
         const res = await createYakit({
             ...formData,
             litre,
             tutar,
-            km: parseInt(formData.km),
+            km,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -152,14 +169,19 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
             return;
         }
         setLoading(true);
-        const litre = parseFloat(formData.litre) || 0;
-        const litreFiyati = parseFloat(formData.litreFiyati) || 0;
+        const litre = parseDecimal(formData.litre);
+        const litreFiyati = parseDecimal(formData.litreFiyati);
+        const km = parseKm(formData.km);
+        if (!Number.isFinite(litre) || !Number.isFinite(litreFiyati) || !Number.isFinite(km)) {
+            setLoading(false);
+            return toast.error("Geçersiz değer", { description: "Litre, litre fiyatı veya KM alanını kontrol edin." });
+        }
         const tutar = litre * litreFiyati;
         const res = await updateYakit(editRow.id, {
             ...formData,
             litre,
             tutar,
-            km: parseInt(formData.km),
+            km,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -259,6 +281,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                 data={initialYakitlar}
                 searchKey="arac_plaka"
                 searchPlaceholder="Yakıt kaydı için araç plakası ara..."
+                toolbarArrangement="report-right-scroll"
                 excelEntity="yakit"
             />
 

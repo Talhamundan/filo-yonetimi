@@ -15,9 +15,14 @@ function parseEnumValue<T extends string>(value: string | null, values: readonly
     return values.includes(value as T) ? (value as T) : null;
 }
 
-function parseDateValue(value: string | null) {
+function parseDateValue(value: string | null, endOfDay = false) {
     if (!value) return null;
     const date = new Date(value);
+    if (endOfDay) {
+        date.setHours(23, 59, 59, 999);
+    } else {
+        date.setHours(0, 0, 0, 0);
+    }
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -43,7 +48,7 @@ export default async function AktiviteGecmisiPage(props: { searchParams?: Promis
     const actionType = parseEnumValue(parseString(resolvedSearchParams.action), Object.values(ActivityActionType));
     const entityType = parseEnumValue(parseString(resolvedSearchParams.entity), Object.values(ActivityEntityType));
     const from = parseDateValue(parseString(resolvedSearchParams.from));
-    const to = parseDateValue(parseString(resolvedSearchParams.to));
+    const to = parseDateValue(parseString(resolvedSearchParams.to), true);
     const page = Number(parseString(resolvedSearchParams.page) || "1");
 
     const scopedLogFilter = await getModelFilterWithOptions("activityLog", selectedSirketId, { includeDeleted: true });

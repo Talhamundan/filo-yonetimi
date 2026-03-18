@@ -2,8 +2,11 @@
 
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
+import { logEntityActivity } from "@/lib/activity-log";
+import { softDeleteEntity } from "@/lib/soft-delete";
 
 const PATH = "/dashboard/cezalar";
 const DASHBOARD_PATH = "/dashboard";
@@ -31,16 +34,17 @@ type CezaPayload = {
 
 export async function createCeza(data: CezaPayload) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             plaka: true,
             sirketId: true,
         });
         const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
+        let created: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
 
         try {
-            await prisma.ceza.create({
+            created = await prisma.ceza.create({
                 data: {
                     plaka: arac.plaka,
                     aracId: arac.id,
@@ -55,7 +59,7 @@ export async function createCeza(data: CezaPayload) {
         } catch (error) {
             if (isCezaSchemaCompatibilityError(error)) {
                 await ensureCezaFineTrackingColumns();
-                await prisma.ceza.create({
+                created = await prisma.ceza.create({
                     data: {
                         plaka: arac.plaka,
                         aracId: arac.id,
@@ -72,6 +76,24 @@ export async function createCeza(data: CezaPayload) {
             }
         }
 
+        if (created) {
+            await logEntityActivity({
+                actionType: ActivityActionType.CREATE,
+                entityType: ActivityEntityType.CEZA,
+                entityId: created.id,
+                summary: `${created.plaka || "Bilinmeyen plaka"} için ceza kaydı eklendi.`,
+                actor,
+                companyId: created.sirketId || actor.sirketId || null,
+                metadata: {
+                    cezaMaddesi: created.cezaMaddesi,
+                    tutar: created.tutar,
+                    tarih: created.tarih,
+                    aracId: created.aracId,
+                    soforId: created.soforId,
+                },
+            });
+        }
+
         revalidateCezaRelatedPaths([arac.id]);
         return { success: true };
     } catch (e) {
@@ -82,7 +104,7 @@ export async function createCeza(data: CezaPayload) {
 
 export async function updateCeza(id: string, data: CezaPayload) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "ceza",
             filterModel: "ceza",
@@ -97,9 +119,10 @@ export async function updateCeza(id: string, data: CezaPayload) {
             sirketId: true,
         });
         const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
+        let updated: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
 
         try {
-            await prisma.ceza.update({
+            updated = await prisma.ceza.update({
                 where: { id },
                 data: {
                     plaka: arac.plaka,
@@ -115,7 +138,7 @@ export async function updateCeza(id: string, data: CezaPayload) {
         } catch (error) {
             if (isCezaSchemaCompatibilityError(error)) {
                 await ensureCezaFineTrackingColumns();
-                await prisma.ceza.update({
+                updated = await prisma.ceza.update({
                     where: { id },
                     data: {
                         plaka: arac.plaka,
@@ -133,6 +156,24 @@ export async function updateCeza(id: string, data: CezaPayload) {
             }
         }
 
+        if (updated) {
+            await logEntityActivity({
+                actionType: ActivityActionType.UPDATE,
+                entityType: ActivityEntityType.CEZA,
+                entityId: updated.id,
+                summary: `${updated.plaka || "Bilinmeyen plaka"} için ceza kaydı güncellendi.`,
+                actor,
+                companyId: updated.sirketId || actor.sirketId || null,
+                metadata: {
+                    cezaMaddesi: updated.cezaMaddesi,
+                    tutar: updated.tutar,
+                    tarih: updated.tarih,
+                    aracId: updated.aracId,
+                    soforId: updated.soforId,
+                },
+            });
+        }
+
         revalidateCezaRelatedPaths([(mevcutKayit as { aracId?: string } | null)?.aracId, arac.id]);
         return { success: true };
     } catch (e) {
@@ -143,20 +184,20 @@ export async function updateCeza(id: string, data: CezaPayload) {
 
 export async function deleteCeza(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "ceza",
             filterModel: "ceza",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true, plaka: true, cezaMaddesi: true, tutar: true, tarih: true },
             errorMessage: "Ceza kaydı bulunamadı veya yetkiniz yok.",
         });
 
-        await prisma.ceza.delete({ where: { id } });
+        await softDeleteEntity("ceza", id, actor.id);
         revalidateCezaRelatedPaths([(mevcutKayit as { aracId?: string } | null)?.aracId]);
         return { success: true };
     } catch (e) {
         console.error(e);
-        return { success: false, error: "Ceza kaydı silinemedi." };
+        return { success: false, error: "Ceza kaydı çöp kutusuna taşınamadı." };
     }
 }

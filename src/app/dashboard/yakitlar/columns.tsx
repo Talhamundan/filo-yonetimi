@@ -16,6 +16,7 @@ export type YakitRow = {
     istasyon: string | null;
     odemeYontemi: 'NAKIT' | 'TASIT_TANIMA';
     soforId?: string | null;
+    sofor?: { id: string; ad: string; soyad: string } | null;
     kullanici?: { id: string; ad: string; soyad: string } | null;
     arac: { 
         id: string; 
@@ -35,11 +36,12 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => [
         header: "Araç",
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
-            const { arac, kullanici } = row.original;
-            const sofor = kullanici
-                ? `${kullanici.ad} ${kullanici.soyad}`
+            const { arac, kullanici, sofor } = row.original;
+            const selectedSofor = sofor || kullanici || null;
+            const soforText = selectedSofor
+                ? `${selectedSofor.ad} ${selectedSofor.soyad}`
                 : (arac.kullanici ? `${arac.kullanici.ad} ${arac.kullanici.soyad}` : null);
-            const soforId = kullanici?.id || arac.kullanici?.id;
+            const soforId = selectedSofor?.id || arac.kullanici?.id;
             return (
                 <VehicleIdentityCell
                     aracId={arac.id}
@@ -47,12 +49,12 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => [
                     subtitle={`${arac.marka} ${arac.model}`}
                     companyName={arac.sirket?.ad}
                     showCompanyInfo={showCompanyInfo}
-                    extra={sofor ? (
+                    extra={soforText ? (
                         <PersonelLink
                             personelId={soforId}
                             className="text-[11px] text-indigo-500 font-semibold mt-0.5 hover:underline"
                         >
-                            👤 {sofor}
+                            👤 {soforText}
                         </PersonelLink>
                     ) : null}
                 />

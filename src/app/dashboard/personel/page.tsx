@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import PersonelClient from "./Client";
 import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters } from "@/lib/list-filters";
 
 function getMonthDateRange(yil: number, ay: number) {
     const start = new Date(yil, ay - 1, 1, 0, 0, 0, 0);
@@ -34,10 +35,11 @@ function findDriverAtDate(
 }
 
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, selectedAy] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
         getSelectedAy(props.searchParams),
+        getCommonListFilters(props.searchParams),
     ]);
     const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
 
@@ -49,12 +51,28 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         getModelFilter("bakim", selectedSirketId),
         getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
+    const personelWhereParts: Record<string, unknown>[] = [((filter || {}) as Record<string, unknown>)];
+
+    if (commonFilters.q) {
+        const q = commonFilters.q;
+        personelWhereParts.push({
+            OR: [
+                { ad: { contains: q, mode: "insensitive" } },
+                { soyad: { contains: q, mode: "insensitive" } },
+                { eposta: { contains: q, mode: "insensitive" } },
+                { telefon: { contains: q, mode: "insensitive" } },
+                { tcNo: { contains: q, mode: "insensitive" } },
+            ],
+        });
+    }
+    if (commonFilters.status) {
+        personelWhereParts.push({ rol: commonFilters.status });
+    }
+    const personelWhere = personelWhereParts.length > 1 ? { AND: personelWhereParts } : personelWhereParts[0];
 
     const [personeller, sirketler, cezaBySofor, yakitKayitlari, arizaKayitlari, tumZimmetler] = await Promise.all([
         (prisma as any).kullanici.findMany({
-            where: {
-                ...(filter as any),
-            },
+            where: personelWhere as any,
             orderBy: { ad: 'asc' },
             include: { 
                 sirket: true,

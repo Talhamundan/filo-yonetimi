@@ -31,6 +31,7 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
     const { canAccessAllCompanies } = useDashboardScope();
     const [searchTerm, setSearchTerm] = useState("");
     const [filterDurum, setFilterDurum] = useState("TÜMÜ");
+    const [filterTur, setFilterTur] = useState("TUMU");
     const [sortState, setSortState] = useState<{ key: EvrakSortKey; direction: SortDirection }>({
         key: "gecerlilikTarihi",
         direction: "asc",
@@ -40,7 +41,8 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
         const filtered = initialEvraklar.filter(evrak => {
             const matchesSearch = evrak.plaka.toLowerCase().includes(searchTerm.toLowerCase());
             const matchesDurum = filterDurum === "TÜMÜ" || evrak.durum === filterDurum;
-            return matchesSearch && matchesDurum;
+            const matchesTur = filterTur === "TUMU" || evrak.tur === filterTur;
+            return matchesSearch && matchesDurum && matchesTur;
         });
 
         return [...filtered].sort((a, b) => {
@@ -77,7 +79,7 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
 
             return sortState.direction === "asc" ? result : -result;
         });
-    }, [initialEvraklar, searchTerm, filterDurum, sortState]);
+    }, [initialEvraklar, searchTerm, filterDurum, filterTur, sortState]);
 
     const toggleSort = (key: EvrakSortKey) => {
         setSortState((prev) => {
@@ -121,13 +123,15 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900">Evrak Takibi</h2>
                     <p className="text-slate-500 text-sm mt-1">Muayene, kasko ve trafik poliçesi bitiş sürelerini izleyin.</p>
                 </div>
-                <ExcelTransferToolbar
-                    options={[
-                        { entity: "muayene", label: "Muayene" },
-                        { entity: "kasko", label: "Kasko" },
-                        { entity: "trafikSigortasi", label: "Trafik Sigortası" },
-                    ]}
-                />
+                <div className="flex items-center gap-2 flex-wrap justify-end">
+                    <ExcelTransferToolbar
+                        options={[
+                            { entity: "muayene", label: "Muayene" },
+                            { entity: "kasko", label: "Kasko" },
+                            { entity: "trafikSigortasi", label: "Trafik Sigortası" },
+                        ]}
+                    />
+                </div>
             </header>
 
             <div className="bg-white rounded-xl shadow-sm border border-[#E2E8F0] overflow-hidden">
@@ -142,17 +146,29 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <select
-                        className="border-[#E2E8F0] shadow-sm border text-sm rounded-md px-3 h-9 bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700 w-full sm:w-auto"
-                        value={filterDurum}
-                        onChange={(e) => setFilterDurum(e.target.value)}
-                    >
-                        <option value="TÜMÜ">Tüm Durumlar</option>
-                        <option value="GECIKTI">Gecikti</option>
-                        <option value="KRITIK">Kritik (&lt;15 Gün)</option>
-                        <option value="YAKLASTI">Yaklaştı (&lt;30 Gün)</option>
-                        <option value="GECERLI">Geçerli</option>
-                    </select>
+                    <div className="flex items-center gap-2 w-full sm:w-auto">
+                        <select
+                            className="border-[#E2E8F0] shadow-sm border text-sm rounded-md px-3 h-9 bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700 w-full sm:w-auto"
+                            value={filterDurum}
+                            onChange={(e) => setFilterDurum(e.target.value)}
+                        >
+                            <option value="TÜMÜ">Tüm Durumlar</option>
+                            <option value="GECIKTI">Gecikti</option>
+                            <option value="KRITIK">Kritik (&lt;15 Gün)</option>
+                            <option value="YAKLASTI">Yaklaştı (&lt;30 Gün)</option>
+                            <option value="GECERLI">Geçerli</option>
+                        </select>
+                        <select
+                            className="border-[#E2E8F0] shadow-sm border text-sm rounded-md px-3 h-9 bg-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-700 w-full sm:w-auto"
+                            value={filterTur}
+                            onChange={(e) => setFilterTur(e.target.value)}
+                        >
+                            <option value="TUMU">Tüm Türler</option>
+                            <option value="Muayene">Muayene</option>
+                            <option value="Kasko">Kasko</option>
+                            <option value="Trafik Sigortası">Trafik Sigortası</option>
+                        </select>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto">

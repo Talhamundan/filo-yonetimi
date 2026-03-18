@@ -46,7 +46,9 @@ export async function getDashboardCalendarData(params: {
     dateContext: DashboardDateContext;
 }) {
     const { scope, cezaScope, dateContext } = params;
-    const { bugun, seciliAyBasi, seciliAySonu } = dateContext;
+    const { bugun, normalizedYear } = dateContext;
+    const seciliYilBasi = new Date(normalizedYear, 0, 1, 0, 0, 0, 0);
+    const seciliYilSonu = new Date(normalizedYear, 11, 31, 23, 59, 59, 999);
 
     const araclar = await prisma.arac.findMany({
         where: scope as Prisma.AracWhereInput,
@@ -90,8 +92,8 @@ export async function getDashboardCalendarData(params: {
                     { odendiMi: { not: true } },
                     {
                         OR: [
-                            { sonOdemeTarihi: { gte: seciliAyBasi, lte: seciliAySonu } },
-                            { tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
+                            { sonOdemeTarihi: { gte: seciliYilBasi, lte: seciliYilSonu } },
+                            { tarih: { gte: seciliYilBasi, lte: seciliYilSonu } },
                         ],
                     },
                 ],
@@ -137,7 +139,7 @@ export async function getDashboardCalendarData(params: {
         };
 
         const sonMuayene = latestMuayene.get(arac.id);
-        if (sonMuayene && isWithinSelectedRange(sonMuayene.gecerlilikTarihi, seciliAyBasi, seciliAySonu)) {
+        if (sonMuayene && isWithinSelectedRange(sonMuayene.gecerlilikTarihi, seciliYilBasi, seciliYilSonu)) {
             const daysLeft = differenceInCalendarDays(sonMuayene.gecerlilikTarihi, bugun);
             if (daysLeft <= 15) {
                 alerts.push({
@@ -161,7 +163,7 @@ export async function getDashboardCalendarData(params: {
         }
 
         const sonKasko = latestKasko.get(arac.id);
-        if (sonKasko && isWithinSelectedRange(sonKasko.gecerlilikTarihi, seciliAyBasi, seciliAySonu)) {
+        if (sonKasko && isWithinSelectedRange(sonKasko.gecerlilikTarihi, seciliYilBasi, seciliYilSonu)) {
             const daysLeft = differenceInCalendarDays(sonKasko.gecerlilikTarihi, bugun);
             if (daysLeft <= 15) {
                 alerts.push({
@@ -185,7 +187,7 @@ export async function getDashboardCalendarData(params: {
         }
 
         const sonTrafik = latestTrafik.get(arac.id);
-        if (sonTrafik && isWithinSelectedRange(sonTrafik.gecerlilikTarihi, seciliAyBasi, seciliAySonu)) {
+        if (sonTrafik && isWithinSelectedRange(sonTrafik.gecerlilikTarihi, seciliYilBasi, seciliYilSonu)) {
             const daysLeft = differenceInCalendarDays(sonTrafik.gecerlilikTarihi, bugun);
             if (daysLeft <= 15) {
                 alerts.push({
@@ -214,6 +216,7 @@ export async function getDashboardCalendarData(params: {
         if (!dueDateRaw) continue;
         const dueDate = new Date(dueDateRaw);
         if (Number.isNaN(dueDate.getTime())) continue;
+        if (!isWithinSelectedRange(dueDate, seciliYilBasi, seciliYilSonu)) continue;
 
         const daysLeft = differenceInCalendarDays(dueDate, bugun);
         calendarEvents.push({

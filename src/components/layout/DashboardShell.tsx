@@ -4,7 +4,7 @@ import React from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings } from "lucide-react";
+import { History, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Settings, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
@@ -127,6 +127,8 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const scopedQuery = searchParams.toString();
     const dashboardHref = scopedQuery ? `/dashboard?${scopedQuery}` : "/dashboard";
     const adminHref = scopedQuery ? `/dashboard/onay-merkezi?${scopedQuery}` : "/dashboard/onay-merkezi";
+    const activityHref = scopedQuery ? `/dashboard/aktivite-gecmisi?${scopedQuery}` : "/dashboard/aktivite-gecmisi";
+    const trashHref = scopedQuery ? `/dashboard/cop-kutusu?${scopedQuery}` : "/dashboard/cop-kutusu";
 
     return (
         <DashboardScopeProvider
@@ -211,6 +213,22 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 className="absolute right-0 top-[calc(100%+10px)] z-50 min-w-[180px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70"
                                                 role="menu"
                                             >
+                                                <Link
+                                                    href={activityHref}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    role="menuitem"
+                                                >
+                                                    <History size={16} className="text-indigo-500" />
+                                                    Aktivite Geçmişi
+                                                </Link>
+                                                <Link
+                                                    href={trashHref}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    role="menuitem"
+                                                >
+                                                    <Trash2 size={16} className="text-amber-500" />
+                                                    Çöp Kutusu
+                                                </Link>
                                                 <button
                                                     type="button"
                                                     onClick={() => signOut({ callbackUrl: "/auth/login" })}
@@ -288,6 +306,22 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 className="absolute right-0 top-[calc(100%+10px)] z-50 min-w-[180px] rounded-2xl border border-slate-200 bg-white p-2 shadow-xl shadow-slate-200/70"
                                                 role="menu"
                                             >
+                                                <Link
+                                                    href={activityHref}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    role="menuitem"
+                                                >
+                                                    <History size={16} className="text-indigo-500" />
+                                                    Aktivite Geçmişi
+                                                </Link>
+                                                <Link
+                                                    href={trashHref}
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    role="menuitem"
+                                                >
+                                                    <Trash2 size={16} className="text-amber-500" />
+                                                    Çöp Kutusu
+                                                </Link>
                                                 <button
                                                     type="button"
                                                     onClick={() => signOut({ callbackUrl: "/auth/login" })}

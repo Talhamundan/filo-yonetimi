@@ -2,7 +2,10 @@
 
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
+import { logEntityActivity } from "@/lib/activity-log";
+import { softDeleteEntity } from "@/lib/soft-delete";
 
 const PATH = '/dashboard/dokumanlar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -20,13 +23,14 @@ export async function createDokuman(data: {
     aracId: string;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
+            plaka: true,
             sirketId: true,
         });
 
-        await prisma.dokuman.create({
+        const created = await prisma.dokuman.create({
             data: {
                 ad: data.ad,
                 dosyaUrl: data.dosyaUrl,
@@ -35,6 +39,21 @@ export async function createDokuman(data: {
                 sirketId: arac.sirketId,
             }
         });
+
+        await logEntityActivity({
+            actionType: ActivityActionType.CREATE,
+            entityType: ActivityEntityType.DOKUMAN,
+            entityId: created.id,
+            summary: `${arac.plaka} için doküman yüklendi.`,
+            actor,
+            companyId: created.sirketId || actor.sirketId || null,
+            metadata: {
+                ad: created.ad,
+                tur: created.tur,
+                aracId: created.aracId,
+            },
+        });
+
         revalidateDokumanPages(arac.id);
         return { success: true };
     } catch (error) {
@@ -45,20 +64,20 @@ export async function createDokuman(data: {
 
 export async function deleteDokuman(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const kayit = await getScopedRecordOrThrow({
             prismaModel: "dokuman",
             filterModel: "dokuman",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true, ad: true, tur: true },
             errorMessage: "Dokuman bulunamadi veya yetkiniz yok.",
         });
 
-        await prisma.dokuman.delete({ where: { id } });
+        await softDeleteEntity("dokuman", id, actor.id);
         revalidateDokumanPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (error) {
         console.error("Doküman silinirken hata:", error);
-        return { success: false, error: "Doküman silinirken bir hata oluştu." };
+        return { success: false, error: "Doküman çöp kutusuna taşınırken bir hata oluştu." };
     }
 }

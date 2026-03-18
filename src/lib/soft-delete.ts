@@ -1,4 +1,6 @@
 import prisma from "@/lib/prisma";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
+import { logActivity } from "@/lib/activity-log";
 
 export type SoftDeleteEntity = "arac" | "masraf" | "bakim" | "dokuman" | "ceza" | "kullanici";
 
@@ -7,6 +9,23 @@ export type SoftDeleteSnapshot = {
     companyId: string | null;
     summary: string;
 };
+
+function toActivityEntityType(entity: SoftDeleteEntity): ActivityEntityType {
+    switch (entity) {
+        case "arac":
+            return ActivityEntityType.ARAC;
+        case "masraf":
+            return ActivityEntityType.MASRAF;
+        case "bakim":
+            return ActivityEntityType.BAKIM;
+        case "dokuman":
+            return ActivityEntityType.DOKUMAN;
+        case "ceza":
+            return ActivityEntityType.CEZA;
+        case "kullanici":
+            return ActivityEntityType.KULLANICI;
+    }
+}
 
 function formatVehicleSummary(row: { plaka: string; marka: string; model: string }) {
     return `${row.plaka} - ${row.marka} ${row.model}`.trim();
@@ -99,29 +118,71 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
 
 export async function softDeleteEntity(entity: SoftDeleteEntity, id: string, deletedBy: string | null) {
     const deletedAt = new Date();
+    const snapshot = await getSoftDeleteSnapshot(entity, id);
+    let result: unknown;
 
     switch (entity) {
-        case "arac":
-            return prisma.arac.update({
-                where: { id },
-                data: {
-                    deletedAt,
-                    deletedBy,
-                    kullaniciId: null,
-                    durum: "BOSTA",
-                },
+        case "arac": {
+            result = await prisma.$transaction(async (tx) => {
+                await Promise.all([
+                    tx.masraf.updateMany({
+                        where: { aracId: id, deletedAt: null },
+                        data: { deletedAt, deletedBy },
+                    }),
+                    tx.bakim.updateMany({
+                        where: { aracId: id, deletedAt: null },
+                        data: { deletedAt, deletedBy },
+                    }),
+                    tx.dokuman.updateMany({
+                        where: { aracId: id, deletedAt: null },
+                        data: { deletedAt, deletedBy },
+                    }),
+                    tx.ceza.updateMany({
+                        where: { aracId: id, deletedAt: null },
+                        data: { deletedAt, deletedBy },
+                    }),
+                ]);
+
+                return tx.arac.update({
+                    where: { id },
+                    data: {
+                        deletedAt,
+                        deletedBy,
+                        kullaniciId: null,
+                        durum: "BOSTA",
+                    },
+                });
             });
+            break;
+        }
         case "masraf":
-            return prisma.masraf.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.masraf.update({ where: { id }, data: { deletedAt, deletedBy } });
+            break;
         case "bakim":
-            return prisma.bakim.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.bakim.update({ where: { id }, data: { deletedAt, deletedBy } });
+            break;
         case "dokuman":
-            return prisma.dokuman.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.dokuman.update({ where: { id }, data: { deletedAt, deletedBy } });
+            break;
         case "ceza":
-            return prisma.ceza.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.ceza.update({ where: { id }, data: { deletedAt, deletedBy } });
+            break;
         case "kullanici":
-            return prisma.kullanici.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.kullanici.update({ where: { id }, data: { deletedAt, deletedBy } });
+            break;
     }
+
+    await logActivity({
+        actionType: ActivityActionType.ARCHIVE,
+        entityType: toActivityEntityType(entity),
+        entityId: id,
+        summary: `${snapshot?.summary || "Kayıt"} çöp kutusuna taşındı.`,
+        userId: deletedBy,
+        companyId: snapshot?.companyId || null,
+        metadata: { deletedAt },
+    });
+
+    return result;
 }
 
 export async function restoreEntity(entity: SoftDeleteEntity, id: string) {
