@@ -1,9 +1,10 @@
 import { differenceInCalendarDays } from "date-fns";
 
-export type DeadlineStatus = "GECIKTI" | "KRITIK" | "YAKLASTI" | "GECERLI";
+export type DeadlineStatus = "GECIKTI" | "YUKSEK" | "KRITIK" | "YAKLASTI" | "GECERLI";
 
 export const DEADLINE_STATUS_CLASS: Record<DeadlineStatus, string> = {
     GECIKTI: "bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-none",
+    YUKSEK: "bg-orange-100 text-orange-800 hover:bg-orange-200 border-0 shadow-none",
     KRITIK: "bg-orange-100 text-orange-800 hover:bg-orange-200 border-0 shadow-none",
     YAKLASTI: "bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-none",
     GECERLI: "bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-0 shadow-none",
@@ -18,7 +19,7 @@ export function getDaysLeft(targetDate: Date | string | null | undefined, baseDa
 
 export function getDeadlineStatus(daysLeft: number): DeadlineStatus {
     if (daysLeft < 0) return "GECIKTI";
-    if (daysLeft <= 15) return "KRITIK";
+    if (daysLeft <= 15) return "YUKSEK";
     if (daysLeft <= 30) return "YAKLASTI";
     return "GECERLI";
 }
@@ -27,8 +28,9 @@ export function getDeadlineLabel(status: DeadlineStatus, daysLeft: number) {
     switch (status) {
         case "GECIKTI":
             return "Gecikti";
+        case "YUKSEK":
         case "KRITIK":
-            return `Kritik (${daysLeft} Gün)`;
+            return `Yüksek (${daysLeft} Gün)`;
         case "YAKLASTI":
             return `Yaklaşıyor (${daysLeft} Gün)`;
         case "GECERLI":
@@ -45,4 +47,3 @@ export function getDeadlineBadgeConfig(daysLeft: number) {
         className: DEADLINE_STATUS_CLASS[status],
     };
 }
-

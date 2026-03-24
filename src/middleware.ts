@@ -1,7 +1,7 @@
 import NextAuth from "next-auth"
 import { authConfig } from "./auth.config"
 import { NextResponse } from "next/server"
-import { isDashboardPathRestrictedForRole, shouldForceWaitingPage } from "@/lib/policy"
+import { isAdminRole, isDashboardPathRestrictedForRole, shouldForceWaitingPage } from "@/lib/policy"
 
 const { auth } = NextAuth(authConfig)
 
@@ -13,6 +13,7 @@ export default auth((req) => {
   const userOnayDurumu = authUser?.onayDurumu
   const isAuthPage = nextUrl.pathname.startsWith("/auth")
   const isDashboardPage = nextUrl.pathname.startsWith("/dashboard")
+  const isCompanyManagementPage = nextUrl.pathname.startsWith("/dashboard/sirketler")
 
   // 1. Giriş yapmamış kullanıcı dashboard'a girmek isterse login'e at
   if (isDashboardPage && !isLoggedIn) {
@@ -30,6 +31,11 @@ export default auth((req) => {
   if (isLoggedIn && isDashboardPage && isDashboardPathRestrictedForRole(userRole, nextUrl.pathname)) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl));
     }
+
+  // 3.1 Şirket Yönetimi sadece ADMIN tarafından görüntülenebilir
+  if (isLoggedIn && isCompanyManagementPage && !isAdminRole(userRole)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+  }
 
   // 4. Giriş yapmış kullanıcı auth sayfalarına (login/register) girmek isterse dashboard'a at
   if (isAuthPage && isLoggedIn) {

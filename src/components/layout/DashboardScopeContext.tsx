@@ -5,11 +5,13 @@ import React from "react";
 type DashboardScopeContextValue = {
     canAccessAllCompanies: boolean;
     isAdmin: boolean;
+    canAssignIndependentRecords: boolean;
 };
 
 const DashboardScopeContext = React.createContext<DashboardScopeContextValue>({
     canAccessAllCompanies: false,
     isAdmin: false,
+    canAssignIndependentRecords: false,
 });
 
 export function DashboardScopeProvider({

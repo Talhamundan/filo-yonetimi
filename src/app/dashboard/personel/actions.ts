@@ -1,14 +1,18 @@
 "use server";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ActivityActionType, ActivityEntityType } from "@prisma/client";
+import { ActivityActionType, ActivityEntityType, iller, Prisma, Rol } from "@prisma/client";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/auth-utils";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { resolveActionSirketId } from "@/lib/action-scope";
+import { syncAracDurumu } from "@/lib/arac-durum";
 
 const PATH = "/dashboard/personel";
+const SIRKETLER_PATH = "/dashboard/sirketler";
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
+const PERSONEL_ID_RETRY_LIMIT = 6;
 
 type ActorUser = {
     id: string;
@@ -16,58 +20,101 @@ type ActorUser = {
     sirketId?: string | null;
 };
 
-async function assertAdmin() {
+import { normalizeRole } from "@/lib/policy";
+
+async function assertAuthorized() {
     const session = await auth();
     const user = session?.user as ActorUser | undefined;
-    if (!user || user.rol !== "ADMIN") {
-        throw new Error("Bu işlem için yetkiniz yok.");
+    if (!user) throw new Error("Oturum bulunamadı.");
+    const role = normalizeRole(user.rol);
+    if (role === "ADMIN" || role === "TEKNIK" || role === "YETKILI") {
+        return user;
     }
-    return user;
+    throw new Error("Bu işlem için yetkiniz yok.");
 }
 
-export async function createPersonel(data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
-    try {
-        const actor = await assertAdmin();
+async function getNextSequentialPersonelId() {
+    const rows = await prisma.$queryRaw<Array<{ maxId: number | null }>>`
+        SELECT MAX(CAST("id" AS INTEGER)) AS "maxId"
+        FROM "Personel"
+        WHERE "id" ~ '^[0-9]+$'
+    `;
 
-        const created = await prisma.kullanici.create({
-            data: {
-                ad: forceUppercase(data.ad || ""),
-                soyad: forceUppercase(data.soyad || ""),
-                eposta: data.eposta || null,
-                telefon: data.telefon || null,
-                rol: data.rol as any,
-                sirketId: data.sirketId || null,
-                sehir: data.sehir as any || null,
-                tcNo: data.tcNo || null,
+    const currentMax = rows[0]?.maxId ?? -1;
+    return String(currentMax + 1).padStart(4, "0");
+}
+
+export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; sehir?: iller | ""; tcNo?: string }) {
+    try {
+        const actor = await assertAuthorized();
+        const sirketId = await resolveActionSirketId(data.sirketId);
+
+        let created: Awaited<ReturnType<typeof prisma.kullanici.create>> | null = null;
+        for (let attempt = 0; attempt < PERSONEL_ID_RETRY_LIMIT; attempt += 1) {
+            const nextId = await getNextSequentialPersonelId();
+            try {
+                created = await prisma.kullanici.create({
+                    data: {
+                        id: nextId,
+                        ad: forceUppercase(data.ad || ""),
+                        soyad: forceUppercase(data.soyad || ""),
+                        eposta: null,
+                        sifre: null,
+                        telefon: data.telefon || null,
+                        rol: data.rol,
+                        sirketId,
+                        sehir: data.sehir ? (data.sehir as iller) : null,
+                        tcNo: data.tcNo || null,
+                        onayDurumu: "ONAYLANDI",
+                    }
+                });
+                break;
+            } catch (error) {
+                const isIdConflict =
+                    error instanceof Prisma.PrismaClientKnownRequestError &&
+                    error.code === "P2002" &&
+                    Array.isArray((error.meta as { target?: unknown })?.target) &&
+                    ((error.meta as { target?: unknown[] }).target as unknown[]).includes("id");
+                if (isIdConflict) {
+                    continue;
+                }
+                throw error;
             }
-        });
+        }
+
+        if (!created) {
+            return { success: false, error: "Personel ID üretilemedi. Lütfen tekrar deneyin." };
+        }
 
         await logEntityActivity({
             actionType: ActivityActionType.CREATE,
             entityType: ActivityEntityType.KULLANICI,
             entityId: created.id,
-            summary: `${created.ad} ${created.soyad} kullanıcısı oluşturuldu.`,
+            summary: `${created.ad} ${created.soyad} personeli oluşturuldu.`,
             actor,
             companyId: created.sirketId || actor.sirketId || null,
             metadata: {
                 rol: created.rol,
-                eposta: created.eposta,
+                eposta: null,
                 sirketId: created.sirketId,
             },
         });
 
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${created.id}`);
+        revalidatePath(SIRKETLER_PATH);
         return { success: true };
-    } catch (e) {
-        console.error(e);
-        return { success: false, error: "Personel kaydedilemedi. E-posta veya TC No çakışması olabilir." };
+    } catch (e: any) {
+        console.error("CreatePersonel Error:", e);
+        if (e.message) return { success: false, error: e.message };
+        return { success: false, error: "Personel kaydedilemedi. Beklenmedik bir hata oluştu." };
     }
 }
 
-export async function updatePersonel(id: string, data: { ad: string; soyad: string; eposta?: string; telefon?: string; rol: string; sirketId?: string; sehir?: string; tcNo?: string }) {
+export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; sehir?: iller | ""; tcNo?: string }) {
     try {
-        const actor = await assertAdmin();
+        const actor = await assertAuthorized();
+        const sirketId = await resolveActionSirketId(data.sirketId);
         const oncekiKayit = await prisma.kullanici.findUnique({
             where: { id },
             select: { rol: true, ad: true, soyad: true, sirketId: true },
@@ -78,11 +125,10 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
             data: {
                 ad: forceUppercase(data.ad || ""),
                 soyad: forceUppercase(data.soyad || ""),
-                eposta: data.eposta || null,
                 telefon: data.telefon || null,
-                rol: data.rol as any,
-                sirketId: data.sirketId || null,
-                sehir: data.sehir as any || null,
+                rol: data.rol,
+                sirketId,
+                sehir: data.sehir ? (data.sehir as iller) : null,
                 tcNo: data.tcNo || null,
             }
         });
@@ -93,8 +139,8 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
             entityType: ActivityEntityType.KULLANICI,
             entityId: updated.id,
             summary: roleChanged
-                ? `${updated.ad} ${updated.soyad} kullanıcısının rolü değiştirildi.`
-                : `${updated.ad} ${updated.soyad} kullanıcısı güncellendi.`,
+                ? `${updated.ad} ${updated.soyad} personelinin rolü değiştirildi.`
+                : `${updated.ad} ${updated.soyad} personeli güncellendi.`,
             actor,
             companyId: updated.sirketId || actor.sirketId || null,
             metadata: {
@@ -107,6 +153,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
 
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${id}`);
+        revalidatePath(SIRKETLER_PATH);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -116,10 +163,40 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
 
 export async function deletePersonel(id: string) {
     try {
-        const actor = await assertAdmin();
+        const actor = await assertAuthorized();
+        const personel = await prisma.kullanici.findUnique({
+            where: { id },
+            select: {
+                id: true,
+                ad: true,
+                soyad: true,
+                arac: { select: { id: true, plaka: true } },
+            },
+        });
+
+        if (!personel) {
+            return { success: false, error: "Personel bulunamadı." };
+        }
+
+        const aktifZimmet = personel.arac
+            ? personel.arac
+            : await prisma.kullaniciZimmet.findFirst({
+                  where: { kullaniciId: id, bitis: null },
+                  select: { arac: { select: { id: true, plaka: true } } },
+              }).then((row) => row?.arac || null);
+
+        if (aktifZimmet) {
+            return {
+                success: false,
+                code: "AKTIF_KULLANIM",
+                error: `${personel.ad} ${personel.soyad} üzerinde ${aktifZimmet.plaka} plakalı aktif araç zimmeti var. Önce aracı personelden ayırın.`,
+            };
+        }
+
         await softDeleteEntity("kullanici", id, actor.id);
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${id}`);
+        revalidatePath(SIRKETLER_PATH);
         return { success: true };
     } catch (e) {
         console.error(e);
@@ -155,7 +232,6 @@ export async function araciBirak(personelId: string) {
             where: { id: arac.id },
             data: {
                 kullaniciId: null,
-                durum: 'BOSTA'
             }
         });
 
@@ -185,6 +261,7 @@ export async function araciBirak(personelId: string) {
             },
         });
 
+        await syncAracDurumu(arac.id);
         revalidatePath(PATH);
         revalidatePath(`${PATH}/${personelId}`);
         revalidatePath('/dashboard/araclar');

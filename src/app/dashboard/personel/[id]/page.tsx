@@ -24,6 +24,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             where: whereClause,
             include: {
                 sirket: true,
+                hesap: { select: { kullaniciAdi: true } },
                 arac: {
                     include: {
                         sirket: true,
@@ -49,6 +50,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                 where: whereClause,
                 include: {
                     sirket: true,
+                    hesap: { select: { kullaniciAdi: true } },
                     arac: {
                         include: {
                             sirket: true,
@@ -75,12 +77,35 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
         notFound();
     }
 
+    const arizalar = await (prisma as any).arizaKaydi
+        .findMany({
+            where: {
+                soforId: personel.id,
+                ...(selectedSirketId ? { sirketId: selectedSirketId } : {}),
+            },
+            include: {
+                arac: {
+                    include: {
+                        sirket: true,
+                    },
+                },
+            },
+            orderBy: [{ durum: "asc" }, { bildirimTarihi: "desc" }],
+            take: 100,
+        })
+        .catch((error: any) => {
+            console.warn("Personel arıza kayıtları alınamadı.", error);
+            return [];
+        });
+
     // Eski/yeni şema farklarını tek formata çek.
     const normalizedPersonel = {
         ...personel,
         sirket: personel.sirket || null,
+        hesap: personel.hesap || null,
         arac: personel.arac || null,
         zimmetler: personel.zimmetler || [],
+        arizalar: arizalar || [],
         cezalar: (personel.cezalar || [])
             .map((c: any) => ({
                 ...c,

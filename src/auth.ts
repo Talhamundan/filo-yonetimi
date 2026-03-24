@@ -18,49 +18,61 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Credentials({
       name: "Credentials",
       credentials: {
-        eposta: { label: "E-Posta", type: "email" },
+        kullaniciAdi: { label: "Kullanıcı Adı", type: "text" },
         sifre: { label: "Şifre", type: "password" }
       },
       async authorize(credentials) {
-        const email = String(credentials?.eposta || "").trim().toLowerCase()
-        if (!credentials?.eposta || !credentials?.sifre) {
+        const creds = credentials as Record<string, unknown> | undefined
+        const identifier = String(creds?.kullaniciAdi || creds?.eposta || "").trim().toLowerCase()
+        const password = String(creds?.sifre || "")
+
+        if (!identifier || !password) {
           await logActivity({
             actionType: ActivityActionType.LOGIN_FAILURE,
             entityType: ActivityEntityType.OTURUM,
-            entityId: email || "UNKNOWN",
+            entityId: identifier || "UNKNOWN",
             summary: "Giriş denemesi başarısız: eksik kimlik bilgisi.",
-            metadata: { email: email || null, reason: "MISSING_CREDENTIALS" },
+            metadata: { email: identifier || null, reason: "MISSING_CREDENTIALS" },
           })
           return null
         }
 
         try {
-          const user = await prisma.kullanici.findUnique({
-            where: { eposta: email },
+          const hesap = await prisma.hesap.findUnique({
+            where: { kullaniciAdi: identifier },
             select: {
               id: true,
-              ad: true,
-              soyad: true,
-              eposta: true,
-              sifre: true,
-              rol: true,
-              sirketId: true,
-              onayDurumu: true,
+              kullaniciAdi: true,
+              sifreHash: true,
+              aktifMi: true,
+              personel: {
+                select: {
+                  id: true,
+                  ad: true,
+                  soyad: true,
+                  eposta: true,
+                  rol: true,
+                  sirketId: true,
+                  onayDurumu: true,
+                  deletedAt: true,
+                },
+              },
             },
           })
 
-          if (!user || !user.sifre) {
-            await logActivity({
-              actionType: ActivityActionType.LOGIN_FAILURE,
-              entityType: ActivityEntityType.OTURUM,
-              entityId: email || "UNKNOWN",
-              summary: "Giriş denemesi başarısız: kullanıcı bulunamadı.",
-              metadata: { email: email || null, reason: "USER_NOT_FOUND" },
-            })
-            return null
-          }
+          const user = hesap?.personel;
+          if (!hesap || !hesap.sifreHash || !hesap.aktifMi || !user || user.deletedAt) {
+              await logActivity({
+                actionType: ActivityActionType.LOGIN_FAILURE,
+                entityType: ActivityEntityType.OTURUM,
+                entityId: identifier || "UNKNOWN",
+                summary: "Giriş denemesi başarısız: kullanıcı bulunamadı.",
+                metadata: { email: identifier || null, reason: "USER_NOT_FOUND" },
+              })
+              return null
+            }
 
-          const isValid = await bcrypt.compare(credentials.sifre as string, user.sifre)
+          const isValid = await bcrypt.compare(password, hesap.sifreHash)
 
           if (!isValid) {
             await logActivity({
@@ -70,7 +82,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               summary: "Giriş denemesi başarısız: şifre doğrulanamadı.",
               userId: user.id,
               companyId: user.sirketId,
-              metadata: { email: user.eposta, reason: "INVALID_PASSWORD" },
+              metadata: { username: hesap.kullaniciAdi, reason: "INVALID_PASSWORD" },
             })
             return null
           }
@@ -82,13 +94,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             summary: "Kullanıcı sisteme başarıyla giriş yaptı.",
             userId: user.id,
             companyId: user.sirketId,
-            metadata: { email: user.eposta },
+            metadata: { username: hesap.kullaniciAdi },
           })
           
           return {
             id: user.id,
             name: `${user.ad} ${user.soyad}`,
-            email: user.eposta,
+            email: hesap.kullaniciAdi,
             rol: user.rol,
             sirketId: user.sirketId,
             onayDurumu: user.onayDurumu
@@ -98,9 +110,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           await logActivity({
             actionType: ActivityActionType.LOGIN_FAILURE,
             entityType: ActivityEntityType.OTURUM,
-            entityId: email || "UNKNOWN",
+            entityId: identifier || "UNKNOWN",
             summary: "Giriş denemesi sırasında sunucu hatası oluştu.",
-            metadata: { email: email || null, reason: "AUTHORIZE_EXCEPTION" },
+            metadata: { email: identifier || null, reason: "AUTHORIZE_EXCEPTION" },
           })
           return null;
         }

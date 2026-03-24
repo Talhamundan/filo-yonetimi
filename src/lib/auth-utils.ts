@@ -32,7 +32,7 @@ export async function getSirketFilter(selectedSirketId?: string | null) {
     const { rol, sirketId } = session.user;
     const requestedCompanyId = getRequestedCompanyId(selectedSirketId);
 
-    if (canRoleAccessAllCompanies(rol)) {
+    if (canRoleAccessAllCompanies(rol, sirketId)) {
         return requestedCompanyId ? { sirketId: requestedCompanyId } : {};
     }
 
@@ -72,7 +72,7 @@ export async function getModelFilterWithOptions(
 
 export async function canAccessAllCompanies() {
     const session = await getSession();
-    return canRoleAccessAllCompanies(session?.user?.rol);
+    return canRoleAccessAllCompanies(session?.user?.rol, session?.user?.sirketId);
 }
 
 export async function getSirketListFilter() {
@@ -82,7 +82,7 @@ export async function getSirketListFilter() {
     }
 
     const { rol, sirketId } = session.user;
-    if (canRoleAccessAllCompanies(rol)) {
+    if (canRoleAccessAllCompanies(rol, sirketId)) {
         return {};
     }
 
@@ -94,7 +94,7 @@ export async function getScopedSirketId(selectedSirketId?: string | null) {
     if (!session?.user) return null;
 
     const { rol, sirketId } = session.user;
-    if (canRoleAccessAllCompanies(rol)) {
+    if (canRoleAccessAllCompanies(rol, sirketId)) {
         return getRequestedCompanyId(selectedSirketId);
     }
 

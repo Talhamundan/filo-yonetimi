@@ -1,7 +1,9 @@
 export type GenericWhere = Record<string, unknown>;
 
 export type DashboardEventType = "TRAFIK" | "KASKO" | "MUAYENE" | "CEZA";
-export type DashboardEventStatus = "GECIKTI" | "KRITIK" | "YAKLASTI" | "PLANLI";
+export type DashboardEventStatus = "GECIKTI" | "YUKSEK" | "KRITIK" | "YAKLASTI" | "PLANLI";
+export type DashboardArizaOncelik = "KRITIK" | "YUKSEK" | "ORTA" | "DUSUK";
+export type DashboardArizaDurumu = "ACIK" | "SERVISTE";
 
 export interface DashboardCalendarEvent {
     id: string;
@@ -15,6 +17,16 @@ export interface DashboardCalendarEvent {
     date: string;
     daysLeft: number;
     href: string;
+}
+
+export interface DashboardOperationArizaItem {
+    id: string;
+    aracId: string;
+    plaka: string;
+    oncelik: DashboardArizaOncelik;
+    durum: DashboardArizaDurumu;
+    aciklama: string;
+    bildirimTarihi: string;
 }
 
 export interface DashboardMonthlyTrendItem {
@@ -54,6 +66,20 @@ export interface DashboardDriverCostItem {
     ariza: number;
 }
 
+export interface DashboardCompanyCostItem {
+    sirketId: string | null;
+    sirketAd: string;
+    toplam: number;
+    yakit: number;
+    bakim: number;
+    muayene: number;
+    hgs: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+}
+
 export interface DashboardData {
     metrics: {
         aylikToplamGider: number;
@@ -67,20 +93,32 @@ export interface DashboardData {
         aktifArac: number;
         toplamArac: number;
         servisteArac: number;
+        arizaliArac: number;
         comparisonLabel: string;
         giderDegisimYuzdesi: number;
+        servisMaliyetDegisimYuzdesi: number;
         aracMaliyetDegisimYuzdesi: number;
         soforMaliyetDegisimYuzdesi: number;
         yakitDegisimYuzdesi: number;
     };
     durumData: { name: string; value: number }[];
     alerts: { id: string; aracId: string; plaka: string; message: string; tarih: string }[];
+    operationSummary: {
+        kritik: number;
+        yuksek: number;
+        orta: number;
+        dusuk: number;
+        toplam: number;
+        serviste: number;
+    };
+    operationArizalar: DashboardOperationArizaItem[];
     sixMonthsTrend: { name: string; gider: number }[];
     top5Expenses: { plaka: string; tutar: number }[];
     calendarEvents: DashboardCalendarEvent[];
     monthlyExpenseTrend: DashboardMonthlyTrendItem[];
     vehicleCostReport: DashboardVehicleCostItem[];
     driverCostReport: DashboardDriverCostItem[];
+    companyCostReport: DashboardCompanyCostItem[];
 }
 
 export type DashboardComparisonGranularity = "AY" | "YIL";

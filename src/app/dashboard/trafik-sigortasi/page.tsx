@@ -46,6 +46,7 @@ export default async function TrafikSigortasiPage(props: { searchParams?: Promis
             case "GECIKTI":
                 whereParts.push({ aktifMi: true, bitisTarihi: { lt: now } });
                 break;
+            case "YUKSEK":
             case "KRITIK":
                 whereParts.push({ aktifMi: true, bitisTarihi: { gte: now, lte: criticalDate } });
                 break;

@@ -162,7 +162,7 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
                     </button>
                 </div>
             )
-        }
+        },
     ];
 
     return (

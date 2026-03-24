@@ -21,7 +21,8 @@ export type BakimRow = {
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
 
-export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => [
+export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => {
+    const columns: ColumnDef<BakimRow>[] = [
     {
         accessorKey: "bakimTarihi",
         header: "Tarih",
@@ -93,4 +94,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => [
             return <div className="text-right font-bold text-slate-900">₺{row.original.tutar.toLocaleString('tr-TR')}</div>
         },
     },
-]
+    ];
+
+    return columns;
+};

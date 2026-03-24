@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { Prisma } from "@prisma/client";
 import prisma from "@/lib/prisma";
-import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
+import { getCurrentUserRole, getModelFilter, getScopedSirketId } from "@/lib/auth-utils";
 import { formatCurrency } from "@/lib/simple-pdf";
 
 const REPORT_NAMES = [
@@ -81,7 +81,7 @@ function getReportFileName(report: ReportName, format: "xlsx" | "pdf") {
 
 function getExpirationStatus(daysLeft: number) {
     if (daysLeft < 0) return "GECIKTI";
-    if (daysLeft <= 15) return "KRITIK";
+    if (daysLeft <= 15) return "YUKSEK";
     if (daysLeft <= 30) return "YAKLASTI";
     return "GECERLI";
 }
@@ -292,6 +292,7 @@ async function getDocumentExpirationReport(params: {
     }
 
     const today = new Date();
+    const normalizedStatus = params.status === "KRITIK" ? "YUKSEK" : params.status;
     const rows = araclar
         .flatMap((arac) => {
             const items = latestMap.get(arac.id) || [];
@@ -309,7 +310,7 @@ async function getDocumentExpirationReport(params: {
             });
         })
         .filter((row) => row._rawDate.getTime() >= params.from.getTime() && row._rawDate.getTime() <= params.to.getTime())
-        .filter((row) => (params.status ? row.Durum === params.status : true))
+        .filter((row) => (normalizedStatus ? row.Durum === normalizedStatus : true))
         .filter((row) => (params.type ? row.Tur === params.type : true))
         .filter((row) =>
             params.q
@@ -563,7 +564,8 @@ export async function GET(req: NextRequest, context: { params: Promise<{ report:
             return NextResponse.json({ error: "Desteklenmeyen rapor tipi." }, { status: 404 });
         }
 
-        const selectedSirketId = req.nextUrl.searchParams.get("sirket");
+        const requestedSirketId = req.nextUrl.searchParams.get("sirket");
+        const selectedSirketId = await getScopedSirketId(requestedSirketId);
         if (req.nextUrl.searchParams.get("format") === "pdf") {
             return NextResponse.json(
                 { error: "PDF rapor dışa aktarımı devre dışı bırakıldı." },

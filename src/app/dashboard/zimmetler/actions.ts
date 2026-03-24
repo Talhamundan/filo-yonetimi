@@ -4,6 +4,7 @@ import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
+import { syncAracDurumu } from "@/lib/arac-durum";
 
 const PATH = '/dashboard/zimmetler';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -70,6 +71,7 @@ export async function createZimmet(data: {
         });
 
         await syncAracGuncelKm(arac.id);
+        await syncAracDurumu(arac.id);
 
         revalidateZimmetPages(arac.id);
         return { success: true };
@@ -91,6 +93,9 @@ export async function deleteZimmet(id: string) {
         });
 
         await prisma.kullaniciZimmet.delete({ where: { id } });
+        if ((kayit as { aracId?: string } | null)?.aracId) {
+            await syncAracDurumu((kayit as { aracId: string }).aracId);
+        }
         revalidateZimmetPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (e) {
@@ -176,6 +181,7 @@ export async function updateZimmet(id: string, data: {
         });
 
         await syncAracGuncelKm(arac.id);
+        await syncAracDurumu(arac.id);
 
         revalidateZimmetPages(arac.id);
         return { success: true };

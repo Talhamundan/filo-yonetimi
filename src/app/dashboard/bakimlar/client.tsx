@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
@@ -8,7 +8,7 @@ import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, BakimRow } from "./columns";
 import { addBakim, updateBakim, deleteBakim } from "./actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 
@@ -38,6 +38,18 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const searchParams = useSearchParams();
+    const shouldOpenCreate = searchParams.get("add") === "true";
+
+    useEffect(() => {
+        if (shouldOpenCreate) {
+            setCreateOpen(true);
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("add");
+            const query = params.toString();
+            router.replace(`/dashboard/bakimlar${query ? `?${query}` : ""}`, { scroll: false });
+        }
+    }, [shouldOpenCreate, router, searchParams]);
     const selectedArac = activeAraclar.find((arac) => arac.id === formData.aracId);
 
     const handleCreate = async () => {

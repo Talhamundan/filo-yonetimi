@@ -9,6 +9,7 @@ export type PolicyModelName =
     | "ceza"
     | "masraf"
     | "bakim"
+    | "arizaKaydi"
     | "muayene"
     | "kasko"
     | "trafikSigortasi"
@@ -23,14 +24,14 @@ export type PolicyModelName =
 const GLOBAL_SCOPE_ROLES = new Set<Rol>(["ADMIN"]);
 const DRIVER_RESTRICTED_DASHBOARD_PATHS = [
     "/dashboard/personel",
-    "/dashboard/onay-merkezi",
+    "/dashboard/yetkilendirme-paneli",
     "/dashboard/sirketler",
     "/dashboard/finans",
     "/dashboard/aktivite-gecmisi",
     "/dashboard/cop-kutusu",
 ] as const;
 
-const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YETKILI", "SOFOR"] as const;
+const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YETKILI", "SOFOR", "TEKNIK"] as const;
 const LEGACY_ROLE_ALIASES: Record<string, Rol> = {
     YONETICI: "YETKILI",
     MUDUR: "YETKILI",
@@ -50,6 +51,7 @@ const VEHICLE_RELATION_MODELS = new Set<PolicyModelName>([
     "ceza",
     "masraf",
     "bakim",
+    "arizaKaydi",
     "muayene",
     "kasko",
     "trafikSigortasi",
@@ -68,10 +70,29 @@ export function normalizeRole(role: string | null | undefined): Rol | null {
     return LEGACY_ROLE_ALIASES[role] ?? null;
 }
 
-export function canRoleAccessAllCompanies(role: string | null | undefined) {
+export function canRoleAccessAllCompanies(
+    role: string | null | undefined,
+    sirketId?: string | null | undefined
+) {
     const normalizedRole = normalizeRole(role);
     if (!normalizedRole) return false;
-    return GLOBAL_SCOPE_ROLES.has(normalizedRole);
+    if (GLOBAL_SCOPE_ROLES.has(normalizedRole)) return true;
+
+    const normalizedSirketId = typeof sirketId === "string" ? sirketId.trim() : sirketId;
+    return (normalizedRole === "YETKILI" || normalizedRole === "TEKNIK") && !normalizedSirketId;
+}
+
+export function canRoleAssignIndependentRecords(
+    role: string | null | undefined,
+    sirketId?: string | null | undefined
+) {
+    const normalizedRole = normalizeRole(role);
+    if (!normalizedRole) return false;
+
+    const normalizedSirketId = typeof sirketId === "string" ? sirketId.trim() : sirketId;
+    if (normalizedSirketId) return false;
+
+    return normalizedRole === "ADMIN" || normalizedRole === "YETKILI" || normalizedRole === "TEKNIK";
 }
 
 export function isDriverRole(role: string | null | undefined) {
@@ -122,6 +143,7 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "ceza":
         case "masraf":
         case "bakim":
+        case "arizaKaydi":
         case "muayene":
         case "kasko":
         case "trafikSigortasi":
@@ -207,7 +229,7 @@ export function getModelFilterByPolicy(params: {
         return getBlockedFilter(modelName);
     }
 
-    if (canRoleAccessAllCompanies(normalizedRole)) {
+    if (canRoleAccessAllCompanies(normalizedRole, currentSirketId)) {
         return withActiveVehicleFilter(
             modelName,
             withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, requestedSirketId), includeDeleted),

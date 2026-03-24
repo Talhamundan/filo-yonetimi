@@ -69,7 +69,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         }).then((rows: any[]) => rows.map((row: any) => ({ ...row, tutar: null, gectiMi: true })));
     });
 
-    const [bakimlar, kasko, trafikSigortasi, yakitlar, masraflar, cezalar, dokumanlar, hgsYuklemeler] = await Promise.all([
+    const [bakimlar, arizalar, kasko, trafikSigortasi, yakitlar, masraflar, cezalar, dokumanlar, hgsYuklemeler] = await Promise.all([
         (prisma as any).bakim.findMany({
             where: { aracId },
             orderBy: { bakimTarihi: "desc" },
@@ -77,6 +77,32 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
             console.warn("Arac detay bakim sorgusu basarisiz.", error);
             return [];
         }),
+        (prisma as any).arizaKaydi
+            .findMany({
+                where: { aracId },
+                orderBy: [{ durum: "asc" }, { bildirimTarihi: "desc" }],
+                include: {
+                    sofor: {
+                        select: {
+                            id: true,
+                            ad: true,
+                            soyad: true,
+                        },
+                    },
+                },
+            })
+            .catch(async (error: unknown) => {
+                console.warn("Arac detay ariza sorgusu basarisiz, fallback deneniyor.", error);
+                return (prisma as any).arizaKaydi
+                    .findMany({
+                        where: { aracId },
+                        orderBy: [{ durum: "asc" }, { bildirimTarihi: "desc" }],
+                    })
+                    .catch((fallbackError: unknown) => {
+                        console.warn("Arac detay ariza fallback sorgusu da basarisiz.", fallbackError);
+                        return [];
+                    });
+            }),
         (prisma as any).kasko.findMany({
             where: { aracId },
             orderBy: [{ aktifMi: "desc" }, { bitisTarihi: "desc" }],
@@ -141,6 +167,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         ...baseArac,
         muayene,
         bakimlar,
+        arizalar,
         kasko,
         trafikSigortasi,
         yakitlar,
@@ -209,6 +236,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
         kullaniciGecmisi: (aracRaw as any).kullaniciGecmisi || [],
         muayene: (aracRaw as any).muayene || [],
         bakimlar: (aracRaw as any).bakimlar || [],
+        arizalar: (aracRaw as any).arizalar || [],
         kasko: (aracRaw as any).kasko || [],
         trafikSigortasi: (aracRaw as any).trafikSigortasi || [],
         yakitlar: (aracRaw as any).yakitlar || [],

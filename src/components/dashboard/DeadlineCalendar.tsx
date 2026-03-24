@@ -61,8 +61,12 @@ const STATUS_META: Record<DashboardCalendarEvent["status"], { label: string; cla
     label: "Gecikti",
     className: "text-rose-700 bg-rose-50 border-rose-200",
   },
+  YUKSEK: {
+    label: "Yüksek",
+    className: "text-orange-700 bg-orange-50 border-orange-200",
+  },
   KRITIK: {
-    label: "Kritik",
+    label: "Yüksek",
     className: "text-orange-700 bg-orange-50 border-orange-200",
   },
   YAKLASTI: {

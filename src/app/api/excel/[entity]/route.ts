@@ -9,8 +9,15 @@ import { EXCEL_ENTITY_CONFIG, isExcelEntityKey } from "@/lib/excel-entities";
 type PrismaField = (typeof Prisma.dmmf.datamodel.models)[number]["fields"][number];
 type RowData = Record<string, unknown>;
 type WhereData = Record<string, unknown>;
+type ExportColumn =
+    | { key: string; type: "scalar"; fieldName: string }
+    | { key: string; type: "relation"; relationFieldName: string };
 type ModelDelegate = {
-    findMany?: (args?: { where?: WhereData; orderBy?: Record<string, "asc" | "desc"> }) => Promise<RowData[]>;
+    findMany?: (args?: {
+        where?: WhereData;
+        orderBy?: Record<string, "asc" | "desc">;
+        include?: Record<string, unknown>;
+    }) => Promise<RowData[]>;
     create?: (args: { data: RowData }) => Promise<unknown>;
     upsert?: (args: { where: WhereData; create: RowData; update: RowData }) => Promise<unknown>;
     findUnique?: (args: { where: WhereData; select: Record<string, boolean> }) => Promise<RowData | null>;
@@ -39,6 +46,119 @@ function getModelDelegate(source: unknown, modelName: string): ModelDelegate | n
 
 function getColumnFields(model: NonNullable<ReturnType<typeof getModelMeta>>) {
     return model.fields.filter((field) => field.kind === "scalar" || field.kind === "enum");
+}
+
+function getObjectFields(model: NonNullable<ReturnType<typeof getModelMeta>>) {
+    return model.fields.filter((field) => field.kind === "object");
+}
+
+function getRelationFromFields(field: PrismaField) {
+    const relationFromFields = (field as PrismaField & { relationFromFields?: string[] | null }).relationFromFields;
+    return Array.isArray(relationFromFields) ? relationFromFields : [];
+}
+
+function shouldHideInternalExportField(fieldName: string) {
+    if (fieldName === "id" || fieldName === "sifre") return true;
+    if (fieldName === "deletedAt" || fieldName === "deletedBy") return true;
+    if (fieldName.endsWith("Id")) return true;
+    return false;
+}
+
+function buildRelationDisplaySelect(modelName: string) {
+    const modelMeta = Prisma.dmmf.datamodel.models.find((model) => model.name === modelName);
+    if (!modelMeta) {
+        return { id: true };
+    }
+
+    const scalarFields = modelMeta.fields.filter((field) => field.kind === "scalar" || field.kind === "enum");
+    const scalarFieldNames = new Set(scalarFields.map((field) => field.name));
+    const preferredByModel: Record<string, string[]> = {
+        Arac: ["plaka", "saseNo", "marka", "model"],
+        Kullanici: ["ad", "soyad", "eposta"],
+        Sirket: ["ad"],
+    };
+    const preferred = preferredByModel[modelName] ?? ["ad", "plaka", "adSoyad", "eposta"];
+    const selected = preferred.filter((name) => scalarFieldNames.has(name));
+
+    if (selected.length === 0) {
+        const fallback = scalarFields.find((field) => !field.isId)?.name ?? scalarFields[0]?.name ?? "id";
+        return { [fallback]: true };
+    }
+
+    return Object.fromEntries(selected.map((name) => [name, true]));
+}
+
+function relationDisplayValue(value: unknown) {
+    if (!value || typeof value !== "object") return null;
+    const relation = value as Record<string, unknown>;
+
+    const ad = typeof relation.ad === "string" ? relation.ad.trim() : "";
+    const soyad = typeof relation.soyad === "string" ? relation.soyad.trim() : "";
+    const adSoyad = `${ad} ${soyad}`.trim();
+    if (adSoyad) return adSoyad;
+
+    const plaka = typeof relation.plaka === "string" ? relation.plaka.trim() : "";
+    const saseNo = typeof relation.saseNo === "string" ? relation.saseNo.trim() : "";
+    if (plaka && saseNo) return `${plaka} / ${saseNo}`;
+    if (plaka) return plaka;
+    if (saseNo) return saseNo;
+
+    if (typeof relation.ad === "string" && relation.ad.trim()) return relation.ad.trim();
+    if (typeof relation.eposta === "string" && relation.eposta.trim()) return relation.eposta.trim();
+    return null;
+}
+
+function getForeignKeyBaseName(fieldName: string) {
+    return fieldName.endsWith("Id") ? fieldName.slice(0, -2) : fieldName;
+}
+
+function getExportColumnKeyForRelationId(fieldName: string, usedKeys: Set<string>) {
+    const base = getForeignKeyBaseName(fieldName);
+    const candidates = [base, `${base}Adi`, `${base}Bilgi`];
+
+    for (const candidate of candidates) {
+        if (!usedKeys.has(candidate)) return candidate;
+    }
+
+    let suffix = 2;
+    while (usedKeys.has(`${base}${suffix}`)) {
+        suffix += 1;
+    }
+    return `${base}${suffix}`;
+}
+
+function buildExportColumns(
+    fields: PrismaField[],
+    relationFieldByForeignKey: Map<string, PrismaField>
+) {
+    const exportColumns: ExportColumn[] = [];
+    const usedKeys = new Set<string>();
+
+    for (const field of fields) {
+        if (shouldHideInternalExportField(field.name)) {
+            if (field.name.endsWith("Id")) {
+                const relationField = relationFieldByForeignKey.get(field.name);
+                if (!relationField) continue;
+                const key = getExportColumnKeyForRelationId(field.name, usedKeys);
+                usedKeys.add(key);
+                exportColumns.push({
+                    key,
+                    type: "relation",
+                    relationFieldName: relationField.name,
+                });
+            }
+            continue;
+        }
+
+        usedKeys.add(field.name);
+        exportColumns.push({
+            key: field.name,
+            type: "scalar",
+            fieldName: field.name,
+        });
+    }
+
+    return exportColumns;
 }
 
 function toExportCell(value: unknown) {
@@ -282,7 +402,15 @@ export async function GET(
             return NextResponse.json({ error: "Model metadata bulunamadi." }, { status: 500 });
         }
         const fields = getColumnFields(modelMeta);
-        const columns = fields.map((field) => field.name);
+        const objectFields = getObjectFields(modelMeta);
+        const relationFieldByForeignKey = new Map<string, PrismaField>();
+        for (const objectField of objectFields) {
+            for (const foreignKeyField of getRelationFromFields(objectField)) {
+                relationFieldByForeignKey.set(foreignKeyField, objectField);
+            }
+        }
+        const exportColumns = buildExportColumns(fields, relationFieldByForeignKey);
+        const columns = exportColumns.map((column) => column.key);
 
         const selectedSirketId = req.nextUrl.searchParams.get("sirket");
         const selectedYil = parseSelectedYil(req.nextUrl.searchParams.get("yil"));
@@ -298,15 +426,26 @@ export async function GET(
         }
 
         const orderByField = fields.find((field) => field.isId)?.name || columns[0];
+        const include = Object.fromEntries(
+            [...relationFieldByForeignKey.entries()].map(([, relationField]) => [
+                relationField.name,
+                { select: buildRelationDisplaySelect(relationField.type) },
+            ])
+        );
         const rows = await modelDelegate.findMany({
             where: where ? (where as WhereData) : undefined,
             orderBy: orderByField ? { [orderByField]: "asc" } : undefined,
+            include: Object.keys(include).length > 0 ? include : undefined,
         });
 
         const normalizedRows = rows.map((row) => {
             const output: Record<string, unknown> = {};
-            for (const column of columns) {
-                output[column] = toExportCell(row[column]);
+            for (const column of exportColumns) {
+                if (column.type === "scalar") {
+                    output[column.key] = toExportCell(row[column.fieldName]);
+                    continue;
+                }
+                output[column.key] = toExportCell(relationDisplayValue(row[column.relationFieldName]));
             }
             return output;
         });

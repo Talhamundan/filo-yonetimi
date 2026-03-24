@@ -15,6 +15,7 @@ type ExcelToolbarOption = {
 type ExcelTransferToolbarProps = {
     options: ExcelToolbarOption[];
     className?: string;
+    hideEntitySelect?: boolean;
 };
 
 function getDownloadFileName(contentDisposition: string | null, fallback: string) {
@@ -47,7 +48,7 @@ async function getErrorMessage(response: Response, fallback: string) {
     return fallback;
 }
 
-export default function ExcelTransferToolbar({ options, className }: ExcelTransferToolbarProps) {
+export default function ExcelTransferToolbar({ options, className, hideEntitySelect = false }: ExcelTransferToolbarProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
     const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -140,17 +141,19 @@ export default function ExcelTransferToolbar({ options, className }: ExcelTransf
                 className="hidden"
                 onChange={handleImportFileChange}
             />
-            <select
-                value={selectedEntity}
-                onChange={(e) => setSelectedEntity(e.target.value as ExcelEntityKey)}
-                className="h-10 min-w-[140px] shrink-0 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
-            >
-                {options.map((option) => (
-                    <option key={option.entity} value={option.entity}>
-                        {option.label}
-                    </option>
-                ))}
-            </select>
+            {!hideEntitySelect ? (
+                <select
+                    value={selectedEntity}
+                    onChange={(e) => setSelectedEntity(e.target.value as ExcelEntityKey)}
+                    className="h-10 min-w-[140px] shrink-0 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700"
+                >
+                    {options.map((option) => (
+                        <option key={option.entity} value={option.entity}>
+                            {option.label}
+                        </option>
+                    ))}
+                </select>
+            ) : null}
             <Button
                 type="button"
                 variant="outline"

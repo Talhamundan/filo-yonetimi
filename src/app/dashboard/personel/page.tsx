@@ -1,14 +1,16 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
 import PersonelClient from "./Client";
-import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
+import { getCurrentUserRole, getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
+import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 
-const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR"> = {
+const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR" | "TEKNIK"> = {
     ADMIN: "ADMIN",
     YETKILI: "YETKILI",
     SOFOR: "SOFOR",
+    TEKNIK: "TEKNIK",
     YONETICI: "YETKILI",
     MUDUR: "YETKILI",
     MUHASEBECI: "YETKILI",
@@ -44,11 +46,12 @@ function findDriverAtDate(
 }
 
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters, role] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
         getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
+        getCurrentUserRole(),
     ]);
     const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
 
@@ -68,7 +71,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             OR: [
                 { ad: { contains: q, mode: "insensitive" } },
                 { soyad: { contains: q, mode: "insensitive" } },
-                { eposta: { contains: q, mode: "insensitive" } },
+                { hesap: { is: { kullaniciAdi: { contains: q, mode: "insensitive" } } } },
                 { telefon: { contains: q, mode: "insensitive" } },
                 { tcNo: { contains: q, mode: "insensitive" } },
             ],
@@ -88,6 +91,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             orderBy: { ad: 'asc' },
             include: { 
                 sirket: true,
+                hesap: { select: { kullaniciAdi: true } },
                 arac: { select: { id: true, plaka: true, marka: true, model: true } }
             }
         }),
@@ -103,11 +107,11 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         }).catch(() => []),
         (prisma as any).yakit.findMany({
             where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
-            select: { aracId: true, tarih: true, tutar: true, soforId: true },
+            select: { id: true, aracId: true, tarih: true, tutar: true, litre: true, km: true, soforId: true },
         }).catch(async () => {
             const fallbackRows = await (prisma as any).yakit.findMany({
                 where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
-                select: { aracId: true, tarih: true, tutar: true },
+                select: { id: true, aracId: true, tarih: true, tutar: true, litre: true, km: true },
             }).catch(() => []);
             return (fallbackRows || []).map((row: any) => ({ ...row, soforId: null }));
         }),
@@ -177,14 +181,35 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         upsertCost(soforId, { ariza: tutar, toplam: tutar });
     }
 
+    const fuelMetricsByDriverId = buildFuelIntervalMetrics(
+        (yakitKayitlari as Array<{
+            id: string;
+            aracId: string;
+            tarih: Date;
+            tutar: number;
+            litre: number;
+            km: number;
+            soforId: string | null;
+        }>).map((yakit) => ({
+            id: yakit.id,
+            aracId: yakit.aracId,
+            tarih: yakit.tarih,
+            km: yakit.km,
+            litre: yakit.litre,
+            tutar: yakit.tutar,
+            soforId: yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih),
+        }))
+    ).byDriverId;
+
     const formattedData = personeller.map((p: any) => {
         const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
+        const yakitOrtalama = fuelMetricsByDriverId.get(p.id);
         return {
             id: p.id,
             adSoyad: `${p.ad} ${p.soyad}`,
             tcNo: p.tcNo || "-",
             telefon: p.telefon || "-",
-            eposta: p.eposta || "-",
+            girisAdi: p.hesap?.kullaniciAdi || "-",
             rol: p.rol,
             sirketAdi: p.sirket?.ad || "Bağımsız",
             sirketId: p.sirketId || "",
@@ -197,8 +222,11 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
                 ariza: maliyet.ariza,
             },
             toplamMaliyet: maliyet.toplam,
+            ortalamaYakit100Km: yakitOrtalama?.averageLitresPer100Km ?? null,
+            ortalamaYakitKmBasiMaliyet: yakitOrtalama?.averageCostPerKm ?? null,
+            ortalamaYakitIntervalSayisi: yakitOrtalama?.intervalCount ?? 0,
         };
     });
 
-    return <PersonelClient initialData={formattedData} sirketler={sirketler} />;
+    return <PersonelClient initialData={formattedData} sirketler={sirketler} isTeknik={role === "TEKNIK"} />;
 }

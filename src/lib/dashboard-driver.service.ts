@@ -77,13 +77,15 @@ function buildDriverCosts(params: {
     yakitRows: DriverYakitRow[];
     arizaRows: DriverArizaRow[];
     adSoyadMap: Record<string, string>;
+    activeDriverIds: Set<string>;
     zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>>;
 }) {
-    const { cezaRows, yakitRows, arizaRows, adSoyadMap, zimmetByAracId } = params;
+    const { cezaRows, yakitRows, arizaRows, adSoyadMap, activeDriverIds, zimmetByAracId } = params;
     const map: Record<string, DriverAccumulator> = {};
 
     for (const ceza of cezaRows) {
         if (!ceza.soforId) continue;
+        if (!activeDriverIds.has(ceza.soforId)) continue;
         const row = getOrCreateDriverCost(map, ceza.soforId, adSoyadMap);
         row.ceza += toNumber(ceza.tutar);
         row.toplam += toNumber(ceza.tutar);
@@ -92,6 +94,7 @@ function buildDriverCosts(params: {
     for (const yakit of yakitRows) {
         const soforId = yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
         if (!soforId) continue;
+        if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
         row.yakit += toNumber(yakit.tutar);
         row.toplam += toNumber(yakit.tutar);
@@ -100,6 +103,7 @@ function buildDriverCosts(params: {
     for (const ariza of arizaRows) {
         const soforId = findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
         if (!soforId) continue;
+        if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
         row.ariza += toNumber(ariza.tutar);
         row.toplam += toNumber(ariza.tutar);
@@ -129,7 +133,9 @@ export async function getDashboardDriverData(params: {
         cezaRowsPrevious,
     ] = await Promise.all([
         prisma.kullanici.findMany({
-            where: scope as Prisma.KullaniciWhereInput,
+            where: {
+                AND: [scope as Prisma.KullaniciWhereInput, { deletedAt: null }],
+            },
             select: { id: true, ad: true, soyad: true },
         }),
         prisma.kullaniciZimmet.findMany({
@@ -171,8 +177,10 @@ export async function getDashboardDriverData(params: {
     ]);
 
     const adSoyadMap: Record<string, string> = {};
+    const activeDriverIds = new Set<string>();
     for (const kullanici of kullanicilar) {
         adSoyadMap[kullanici.id] = `${kullanici.ad} ${kullanici.soyad}`.trim();
+        activeDriverIds.add(kullanici.id);
     }
 
     const zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>> = {};
@@ -193,6 +201,7 @@ export async function getDashboardDriverData(params: {
         yakitRows: yakitRowsCurrent,
         arizaRows: arizaRowsCurrent,
         adSoyadMap,
+        activeDriverIds,
         zimmetByAracId,
     });
     const previousRows = buildDriverCosts({
@@ -200,6 +209,7 @@ export async function getDashboardDriverData(params: {
         yakitRows: yakitRowsPrevious,
         arizaRows: arizaRowsPrevious,
         adSoyadMap,
+        activeDriverIds,
         zimmetByAracId,
     });
 

@@ -141,7 +141,7 @@ export async function permanentlyDeleteTrashRecord(entity: SoftDeleteEntity, id:
         }
 
         const snapshot = await getSoftDeleteSnapshot(entity, id);
-        await hardDeleteEntity(entity, id);
+        await hardDeleteEntity(entity, id, { mode: "trash" });
 
         await logActivity({
             actionType: ActivityActionType.DELETE,
@@ -156,7 +156,10 @@ export async function permanentlyDeleteTrashRecord(entity: SoftDeleteEntity, id:
         return { success: true };
     } catch (error) {
         console.error(error);
-        return { success: false, error: "Kalıcı silme işlemi başarısız." };
+        return {
+            success: false,
+            error: error instanceof Error ? error.message : "Kalıcı silme işlemi başarısız.",
+        };
     }
 }
 

@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../../../components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import {
-    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, ShieldAlert, MapPin, FileDigit, Settings, Receipt, FileArchive, CreditCard, FileText, Plus
+    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, CreditCard, FileText, Plus
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -892,6 +892,9 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                         <TabsTrigger value="bakim" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Wrench size={16} className="mr-2" /> Servis Kayıtları
                         </TabsTrigger>
+                        <TabsTrigger value="ariza" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
+                            <AlertTriangle size={16} className="mr-2" /> Arıza Kayıtları
+                        </TabsTrigger>
                         <TabsTrigger value="yakit" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Fuel size={16} className="mr-2" /> Yakıt Kayıtları
                         </TabsTrigger>
@@ -1138,7 +1141,75 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                             </Card>
                         </TabsContent>
 
-                        {/* 6. YAKIT */}
+                        {/* 6. ARIZA */}
+                        <TabsContent value="ariza">
+                            <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
+                                <Table>
+                                    <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
+                                        <TableRow>
+                                            <TableHead className="font-semibold text-slate-500">Bildirim Tarihi</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Personel</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Öncelik</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Durum</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Açıklama</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {arac.arizalar && arac.arizalar.length > 0 ? (
+                                            arac.arizalar.map((a: AracDetaySaaS) => (
+                                                <TableRow key={a.id}>
+                                                    <TableCell className="text-slate-700">{formatDate(a.bildirimTarihi)}</TableCell>
+                                                    <TableCell className="text-slate-900">
+                                                        {a.sofor?.id ? (
+                                                            <PersonelLink personelId={a.sofor.id} className="hover:text-indigo-600 hover:underline">
+                                                                {`${a.sofor.ad || ""} ${a.sofor.soyad || ""}`.trim() || "-"}
+                                                            </PersonelLink>
+                                                        ) : (
+                                                            "-"
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {(a.oncelik === "YUKSEK" || a.oncelik === "KRITIK") ? (
+                                                            <Badge className="bg-orange-100 text-orange-700 border-0 shadow-none">Yüksek</Badge>
+                                                        ) : a.oncelik === "ORTA" ? (
+                                                            <Badge className="bg-blue-100 text-blue-700 border-0 shadow-none">Orta</Badge>
+                                                        ) : (
+                                                            <Badge className="bg-slate-100 text-slate-700 border-0 shadow-none">Düşük</Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {a.durum === "ACIK" ? (
+                                                            <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none">Açık</Badge>
+                                                        ) : a.durum === "SERVISTE" ? (
+                                                            <Badge className="bg-amber-100 text-amber-700 border-0 shadow-none">Serviste</Badge>
+                                                        ) : a.durum === "TAMAMLANDI" ? (
+                                                            <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none">Tamamlandı</Badge>
+                                                        ) : (
+                                                            <Badge className="bg-slate-100 text-slate-700 border-0 shadow-none">İptal</Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-slate-600 max-w-[280px] truncate" title={a.aciklama || "-"}>
+                                                        {a.aciklama || "-"}
+                                                    </TableCell>
+                                                    <TableCell className="font-bold text-slate-900 text-right">
+                                                        ₺{Number(a.tutar || 0).toLocaleString("tr-TR")}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        ) : (
+                                            <TableRow>
+                                                <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                                                    Arıza kaydı bulunmuyor.
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </Card>
+                        </TabsContent>
+
+                        {/* 7. YAKIT */}
                         <TabsContent value="yakit">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -1170,7 +1241,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                             </Card>
                         </TabsContent>
 
-                        {/* 7. MASRAFLAR */}
+                        {/* 8. MASRAFLAR */}
                         <TabsContent value="masraflar">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -1198,7 +1269,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                             </Card>
                         </TabsContent>
 
-                        {/* 8. CEZALAR */}
+                        {/* 9. CEZALAR */}
                         <TabsContent value="ceza">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
@@ -1268,7 +1339,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                             </Card>
                         </TabsContent>
 
-                        {/* 9. SİGORTA & KASKO */}
+                        {/* 10. SİGORTA & KASKO */}
                         <TabsContent value="sigorta">
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">

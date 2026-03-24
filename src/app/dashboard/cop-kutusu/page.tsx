@@ -3,6 +3,20 @@ import { getModelFilterWithOptions, getSirketListFilter } from "@/lib/auth-utils
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import TrashClient, { type TrashRow } from "./trash-client";
 
+type DeletedDataStats = {
+    total: number;
+    pendingPermanentDelete: number;
+    oldestDeletedAt: string | null;
+    byEntity: {
+        arac: number;
+        masraf: number;
+        bakim: number;
+        dokuman: number;
+        ceza: number;
+        kullanici: number;
+    };
+};
+
 function parseString(value: string | string[] | undefined) {
     if (!value) return null;
     return Array.isArray(value) ? value[0] || null : value;
@@ -44,6 +58,82 @@ export default async function CopKutusuPage(props: { searchParams?: Promise<Dash
     ]);
 
     const sirketMap = new Map(sirketler.map((s) => [s.id, s.ad]));
+    const deletionThreshold = new Date();
+    deletionThreshold.setDate(deletionThreshold.getDate() - 30);
+
+    const deletedAracWhere: Record<string, unknown> = { ...(aracFilter as Record<string, unknown>), deletedAt: { not: null } };
+    const deletedMasrafWhere: Record<string, unknown> = { ...(masrafFilter as Record<string, unknown>), deletedAt: { not: null } };
+    const deletedBakimWhere: Record<string, unknown> = { ...(bakimFilter as Record<string, unknown>), deletedAt: { not: null } };
+    const deletedDokumanWhere: Record<string, unknown> = { ...(dokumanFilter as Record<string, unknown>), deletedAt: { not: null } };
+    const deletedCezaWhere: Record<string, unknown> = { ...(cezaFilter as Record<string, unknown>), deletedAt: { not: null } };
+    const deletedKullaniciWhere: Record<string, unknown> = { ...(kullaniciFilter as Record<string, unknown>), deletedAt: { not: null } };
+
+    const [
+        aracDeletedCount,
+        masrafDeletedCount,
+        bakimDeletedCount,
+        dokumanDeletedCount,
+        cezaDeletedCount,
+        kullaniciDeletedCount,
+        aracPurgeCount,
+        masrafPurgeCount,
+        bakimPurgeCount,
+        dokumanPurgeCount,
+        cezaPurgeCount,
+        kullaniciPurgeCount,
+        oldestArac,
+        oldestMasraf,
+        oldestBakim,
+        oldestDokuman,
+        oldestCeza,
+        oldestKullanici,
+    ] = await Promise.all([
+        prisma.arac.count({ where: deletedAracWhere as never }),
+        prisma.masraf.count({ where: deletedMasrafWhere as never }),
+        prisma.bakim.count({ where: deletedBakimWhere as never }),
+        prisma.dokuman.count({ where: deletedDokumanWhere as never }),
+        prisma.ceza.count({ where: deletedCezaWhere as never }),
+        prisma.kullanici.count({ where: deletedKullaniciWhere as never }),
+        prisma.arac.count({ where: { AND: [deletedAracWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.masraf.count({ where: { AND: [deletedMasrafWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.bakim.count({ where: { AND: [deletedBakimWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.dokuman.count({ where: { AND: [deletedDokumanWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.ceza.count({ where: { AND: [deletedCezaWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.kullanici.count({ where: { AND: [deletedKullaniciWhere, { deletedAt: { lte: deletionThreshold } }] } as never }),
+        prisma.arac.findFirst({ where: deletedAracWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+        prisma.masraf.findFirst({ where: deletedMasrafWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+        prisma.bakim.findFirst({ where: deletedBakimWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+        prisma.dokuman.findFirst({ where: deletedDokumanWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+        prisma.ceza.findFirst({ where: deletedCezaWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+        prisma.kullanici.findFirst({ where: deletedKullaniciWhere as never, select: { deletedAt: true }, orderBy: { deletedAt: "asc" } }),
+    ]);
+
+    const oldestDeletedAt =
+        [oldestArac, oldestMasraf, oldestBakim, oldestDokuman, oldestCeza, oldestKullanici]
+            .map((item) => item?.deletedAt)
+            .filter((value): value is Date => Boolean(value))
+            .sort((a, b) => a.getTime() - b.getTime())[0] || null;
+
+    const deletedStats: DeletedDataStats = {
+        total:
+            aracDeletedCount +
+            masrafDeletedCount +
+            bakimDeletedCount +
+            dokumanDeletedCount +
+            cezaDeletedCount +
+            kullaniciDeletedCount,
+        pendingPermanentDelete:
+            aracPurgeCount + masrafPurgeCount + bakimPurgeCount + dokumanPurgeCount + cezaPurgeCount + kullaniciPurgeCount,
+        oldestDeletedAt: oldestDeletedAt ? oldestDeletedAt.toISOString() : null,
+        byEntity: {
+            arac: aracDeletedCount,
+            masraf: masrafDeletedCount,
+            bakim: bakimDeletedCount,
+            dokuman: dokumanDeletedCount,
+            ceza: cezaDeletedCount,
+            kullanici: kullaniciDeletedCount,
+        },
+    };
 
     const [araclar, masraflar, bakimlar, dokumanlar, cezalar, kullanicilar] = await Promise.all([
         entityFilter && entityFilter !== "arac"
@@ -151,5 +241,5 @@ export default async function CopKutusuPage(props: { searchParams?: Promise<Dash
         .filter((row) => (q ? row.summary.toLocaleLowerCase("tr-TR").includes(q) : true))
         .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
 
-    return <TrashClient rows={rows} sirketler={sirketler} />;
+    return <TrashClient rows={rows} sirketler={sirketler} deletedStats={deletedStats} />;
 }

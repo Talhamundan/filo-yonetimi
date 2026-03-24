@@ -1,26 +1,32 @@
 "use server";
 
+import { iller } from "@prisma/client";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
+import { canRoleAccessAllCompanies, normalizeRole } from "@/lib/policy";
 
 const PATH = "/dashboard/sirketler";
 
-async function assertAdmin() {
+async function assertCompanyManager() {
     const session = await auth();
-    if (!session?.user || (session.user as any).rol !== "ADMIN") {
+    const user = session?.user as { rol?: string | null; sirketId?: string | null } | undefined;
+    const role = normalizeRole(user?.rol || null);
+    const hasGlobalCompanyAccess = canRoleAccessAllCompanies(user?.rol || null, user?.sirketId || null);
+    const canManageCompanies = role === "ADMIN" || (role === "YETKILI" && hasGlobalCompanyAccess);
+    if (!canManageCompanies) {
         throw new Error("Bu işlem için yetkiniz yok.");
     }
 }
 
 export async function createSirket(data: { ad: string; bulunduguIl: string; vergiNo?: string }) {
     try {
-        await assertAdmin();
+        await assertCompanyManager();
 
         await prisma.sirket.create({
             data: {
                 ad: data.ad,
-                bulunduguIl: data.bulunduguIl as any,
+                bulunduguIl: data.bulunduguIl as iller,
                 vergiNo: data.vergiNo || null
             }
         });
@@ -34,13 +40,13 @@ export async function createSirket(data: { ad: string; bulunduguIl: string; verg
 
 export async function updateSirket(id: string, data: { ad: string; bulunduguIl: string; vergiNo?: string }) {
     try {
-        await assertAdmin();
+        await assertCompanyManager();
 
         await prisma.sirket.update({
             where: { id },
             data: {
                 ad: data.ad,
-                bulunduguIl: data.bulunduguIl as any,
+                bulunduguIl: data.bulunduguIl as iller,
                 vergiNo: data.vergiNo || null
             }
         });
@@ -54,7 +60,7 @@ export async function updateSirket(id: string, data: { ad: string; bulunduguIl: 
 
 export async function deleteSirket(id: string) {
     try {
-        await assertAdmin();
+        await assertCompanyManager();
 
         await prisma.sirket.delete({ where: { id } });
         revalidatePath(PATH);

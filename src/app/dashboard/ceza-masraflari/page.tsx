@@ -4,6 +4,7 @@ import { CezaMasrafRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName, isDeletedPersonel } from "@/lib/personel-display";
 
 async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
     try {
@@ -30,7 +31,7 @@ async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
                         sirket: { select: { ad: true } },
                     },
                 },
-                kullanici: { select: { id: true, ad: true, soyad: true } },
+                kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
             },
         });
     } catch (error) {
@@ -130,7 +131,7 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
                     bulunduguIl: true,
                     guncelKm: true,
                     kullanici: {
-                        select: { id: true, ad: true, soyad: true },
+                        select: { id: true, ad: true, soyad: true, deletedAt: true },
                     },
                     sirket: { select: { ad: true } },
                 },
@@ -157,8 +158,16 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
 
     const rows: CezaMasrafRow[] = (cezalarRaw as any[]).map((ceza: any) => {
         const arac = ceza.arac || aracMap.get(ceza.aracId);
-        const sofor = ceza.kullanici || (ceza.soforId ? soforMap.get(ceza.soforId) : null);
+        const cezaKullanicisi = ceza.kullanici || null;
+        const cezaSoforuSilinmis = isDeletedPersonel(cezaKullanicisi);
+        const sofor = cezaSoforuSilinmis ? null : (cezaKullanicisi || (ceza.soforId ? soforMap.get(ceza.soforId) : null));
+        const hasLegacySoforRef = Boolean(ceza.soforId);
         const tarih = ceza.tarih ?? ceza.cezaTarihi ?? null;
+        const soforAdSoyad = sofor
+            ? getPersonelDisplayName(sofor)
+            : hasLegacySoforRef
+                ? ESKI_PERSONEL_ETIKETI
+                : "-";
 
         return {
             id: ceza.id,
@@ -167,8 +176,8 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
             aracMarka: arac?.marka || "",
             aracModel: arac?.model || "",
             sirketAd: arac?.sirket?.ad || null,
-            soforId: ceza.soforId || null,
-            soforAdSoyad: sofor ? `${sofor.ad} ${sofor.soyad}` : "-",
+            soforId: getActivePersonelId(sofor),
+            soforAdSoyad,
             tarih,
             sonOdemeTarihi: ceza.sonOdemeTarihi ?? null,
             cezaMaddesi: ceza.cezaMaddesi || "Belirtilmedi",
@@ -189,8 +198,8 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
                 model: a.model,
                 bulunduguIl: a.bulunduguIl,
                 guncelKm: a.guncelKm,
-                aktifSoforId: a.kullanici?.id || null,
-                aktifSoforAdSoyad: a.kullanici ? `${a.kullanici.ad} ${a.kullanici.soyad}` : null,
+                aktifSoforId: getActivePersonelId(a.kullanici),
+                aktifSoforAdSoyad: a.kullanici ? getPersonelDisplayName(a.kullanici) : null,
             }))}
             soforler={(soforlerRaw as any[]).map((s: any) => ({ id: s.id, adSoyad: `${s.ad} ${s.soyad}` }))}
         />

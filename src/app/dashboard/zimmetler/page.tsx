@@ -1,8 +1,9 @@
 import { prisma } from "../../../lib/prisma";
 import ZimmetlerClient from "./client";
 import { SoforZimmetRow } from "./columns";
-import { getModelFilter } from "@/lib/auth-utils";
+import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -40,18 +41,48 @@ function findZimmetIdForEvent(
 }
 
 export default async function ZimmetlerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil] = await Promise.all([
+    const [selectedSirketId, selectedYil, commonFilters, role] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getCommonListFilters(props.searchParams),
+        getCurrentUserRole(),
     ]);
     const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
     const personelFilter = await getModelFilter('kullanici', selectedSirketId);
     const zimmetWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "baslangic", selectedYil);
+    const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+    const whereParts: Record<string, unknown>[] = [zimmetWhere as Record<string, unknown>];
+
+    if (commonFilters.q) {
+        const q = commonFilters.q;
+        whereParts.push({
+            OR: [
+                { notlar: { contains: q, mode: "insensitive" } },
+                { kullanici: { ad: { contains: q, mode: "insensitive" } } },
+                { kullanici: { soyad: { contains: q, mode: "insensitive" } } },
+                { kullanici: { tcNo: { contains: q, mode: "insensitive" } } },
+                { arac: { plaka: { contains: q, mode: "insensitive" } } },
+                { arac: { marka: { contains: q, mode: "insensitive" } } },
+                { arac: { model: { contains: q, mode: "insensitive" } } },
+            ],
+        });
+    }
+    if (commonFilters.status) {
+        if (commonFilters.status === "AKTIF") {
+            whereParts.push({ bitis: null });
+        } else if (commonFilters.status === "TAMAMLANDI") {
+            whereParts.push({ bitis: { not: null } });
+        }
+    }
+    if (dateRange) {
+        whereParts.push({ baslangic: dateRange });
+    }
+    const scopedZimmetWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
 
     const [zimmetlerRaw, araclar, kullanicilar] = await Promise.all([
         (prisma as any).kullaniciZimmet.findMany({
-            where: zimmetWhere as any,
+            where: scopedZimmetWhere as any,
             orderBy: { baslangic: 'desc' },
             include: {
                 arac: { include: { sirket: { select: { ad: true } } } },
@@ -194,6 +225,7 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
             initialZimmetler={zimmetlerWithCost as unknown as SoforZimmetRow[]} 
             araclar={araclar}
             kullanicilar={kullanicilar.map((k: any) => ({ id: k.id, adSoyad: `${k.ad} ${k.soyad}` }))}
+            isTeknik={role === "TEKNIK"}
         />
     );
 }

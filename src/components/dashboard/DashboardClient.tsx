@@ -6,15 +6,15 @@ import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
 import {
     Wallet,
-    ShieldAlert,
+    ArrowRight,
     TrendingUp,
-    Fuel,
-    CalendarClock,
-    ReceiptText,
-    FileClock,
+    Wrench,
+    Car,
+    ClipboardCheck,
     AlertTriangle,
     Truck,
     Users,
+    Fuel,
 } from "lucide-react";
 import {
     BarChart,
@@ -29,21 +29,58 @@ import {
     Pie,
     Cell,
 } from 'recharts';
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { differenceInCalendarDays } from "date-fns";
 import { fetcher } from "@/lib/fetcher";
 import type { DashboardData } from "@/lib/dashboard-data";
 import DeadlineCalendar from "./DeadlineCalendar";
+import YeniZimmetShortcut from "./shortcuts/YeniZimmetShortcut";
+import YeniAracShortcut from "./shortcuts/YeniAracShortcut";
+import YeniPersonelShortcut from "./shortcuts/YeniPersonelShortcut";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 interface DashboardClientProps {
     initialData: DashboardData;
+    isTechnicalPersonnel?: boolean;
+    recentRecords?: any[];
+    role?: string | null;
 }
+
+const ARIZA_ONCELIK_LABEL = {
+    KRITIK: "Yüksek",
+    YUKSEK: "Yüksek",
+    ORTA: "Orta",
+    DUSUK: "Düşük",
+} as const;
+
+const ARIZA_ONCELIK_TONE = {
+    KRITIK: "text-orange-700",
+    YUKSEK: "text-orange-700",
+    ORTA: "text-amber-700",
+    DUSUK: "text-slate-700",
+} as const;
 
 const EVENT_TYPE_LABEL = {
     TRAFIK: "Trafik",
     KASKO: "Kasko",
     MUAYENE: "Muayene",
     CEZA: "Ceza",
+} as const;
+
+const EVENT_STATUS_LABEL = {
+    GECIKTI: "Geciken",
+    YUKSEK: "Yüksek",
+    KRITIK: "Yüksek",
+    YAKLASTI: "Yaklaşan",
+    PLANLI: "Planlı",
+} as const;
+
+const EVENT_STATUS_TONE = {
+    GECIKTI: "text-rose-700",
+    YUKSEK: "text-orange-700",
+    KRITIK: "text-orange-700",
+    YAKLASTI: "text-amber-700",
+    PLANLI: "text-slate-700",
 } as const;
 
 const COST_CATEGORY_LEGEND = [
@@ -57,7 +94,8 @@ const COST_CATEGORY_LEGEND = [
     { key: "diger", label: "Diğer", color: "#94A3B8" },
 ] as const;
 
-export default function DashboardClient({ initialData }: DashboardClientProps) {
+export default function DashboardClient({ initialData, isTechnicalPersonnel, recentRecords, role }: DashboardClientProps) {
+    const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
     const searchParams = useSearchParams();
     const selectedSirketId = searchParams.get("sirket");
@@ -69,14 +107,23 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     if (selectedAy) apiParams.set("ay", selectedAy);
     const dashboardApiKey = apiParams.toString() ? `/api/dashboard?${apiParams.toString()}` : "/api/dashboard";
 
-    const { data } = useSWR<DashboardData>(dashboardApiKey, fetcher, {
+    const { data } = useSWR<DashboardData>(isTechnicalPersonnel ? null : dashboardApiKey, fetcher, {
         refreshInterval: 30000,
         revalidateOnFocus: true,
         shouldRetryOnError: true,
         fallbackData: initialData,
     });
 
-    const { metrics, alerts, calendarEvents, monthlyExpenseTrend, vehicleCostReport, driverCostReport } = data!;
+    const {
+        metrics = {} as any,
+        calendarEvents = [],
+        operationSummary = { kritik: 0, yuksek: 0, orta: 0, dusuk: 0, toplam: 0, serviste: 0 },
+        operationArizalar = [],
+        monthlyExpenseTrend = [],
+        vehicleCostReport = [],
+        driverCostReport = [],
+        companyCostReport = [],
+    } = data || {} as any;
 
     const calendarCardRef = useRef<HTMLDivElement | null>(null);
     const [calendarCardHeight, setCalendarCardHeight] = React.useState<number | null>(null);
@@ -101,7 +148,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                 key: category.key,
                 name: category.label,
                 color: category.color,
-                value: monthlyExpenseTrend.reduce((sum, row) => sum + Number(row[category.key] || 0), 0),
+                value: monthlyExpenseTrend.reduce((sum: number, row: any) => sum + Number(row[category.key] || 0), 0),
             }))
             .filter((item) => item.value > 0);
     }, [monthlyExpenseTrend]);
@@ -124,44 +171,110 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
     }, [selectedMonthRow]);
 
     const yearlyPieTotal = useMemo(
-        () => yearlyPieData.reduce((sum, item) => sum + item.value, 0),
+        () => yearlyPieData.reduce((sum: number, item: { value: number }) => sum + item.value, 0),
         [yearlyPieData]
     );
     const monthlyPieTotal = useMemo(
-        () => monthlyPieData.reduce((sum, item) => sum + item.value, 0),
+        () => monthlyPieData.reduce((sum: number, item: { value: number }) => sum + item.value, 0),
         [monthlyPieData]
     );
+    const isAdminOrYetkili = role === "ADMIN" || role === "YETKILI";
+    const shouldShowCompanyCostReport = role === "ADMIN" || (role === "YETKILI" && canAccessAllCompanies);
+    const sortedCompanyCostReport = useMemo(
+        () => [...companyCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)),
+        [companyCostReport]
+    );
+    const topCompanyCost = sortedCompanyCostReport.length > 0 ? sortedCompanyCostReport[0] : null;
+    const monthlyServiceCost = Number(selectedMonthRow?.bakim || 0);
     const vehicleStackCategories = useMemo(
         () =>
             COST_CATEGORY_LEGEND.filter((category) =>
-                vehicleCostReport.some((row) => Number(row[category.key] || 0) > 0)
+                vehicleCostReport.some((row: any) => Number(row[category.key] || 0) > 0)
             ),
         [vehicleCostReport]
     );
+    const vehicleReportTotal = useMemo(
+        () => vehicleCostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
+        [vehicleCostReport]
+    );
+    const driverReportTotal = useMemo(
+        () => driverCostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
+        [driverCostReport]
+    );
 
-    const calculateDays = (dateStr: string) => {
-        return differenceInCalendarDays(new Date(dateStr), new Date());
-    };
+    const urgentOperationArizalar = useMemo(
+        () => operationArizalar.filter((row: any) => row.oncelik === "KRITIK" || row.oncelik === "YUKSEK").slice(0, 8),
+        [operationArizalar]
+    );
 
-    const riskSummary = useMemo(() => {
-        const gecikti = calendarEvents.filter((event) => event.status === "GECIKTI").length;
-        const kritik = calendarEvents.filter((event) => event.status === "KRITIK").length;
-        const yaklasti = calendarEvents.filter((event) => event.status === "YAKLASTI").length;
+    const otherOperationArizalar = useMemo(
+        () => operationArizalar.filter((row: any) => row.oncelik === "ORTA" || row.oncelik === "DUSUK").slice(0, 8),
+        [operationArizalar]
+    );
+    const yuksekOncelikSayisi = Number(operationSummary.yuksek || 0) + Number(operationSummary.kritik || 0);
+    const gecikenOperasyonSayisi = useMemo(
+        () => calendarEvents.filter((event: any) => event.status === "GECIKTI").length,
+        [calendarEvents]
+    );
+    const yuksekOperasyonSayisi = useMemo(
+        () => calendarEvents.filter((event: any) => event.status === "YUKSEK" || event.status === "KRITIK").length,
+        [calendarEvents]
+    );
+    const yaklasanOperasyonSayisi = useMemo(
+        () => calendarEvents.filter((event: any) => event.status === "YAKLASTI").length,
+        [calendarEvents]
+    );
+    const urgentOperationItems = useMemo(() => {
+        const urgentEvents = calendarEvents
+            .filter((event: any) => event.status === "GECIKTI" || event.status === "YUKSEK" || event.status === "KRITIK")
+            .sort((a: any, b: any) => Number(a.daysLeft || 0) - Number(b.daysLeft || 0))
+            .map((event: any) => ({
+                id: `event-${event.id}`,
+                href: event.href,
+                plaka: event.plaka,
+                line: `${EVENT_TYPE_LABEL[event.type as keyof typeof EVENT_TYPE_LABEL] || event.type} • ${EVENT_STATUS_LABEL[event.status as keyof typeof EVENT_STATUS_LABEL] || event.status}`,
+                lineClass: EVENT_STATUS_TONE[event.status as keyof typeof EVENT_STATUS_TONE] || "text-slate-700",
+                detail:
+                    Number(event.daysLeft) < 0
+                        ? `${Math.abs(Number(event.daysLeft))} gün gecikti`
+                        : `${Number(event.daysLeft)} gün kaldı`,
+            }));
 
-        return {
-            gecikti,
-            kritik,
-            yaklasti,
-        };
-    }, [calendarEvents]);
+        const urgentArizalar = urgentOperationArizalar.map((item: any) => ({
+            id: `ariza-${item.id}`,
+            href: `/dashboard/araclar/${item.aracId}`,
+            plaka: item.plaka,
+            line: `Arıza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Serviste" : "Açık"}`,
+            lineClass: ARIZA_ONCELIK_TONE[item.oncelik as keyof typeof ARIZA_ONCELIK_TONE] || "text-slate-700",
+            detail: item.aciklama,
+        }));
 
-    const upcomingEvents = useMemo(() => {
-        const alertEventIds = new Set(alerts.map((alert) => alert.id));
-        return [...calendarEvents]
-            .filter((event) => event.daysLeft >= 0 && !alertEventIds.has(event.id))
-            .sort((a, b) => a.daysLeft - b.daysLeft)
-            .slice(0, 6);
-    }, [alerts, calendarEvents]);
+        return [...urgentEvents, ...urgentArizalar].slice(0, 8);
+    }, [calendarEvents, urgentOperationArizalar]);
+    const upcomingOperationItems = useMemo(() => {
+        const upcomingEvents = calendarEvents
+            .filter((event: any) => event.status === "YAKLASTI")
+            .sort((a: any, b: any) => Number(a.daysLeft || 0) - Number(b.daysLeft || 0))
+            .map((event: any) => ({
+                id: `event-${event.id}`,
+                href: event.href,
+                plaka: event.plaka,
+                line: `${EVENT_TYPE_LABEL[event.type as keyof typeof EVENT_TYPE_LABEL] || event.type} • ${EVENT_STATUS_LABEL[event.status as keyof typeof EVENT_STATUS_LABEL] || event.status}`,
+                lineClass: EVENT_STATUS_TONE[event.status as keyof typeof EVENT_STATUS_TONE] || "text-slate-700",
+                detail: `${Number(event.daysLeft)} gün kaldı`,
+            }));
+
+        const otherArizalar = otherOperationArizalar.map((item: any) => ({
+            id: `ariza-${item.id}`,
+            href: `/dashboard/araclar/${item.aracId}`,
+            plaka: item.plaka,
+            line: `Arıza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Serviste" : "Açık"}`,
+            lineClass: ARIZA_ONCELIK_TONE[item.oncelik as keyof typeof ARIZA_ONCELIK_TONE] || "text-slate-700",
+            detail: item.aciklama,
+        }));
+
+        return [...upcomingEvents, ...otherArizalar].slice(0, 8);
+    }, [calendarEvents, otherOperationArizalar]);
 
     const formatChangeText = (value: number) => `${value > 0 ? "+" : ""}${value}%`;
     const getChangeClassName = (value: number) => {
@@ -188,92 +301,264 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
         router.push(`${href}${joinChar}${query}`);
     };
 
-    return (
-        <div className="p-5 md:p-7 xl:p-8 space-y-5">
-            <div className="grid grid-cols-1 xl:grid-cols-[1.4fr_1fr] gap-4">
-                <div className="space-y-4">
+    const renderOperationTrackingCard = () => (
+        <Card
+            className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl flex flex-col overflow-hidden"
+            style={calendarCardHeight ? { height: calendarCardHeight } : undefined}
+        >
+            <CardHeader className="pb-2 px-5 pt-5">
+                <button
+                    type="button"
+                    onClick={() => navigateWithScope("/dashboard/evrak-takip")}
+                    className="inline-flex items-center gap-2 text-left text-sm font-semibold text-slate-900 transition-colors hover:text-rose-700 cursor-pointer"
+                    aria-label="Operasyon Takibi sayfasını aç"
+                    title="Operasyon Takibi"
+                >
+                    <AlertTriangle size={15} className="text-rose-600" />
+                    <CardTitle className="text-sm font-semibold">Operasyon Takibi</CardTitle>
+                </button>
+            </CardHeader>
+            <CardContent className="px-5 pb-5 pt-1 flex-1 min-h-0 flex flex-col gap-4">
+                <div className="grid grid-cols-3 gap-2">
+                    <div className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2">
+                        <p className="text-[11px] text-rose-600 font-medium">Geciken</p>
+                        <p className="text-lg font-bold text-rose-700">{gecikenOperasyonSayisi}</p>
+                    </div>
+                    <div className="rounded-lg border border-orange-200 bg-orange-50 px-2 py-2">
+                        <p className="text-[11px] text-orange-600 font-medium">Yüksek</p>
+                        <p className="text-lg font-bold text-orange-700">{yuksekOperasyonSayisi + yuksekOncelikSayisi}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2">
+                        <p className="text-[11px] text-amber-700 font-medium">Yaklaşan</p>
+                        <p className="text-lg font-bold text-amber-700">{yaklasanOperasyonSayisi}</p>
+                    </div>
+                </div>
+
+                <div className="flex-1 min-h-0 flex flex-col gap-3">
+                    <div className="flex flex-col">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">Acil Aksiyon Gerektirenler</p>
+                        <div className="space-y-2 overflow-y-auto pr-1 max-h-[172px]">
+                            {urgentOperationItems.length > 0 ? (
+                                urgentOperationItems.map((item: any) => (
+                                    <button
+                                        type="button"
+                                        key={item.id}
+                                        onClick={() => navigateWithScope(item.href)}
+                                        className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <p className="text-xs font-mono font-semibold text-slate-900">{item.plaka}</p>
+                                        <p className={`text-[11px] font-semibold mt-0.5 ${item.lineClass}`}>
+                                            {item.line}
+                                        </p>
+                                        <p className="text-[11px] text-slate-500 mt-0.5 truncate">{item.detail}</p>
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 text-center">
+                                    Acil evrak veya arıza kaydı yok.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    <div className="min-h-0 flex-1 flex flex-col pt-2 border-t border-slate-200">
+                        <p className="text-xs font-semibold text-slate-500 mb-2">Yaklaşan İşler</p>
+                        <div className="space-y-2 overflow-y-auto pr-1 flex-1 min-h-0">
+                            {upcomingOperationItems.length > 0 ? (
+                                upcomingOperationItems.map((item: any) => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => navigateWithScope(item.href)}
+                                        className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
+                                    >
+                                        <p className={`text-[11px] ${item.lineClass}`}>
+                                            {item.line}
+                                        </p>
+                                        <p className="text-xs font-semibold text-slate-900 mt-0.5">
+                                            {item.plaka} - {item.detail}
+                                        </p>
+                                    </button>
+                                ))
+                            ) : (
+                                <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 text-center">
+                                    Yaklaşan evrak veya takip arızası yok.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            </CardContent>
+        </Card>
+    );
+
+    if (isTechnicalPersonnel) {
+        return (
+            <div className="p-4 md:p-6 xl:p-8 pt-4 md:pt-5 xl:pt-6 pb-8 space-y-5 font-sans">
+                <div className="flex justify-between items-start lg:items-center flex-col lg:flex-row gap-3">
                     <div>
-                        <h2 className="text-2xl font-bold tracking-tight text-slate-900">Filo Operasyon Merkezi</h2>
-                        <p className="text-slate-500 text-sm mt-1 max-w-2xl">
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">Teknik Operasyon Paneli</h2>
+                        <p className="mt-1.5 text-sm text-slate-500 max-w-2xl">
+                            Servis, bakım ve yakıt girişlerinizi kolayca yapabilir, araç durumlarını güncelleyebilirsiniz.
+                        </p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-indigo-700">
+                                <Car className="h-5 w-5" />
+                                Yeni Araç
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Filoya yeni araç kaydı ekleyin ve şirket/şoför atamasını tek adımda yapın.</p>
+                            <YeniAracShortcut className="w-full bg-indigo-600 hover:bg-indigo-700 text-white hover:text-white font-semibold border-0 transition-colors [&_svg]:text-white" />
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-emerald-700">
+                                <Users className="h-5 w-5" />
+                                Yeni Personel
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Yeni şoför veya personel kaydı oluşturup operasyon ekibini güncel tutun.</p>
+                            <YeniPersonelShortcut className="w-full bg-emerald-600 hover:bg-emerald-700 text-white hover:text-white font-semibold border-0 transition-colors [&_svg]:text-white" />
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-amber-700">
+                                <ClipboardCheck className="h-5 w-5" />
+                                Yeni Zimmet
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Araçları personele zimmetleyin, teslim tarihi ve KM bilgilerini kayıt altına alın.</p>
+                            <YeniZimmetShortcut className="w-full bg-amber-600 hover:bg-amber-700 text-white hover:text-white font-semibold border-0 transition-colors [&_svg]:text-white" />
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-rose-700">
+                                <Wrench className="h-5 w-5" />
+                                Servis Kaydı Ekle
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Yeni bir periyodik bakım veya arıza kaydı oluşturun.</p>
+                            <Button className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold" asChild>
+                                <Link href="/dashboard/bakimlar?add=true">
+                                    İşlem Başlat <ArrowRight className="ml-2 h-4 w-4" />
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-orange-700">
+                                <Fuel className="h-5 w-5" />
+                                Yakıt Fişi İşle
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Araçların günlük/haftalık yakıt alımlarını sisteme girin.</p>
+                            <Button className="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold" asChild>
+                                <Link href="/dashboard/yakitlar?add=true">
+                                    İşlem Başlat <ArrowRight className="ml-2 h-4 w-4" />
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-lg text-indigo-700">
+                                <Truck className="h-5 w-5" />
+                                Araç Durumu Güncelle
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-slate-500 mb-6">Kilometre, konum veya aktiflik durumlarını güncelleyin.</p>
+                            <Button className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold" asChild>
+                                <Link href="/dashboard/araclar">
+                                    Araç Listesi <ArrowRight className="ml-2 h-4 w-4" />
+                                </Link>
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] items-start gap-4">
+                    <div ref={calendarCardRef}>
+                        <DeadlineCalendar events={calendarEvents} compact />
+                    </div>
+
+                    {renderOperationTrackingCard()}
+                </div>
+            </div>
+        );
+    }
+
+    return (
+        <div className="p-4 md:p-6 xl:p-8 pt-4 md:pt-5 xl:pt-6 space-y-4">
+            <div className="flex justify-between items-center flex-col lg:flex-row gap-4">
+                <div className="space-y-3">
+                    <div className="space-y-1">
+                        <h2 className="text-2xl font-bold tracking-tight text-slate-900 leading-none">Filo Operasyon Merkezi</h2>
+                        <p className="text-slate-500 text-[12px] max-w-2xl">
                             Günlük operasyon, masraf kontrolü ve son tarih yönetimini tek panelde takip edin.
                         </p>
                     </div>
-                    <div className="inline-flex flex-wrap items-center gap-3 text-xs font-medium text-slate-600 bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5">
-                        <span className="inline-flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-slate-400" />
-                            Toplam Araç: <span className="font-semibold text-slate-900">{metrics.toplamArac}</span>
+                    
+                    <div className="inline-flex flex-wrap items-center gap-3 text-[10px] font-medium text-slate-500 bg-white border border-slate-200 rounded-full px-3 py-1 shadow-sm">
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                            Toplam Araç: <span className="font-bold text-slate-900">{metrics.toplamArac}</span>
                         </span>
-                        <span className="w-1 h-1 rounded-full bg-slate-300" />
-                        <span className="inline-flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                            Aktif: <span className="font-semibold text-slate-900">{metrics.aktifArac}</span>
+                        <span className="w-px h-2 bg-slate-200" />
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            Aktif: <span className="font-bold text-slate-900">{metrics.aktifArac}</span>
                         </span>
-                        <span className="w-1 h-1 rounded-full bg-slate-300" />
-                        <span className="inline-flex items-center gap-1">
-                            <span className="w-2 h-2 rounded-full bg-amber-500" />
-                            Serviste: <span className="font-semibold text-slate-900">{metrics.servisteArac}</span>
+                        <span className="w-px h-2 bg-slate-200" />
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                            Serviste: <span className="font-bold text-slate-900">{metrics.servisteArac}</span>
+                        </span>
+                        <span className="w-px h-2 bg-slate-200" />
+                        <span className="inline-flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                            Arızalı: <span className="font-bold text-slate-900">{metrics.arizaliArac}</span>
                         </span>
                     </div>
                 </div>
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                    <div className="flex items-center gap-2 mb-3">
-                        <CalendarClock size={16} className="text-indigo-600" />
-                        <h3 className="font-semibold text-sm text-slate-900">Hızlı İşlemler</h3>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => navigateWithScope("/dashboard/kasko")}
-                        >
-                            <ShieldAlert size={14} />
-                            Kasko
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => navigateWithScope("/dashboard/trafik-sigortasi")}
-                        >
-                            <FileClock size={14} />
-                            Trafik Sigortası
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => navigateWithScope("/dashboard/muayeneler")}
-                        >
-                            <CalendarClock size={14} />
-                            Muayene
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            className="justify-start"
-                            onClick={() => navigateWithScope("/dashboard/ceza-masraflari")}
-                        >
-                            <ReceiptText size={14} />
-                            Ceza
-                        </Button>
-                    </div>
-                </div>
+
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
-                    <CardContent className="p-5">
-                        <div className="flex justify-between items-start mb-2">
-                            <p className="text-sm font-medium text-slate-500">Bu Ay Toplam Gider</p>
-                            <div className="p-1.5 bg-rose-50 rounded-md text-rose-600"><Wallet size={16} /></div>
-                        </div>
-                        <h3 className="text-2xl font-bold text-slate-900">₺{metrics.aylikToplamGider.toLocaleString("tr-TR")}</h3>
-                        <p className={`text-xs font-medium flex items-center gap-1 mt-2 ${getChangeClassName(metrics.giderDegisimYuzdesi)}`}>
-                            <TrendingUp size={12} /> {formatChangeText(metrics.giderDegisimYuzdesi)} {metrics.comparisonLabel}
-                        </p>
-                    </CardContent>
-                </Card>
+                {!isAdminOrYetkili && (
+                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                        <CardContent className="p-5">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-sm font-medium text-slate-500">Bu Ay Toplam Gider</p>
+                                <div className="p-1.5 bg-rose-50 rounded-md text-rose-600"><Wallet size={16} /></div>
+                            </div>
+                            <h3 className="text-2xl font-bold text-slate-900">₺{metrics.aylikToplamGider.toLocaleString("tr-TR")}</h3>
+                            <p className={`text-xs font-medium flex items-center gap-1 mt-2 ${getChangeClassName(metrics.giderDegisimYuzdesi)}`}>
+                                <TrendingUp size={12} /> {formatChangeText(metrics.giderDegisimYuzdesi)} {metrics.comparisonLabel}
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
 
                 <Card
                     role="button"
@@ -329,7 +614,18 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                     </CardContent>
                 </Card>
 
-                <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                <Card 
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigateWithScope("/dashboard/yakitlar")}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigateWithScope("/dashboard/yakitlar");
+                        }
+                    }}
+                    className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-indigo-200 hover:shadow-md"
+                >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
                             <p className="text-sm font-medium text-slate-500">Araç Başı Yakıt (Ort.)</p>
@@ -344,6 +640,32 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                         </p>
                     </CardContent>
                 </Card>
+
+                {isAdminOrYetkili && (
+                    <Card
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => navigateWithScope("/dashboard/bakimlar")}
+                        onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                navigateWithScope("/dashboard/bakimlar");
+                            }
+                        }}
+                        className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 hover:shadow-md"
+                    >
+                        <CardContent className="p-5">
+                            <div className="flex justify-between items-start mb-2">
+                                <p className="text-sm font-medium text-slate-500">Toplam Servis Maliyeti</p>
+                                <div className="p-1.5 bg-emerald-50 rounded-md text-emerald-600"><Wrench size={16} /></div>
+                            </div>
+                            <h3 className="text-2xl font-bold text-slate-900">₺{monthlyServiceCost.toLocaleString("tr-TR")}</h3>
+                            <p className={`text-xs font-medium mt-2 ${getChangeClassName(metrics.servisMaliyetDegisimYuzdesi)}`}>
+                                {formatChangeText(metrics.servisMaliyetDegisimYuzdesi)} {metrics.comparisonLabel}
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] items-start gap-4">
@@ -351,99 +673,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                     <DeadlineCalendar events={calendarEvents} compact />
                 </div>
 
-                <Card
-                    className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl flex flex-col overflow-hidden"
-                    style={calendarCardHeight ? { height: calendarCardHeight } : undefined}
-                >
-                    <CardHeader className="pb-2 px-5 pt-5">
-                        <button
-                            type="button"
-                            onClick={() => navigateWithScope("/dashboard/evrak-takip")}
-                            className="inline-flex items-center gap-2 text-left text-sm font-semibold text-slate-900 transition-colors hover:text-amber-700 cursor-pointer"
-                            aria-label="Evrak Takibi sayfasını aç"
-                            title="Evrak Takibi"
-                        >
-                            <AlertTriangle size={15} className="text-amber-600" />
-                            <CardTitle className="text-sm font-semibold">Evrak Takibi</CardTitle>
-                        </button>
-                    </CardHeader>
-                    <CardContent className="px-5 pb-5 pt-1 flex-1 min-h-0 flex flex-col gap-4">
-                        <div className="grid grid-cols-3 gap-2">
-                            <div className="rounded-lg border border-rose-200 bg-rose-50 px-2 py-2">
-                                <p className="text-[11px] text-rose-600 font-medium">Geciken</p>
-                                <p className="text-lg font-bold text-rose-700">{riskSummary.gecikti}</p>
-                            </div>
-                            <div className="rounded-lg border border-orange-200 bg-orange-50 px-2 py-2">
-                                <p className="text-[11px] text-orange-600 font-medium">Kritik</p>
-                                <p className="text-lg font-bold text-orange-700">{riskSummary.kritik}</p>
-                            </div>
-                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-2 py-2">
-                                <p className="text-[11px] text-amber-700 font-medium">Yaklaşan</p>
-                                <p className="text-lg font-bold text-amber-700">{riskSummary.yaklasti}</p>
-                            </div>
-                        </div>
-
-                        <div className="flex-1 min-h-0 flex flex-col gap-3">
-                            <div className="flex flex-col">
-                                <p className="text-xs font-semibold text-slate-500 mb-2">Acil Aksiyon Gerektirenler</p>
-                                <div className="space-y-2 overflow-y-auto pr-1 max-h-[172px]">
-                                    {alerts.length > 0 ? (
-                                        alerts.map((alert) => {
-                                            const days = calculateDays(alert.tarih);
-                                            return (
-                                                <button
-                                                    type="button"
-                                                    key={alert.id}
-                                                    onClick={() => navigateWithScope(`/dashboard/araclar/${alert.aracId}`)}
-                                                    className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
-                                                >
-                                                    <p className="text-xs font-mono font-semibold text-slate-900">{alert.plaka}</p>
-                                                    <p className={`text-[11px] font-semibold mt-0.5 ${days < 0 ? "text-rose-600" : "text-amber-600"}`}>
-                                                        {alert.message} ({days < 0 ? `${Math.abs(days)} gün geçti` : `${days} gün`})
-                                                    </p>
-                                                </button>
-                                            );
-                                        })
-                                    ) : (
-                                        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 text-center">
-                                            Şu an acil aksiyon gerektiren kayıt yok.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="min-h-0 flex-1 flex flex-col pt-2 border-t border-slate-200">
-                                <p className="text-xs font-semibold text-slate-500 mb-2">Yaklaşan İşler</p>
-                                <div className="space-y-2 overflow-y-auto pr-1 flex-1 min-h-0">
-                                    {upcomingEvents.length > 0 ? (
-                                        upcomingEvents.map((event) => (
-                                            <button
-                                                key={event.id}
-                                                onClick={() =>
-                                                    event.aracId
-                                                        ? navigateWithScope(`/dashboard/araclar/${event.aracId}`)
-                                                        : navigateWithScope(event.href)
-                                                }
-                                                className="w-full text-left rounded-lg border border-slate-200 px-3 py-2 hover:bg-slate-50 transition-colors"
-                                            >
-                                                <p className="text-[11px] text-slate-500">
-                                                    {EVENT_TYPE_LABEL[event.type]} • {event.daysLeft === 0 ? "Bugün" : `${event.daysLeft} gün`}
-                                                </p>
-                                                <p className="text-xs font-semibold text-slate-900 mt-0.5">
-                                                    {event.plaka} - {event.title}
-                                                </p>
-                                            </button>
-                                        ))
-                                    ) : (
-                                        <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 text-center">
-                                            Yaklaşan planlı iş bulunmuyor.
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    </CardContent>
-                </Card>
+                {renderOperationTrackingCard()}
             </div>
 
             <div className="grid grid-cols-1 gap-4">
@@ -461,12 +691,21 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                             <div className="h-[260px]">
                                 {yearlyPieData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
+                                        <PieChart accessibilityLayer={false}>
                                             <Tooltip
+                                                cursor={false}
                                                 contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
                                                 formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
                                             />
-                                            <Pie data={yearlyPieData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={108} paddingAngle={2}>
+                                            <Pie
+                                                data={yearlyPieData}
+                                                dataKey="value"
+                                                nameKey="name"
+                                                innerRadius={62}
+                                                outerRadius={108}
+                                                paddingAngle={2}
+                                                rootTabIndex={-1}
+                                            >
                                                 {yearlyPieData.map((item) => (
                                                     <Cell key={`year-${item.key}`} fill={item.color} />
                                                 ))}
@@ -506,12 +745,21 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                             <div className="h-[260px]">
                                 {monthlyPieData.length > 0 ? (
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <PieChart>
+                                        <PieChart accessibilityLayer={false}>
                                             <Tooltip
+                                                cursor={false}
                                                 contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
                                                 formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
                                             />
-                                            <Pie data={monthlyPieData} dataKey="value" nameKey="name" innerRadius={62} outerRadius={108} paddingAngle={2}>
+                                            <Pie
+                                                data={monthlyPieData}
+                                                dataKey="value"
+                                                nameKey="name"
+                                                innerRadius={62}
+                                                outerRadius={108}
+                                                paddingAngle={2}
+                                                rootTabIndex={-1}
+                                            >
                                                 {monthlyPieData.map((item) => (
                                                     <Cell key={`month-${item.key}`} fill={item.color} />
                                                 ))}
@@ -545,10 +793,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 Araç Bazlı Toplam Maliyet (Top 10)
                             </CardTitle>
+                            <p className="text-xs text-slate-500">
+                                Toplam: ₺{vehicleReportTotal.toLocaleString("tr-TR")}
+                            </p>
                         </CardHeader>
                         <CardContent className="px-2 pb-4 pt-2 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={vehicleCostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                                <BarChart accessibilityLayer={false} data={vehicleCostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
                                     <XAxis
                                         dataKey="plaka"
@@ -565,8 +816,33 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                                         tickFormatter={(val) => `₺${Math.round(Number(val) / 1000)}k`}
                                     />
                                     <Tooltip
+                                        cursor={false}
                                         contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
-                                        formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
+                                        content={({ active, payload, label }) => {
+                                            if (!active || !payload || payload.length === 0) return null;
+                                            const row = payload[0]?.payload as { toplam?: number } | undefined;
+                                            const total = Number(row?.toplam || 0);
+                                            return (
+                                                <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                                                    <p className="text-xs font-semibold text-slate-900">{String(label || "-")}</p>
+                                                    <div className="mt-1.5 space-y-1">
+                                                        {payload.map((item) => (
+                                                            <div key={`${item.dataKey}`} className="flex items-center justify-between gap-3 text-xs">
+                                                                <span className="font-medium" style={{ color: item.color || "#334155" }}>
+                                                                    {String(item.name || item.dataKey || "-")}
+                                                                </span>
+                                                                <span className="font-semibold text-slate-700">
+                                                                    ₺{Number(item.value ?? 0).toLocaleString("tr-TR")}
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
+                                                        Toplam: ₺{total.toLocaleString("tr-TR")}
+                                                    </div>
+                                                </div>
+                                            );
+                                        }}
                                     />
                                     <Legend wrapperStyle={{ fontSize: 12 }} iconType="circle" />
                                     {vehicleStackCategories.map((category, index) => (
@@ -590,10 +866,13 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 Şoför Bazlı Maliyet (Ceza + Yakıt + Arıza)
                             </CardTitle>
+                            <p className="text-xs text-slate-500">
+                                Toplam: ₺{driverReportTotal.toLocaleString("tr-TR")}
+                            </p>
                         </CardHeader>
                         <CardContent className="px-2 pb-4 pt-2 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={driverCostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                                <BarChart accessibilityLayer={false} data={driverCostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
                                     <XAxis
                                         dataKey="adSoyad"
@@ -611,6 +890,7 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                                         tickFormatter={(val) => `₺${Math.round(Number(val) / 1000)}k`}
                                     />
                                     <Tooltip
+                                        cursor={false}
                                         contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
                                         formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
                                     />
@@ -624,6 +904,45 @@ export default function DashboardClient({ initialData }: DashboardClientProps) {
                     </Card>
                 </div>
             </div>
+
+            {shouldShowCompanyCostReport && (
+                <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <CardHeader className="pb-2 px-5 pt-5">
+                        <CardTitle className="text-sm font-semibold text-slate-900">Şirket Bazlı Toplam Gider</CardTitle>
+                        <p className="text-xs text-slate-500">
+                            {selectedMonthRow?.name || "-"} {selectedYil || new Date().getFullYear()} dönemine göre
+                        </p>
+                        {topCompanyCost ? (
+                            <p className="text-xs font-semibold text-indigo-700">
+                                En yüksek: {topCompanyCost.sirketAd} - ₺{topCompanyCost.toplam.toLocaleString("tr-TR")}
+                            </p>
+                        ) : null}
+                    </CardHeader>
+                    <CardContent className="px-5 pb-5 pt-1">
+                        {sortedCompanyCostReport.length > 0 ? (
+                            <div className="space-y-2">
+                                {sortedCompanyCostReport.map((item, index) => (
+                                    <div
+                                        key={`${item.sirketId || "bagimsiz"}-${index}`}
+                                        className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                                    >
+                                        <p className="text-xs font-medium text-slate-700 truncate pr-2">
+                                            {item.sirketAd}
+                                        </p>
+                                        <p className="text-xs font-bold text-slate-900 whitespace-nowrap">
+                                            ₺{item.toplam.toLocaleString("tr-TR")}
+                                        </p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-xs text-slate-500 text-center">
+                                Seçili dönem için şirket maliyet verisi yok.
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
 
         </div>
     );

@@ -13,6 +13,7 @@ import { createZimmet, deleteZimmet, updateZimmet } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { getPersonelDisplayName } from "@/lib/personel-display";
 
 const EMPTY = {
     aracId: '',
@@ -33,11 +34,13 @@ const EMPTY_EDIT = {
 export default function ZimmetlerClient({ 
     initialZimmetler, 
     araclar, 
-    kullanicilar 
+    kullanicilar,
+    isTeknik = false,
 }: { 
     initialZimmetler: SoforZimmetRow[], 
     araclar: { id: string, plaka: string, marka?: string | null, model?: string | null, bulunduguIl?: string | null, guncelKm: number }[],
-    kullanicilar: { id: string, adSoyad: string }[]
+    kullanicilar: { id: string, adSoyad: string }[],
+    isTeknik?: boolean;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -129,7 +132,7 @@ export default function ZimmetlerClient({
     };
 
     const columnsWithActions = [
-        ...getColumns(canAccessAllCompanies),
+        ...getColumns(canAccessAllCompanies, isTeknik),
         {
             id: 'actions',
             header: 'İşlemler',
@@ -224,6 +227,13 @@ export default function ZimmetlerClient({
                 searchKey="arac_plaka"
                 searchPlaceholder="Araç plakasına göre ara..."
                 toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "AKTIF", label: "Aktif Zimmet" },
+                        { value: "TAMAMLANDI", label: "Tamamlandı" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="zimmet"
             />
 
@@ -247,7 +257,7 @@ export default function ZimmetlerClient({
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Personel / Şoför</label>
-                            <Input value={editRow?.kullanici ? `${editRow.kullanici.ad} ${editRow.kullanici.soyad}` : 'Atanmamış'} disabled className="h-9" />
+                            <Input value={editRow?.kullanici ? getPersonelDisplayName(editRow.kullanici, { fallback: "Atanmamış" }) : "Atanmamış"} disabled className="h-9" />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">

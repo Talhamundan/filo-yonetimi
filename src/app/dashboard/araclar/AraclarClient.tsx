@@ -13,7 +13,13 @@ import { createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 
-const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+const ILLER = [
+    { value: 'ISTANBUL', label: 'İSTANBUL' },
+    { value: 'BURSA', label: 'BURSA' },
+    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
+    { value: 'ANKARA', label: 'ANKARA' },
+    { value: 'DIGER', label: 'DİĞER' }
+];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const EMPTY = {
@@ -38,14 +44,16 @@ const FormFields = ({
     sirketler,
     kullanicilar,
     ILLER,
-    showInitialMuayeneField = false
+    showInitialMuayeneField = false,
+    allowIndependentOption = true,
 }: {
     formData: any,
     setFormData: any,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
     kullanicilar: any[],
-    ILLER: string[],
-    showInitialMuayeneField?: boolean
+    ILLER: { value: string; label: string }[],
+    showInitialMuayeneField?: boolean,
+    allowIndependentOption?: boolean,
 }) => (
     <div className="grid grid-cols-2 gap-4 py-2">
         <div className="col-span-2">
@@ -100,7 +108,7 @@ const FormFields = ({
                 onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
-                {ILLER.map(il => <option key={il} value={il}>{il}</option>)}
+                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
             </select>
         </div>
         <div className="space-y-1.5">
@@ -136,7 +144,13 @@ const FormFields = ({
                 }}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
-                <option value="">Şirket Seçiniz (Bağımsız)</option>
+                {allowIndependentOption ? (
+                    <option value="">Şirket Seçiniz (Bağımsız)</option>
+                ) : (
+                    <option value="" disabled>
+                        Şirket Seçiniz
+                    </option>
+                )}
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
@@ -175,18 +189,22 @@ const FormFields = ({
 export default function AraclarClient({ 
     initialAraclar, 
     sirketler, 
-    kullanicilar 
+    kullanicilar,
+    role
 }: { 
     initialAraclar: AracRow[], 
     sirketler: { id: string, ad: string, bulunduguIl: string }[],
-    kullanicilar: { id: string, adSoyad: string }[] 
+    kullanicilar: { id: string, adSoyad: string }[],
+    role?: string | null
 }) {
+    const isTeknik = role === "TEKNIK";
     const { confirmModal, openConfirm } = useConfirm();
-    const { canAccessAllCompanies } = useDashboardScope();
+    const { canAccessAllCompanies, canAssignIndependentRecords } = useDashboardScope();
+    const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
     const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<AracRow | null>(null);
-    const [formData, setFormData] = useState({ ...EMPTY });
+    const [formData, setFormData] = useState({ ...EMPTY, sirketId: defaultCreateSirketId });
     const [loading, setLoading] = useState(false);
     const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (u) => u.adSoyad), [kullanicilar]);
 
@@ -198,7 +216,7 @@ export default function AraclarClient({
         const res = await createArac(formData);
         if (res.success) {
             setCreateOpen(false);
-            setFormData({ ...EMPTY });
+            setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
             toast.success("Araç Kaydedildi", { description: "Yeni araç envantere başarıyla eklendi." });
             router.refresh();
         } else {
@@ -279,7 +297,7 @@ export default function AraclarClient({
 
 
     const columnsWithActions = [
-        ...getColumns(canAccessAllCompanies),
+        ...getColumns(canAccessAllCompanies, isTeknik),
         {
             id: 'actions',
             header: 'İşlemler',
@@ -313,7 +331,15 @@ export default function AraclarClient({
                     <p className="text-slate-500 text-sm mt-1">Sistemdeki tüm araçların detaylı listesi. Durumlarını, güncel KM ve şoför bilgilerini buradan yönetin.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                    <Dialog
+                        open={createOpen}
+                        onOpenChange={(open) => {
+                            setCreateOpen(open);
+                            if (open) {
+                                setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                            }
+                        }}
+                    >
                         <DialogTrigger asChild>
                             <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                                 <Plus size={16} />
@@ -327,7 +353,15 @@ export default function AraclarClient({
                                     Filoya yeni bir araç eklemek için temel bilgileri girin.
                                 </DialogDescription>
                             </DialogHeader>
-                            <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={sortedKullanicilar} ILLER={ILLER} showInitialMuayeneField={true} />
+                            <FormFields
+                                formData={formData}
+                                setFormData={setFormData}
+                                sirketler={sirketler}
+                                kullanicilar={sortedKullanicilar}
+                                ILLER={ILLER}
+                                showInitialMuayeneField={true}
+                                allowIndependentOption={canAssignIndependentRecords}
+                            />
                             <DialogFooter>
                                 <button 
                                     onClick={handleCreate}
@@ -350,7 +384,14 @@ export default function AraclarClient({
                              "{editRow?.plaka}" plakalı aracın kayıtlı bilgilerini düzenleyin.
                         </DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} kullanicilar={sortedKullanicilar} ILLER={ILLER} />
+                    <FormFields
+                        formData={formData}
+                        setFormData={setFormData}
+                        sirketler={sirketler}
+                        kullanicilar={sortedKullanicilar}
+                        ILLER={ILLER}
+                        allowIndependentOption={canAssignIndependentRecords}
+                    />
                     <DialogFooter>
                         <button 
                             onClick={handleUpdate}
@@ -367,7 +408,7 @@ export default function AraclarClient({
                 columns={columnsWithActions as any}
                 data={initialAraclar}
                 searchKey="plaka"
-                searchPlaceholder="Plaka ara..."
+                searchPlaceholder="Plaka / Şase No ara..."
                 serverFiltering={{
                     statusOptions: [
                         { value: "AKTIF", label: "Aktif" },
@@ -381,9 +422,9 @@ export default function AraclarClient({
                         { value: "KAMYON_TIR", label: "Kamyon / Tır" },
                         { value: "IS_MAKINESI", label: "İş Makinesi" },
                     ],
-                    showDateRange: true,
                 }}
-                tableClassName="min-w-[1560px]"
+                toolbarArrangement="report-right-scroll"
+                tableClassName="min-w-[1680px]"
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
                 excelEntity="arac"
             />

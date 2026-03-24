@@ -30,7 +30,8 @@ export type CezaMasrafRow = {
 const formatDate = (date: string | Date | null | undefined) =>
     date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : "-";
 
-export const getColumns = (showCompanyInfo = false): ColumnDef<CezaMasrafRow>[] => [
+export const getColumns = (showCompanyInfo = false): ColumnDef<CezaMasrafRow>[] => {
+    const columns: ColumnDef<CezaMasrafRow>[] = [
     {
         accessorKey: "arac_plaka",
         header: "Arac",
@@ -131,4 +132,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<CezaMasrafRow>[] 
             </div>
         ),
     },
-];
+    ];
+
+    return columns;
+};

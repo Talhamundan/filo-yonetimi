@@ -9,12 +9,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../../components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import {
-    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Pencil, Trash2, Plus
+    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Pencil, Trash2, Plus, Wrench
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { FormFields } from "../PersonelForm";
+import { FormFields, type PersonelFormData } from "../PersonelForm";
 import { updatePersonel, deletePersonel, araciBirak } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -35,10 +35,9 @@ export default function PersonelDetailClient({
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
     const [editOpen, setEditOpen] = useState(false);
-    const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState<PersonelFormData>({
         ad: p.ad,
         soyad: p.soyad,
-        eposta: p.eposta || '',
         telefon: p.telefon || '',
         rol: p.rol,
         sirketId: p.sirketId || '',
@@ -56,7 +55,7 @@ export default function PersonelDetailClient({
 
     const handleUpdate = async () => {
         setLoading(true);
-        const res = await updatePersonel(p.id, formData as any);
+        const res = await updatePersonel(p.id, formData);
         if (res.success) {
             toast.success("Personel bilgileri güncellendi");
             setEditOpen(false);
@@ -148,6 +147,7 @@ export default function PersonelDetailClient({
         switch (rol) {
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
             case 'YETKILI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yetkili</Badge>;
+            case 'TEKNIK': return <Badge className="bg-emerald-100 text-emerald-800 border-0">Teknik</Badge>;
             case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">Şoför</Badge>;
             default: return <Badge variant="outline">{rol}</Badge>;
         }
@@ -309,6 +309,9 @@ export default function PersonelDetailClient({
                         <TabsTrigger value="cezalar" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                             Cezalar
                         </TabsTrigger>
+                        <TabsTrigger value="arizalar" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                            Arıza Kayıtları
+                        </TabsTrigger>
                         <TabsTrigger value="yakit" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                             Yakıt Harcamaları
                         </TabsTrigger>
@@ -327,9 +330,9 @@ export default function PersonelDetailClient({
                                 </CardHeader>
                                 <CardContent className="space-y-4 pt-4">
                                     <div>
-                                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">E-Posta Adresi</p>
+                                        <p className="text-xs font-bold text-slate-400 uppercase mb-1">Giriş Adı</p>
                                         <p className="text-sm font-semibold text-slate-800 flex items-center gap-2">
-                                            <Mail size={14} className="text-slate-400" /> {p.eposta || 'Belirtilmemiş'}
+                                            <Mail size={14} className="text-slate-400" /> {p.hesap?.kullaniciAdi || "Tanımlı değil"}
                                         </p>
                                     </div>
                                     <div>
@@ -442,6 +445,74 @@ export default function PersonelDetailClient({
                                         <TableRow>
                                             <TableCell colSpan={4} className="h-32 text-center text-slate-400 italic">
                                                 Ceza kaydı bulunmuyor.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabsContent>
+
+                    <TabsContent value="arizalar">
+                        <Card className="overflow-hidden">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead>Bildirim Tarihi</TableHead>
+                                        <TableHead>Araç Plaka</TableHead>
+                                        <TableHead>Öncelik</TableHead>
+                                        <TableHead>Durum</TableHead>
+                                        <TableHead>Açıklama</TableHead>
+                                        <TableHead className="text-right">Tutar</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {p.arizalar && p.arizalar.length > 0 ? (
+                                        p.arizalar.map((a: any) => (
+                                            <TableRow key={a.id}>
+                                                <TableCell>{formatDate(a.bildirimTarihi)}</TableCell>
+                                                <TableCell className="font-mono font-bold">
+                                                    <div className="flex flex-col">
+                                                        <AracLink aracId={a.arac?.id} className="hover:text-indigo-600 hover:underline">
+                                                            {a.arac?.plaka || "-"}
+                                                        </AracLink>
+                                                        {canAccessAllCompanies && a.arac?.sirket?.ad ? (
+                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">{a.arac.sirket.ad}</span>
+                                                        ) : null}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {a.oncelik === "DUSUK" ? (
+                                                        <Badge className="bg-slate-100 text-slate-700 border-0 shadow-none">Düşük</Badge>
+                                                    ) : a.oncelik === "ORTA" ? (
+                                                        <Badge className="bg-blue-100 text-blue-700 border-0 shadow-none">Orta</Badge>
+                                                    ) : (
+                                                        <Badge className="bg-orange-100 text-orange-700 border-0 shadow-none">Yüksek</Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {a.durum === "ACIK" ? (
+                                                        <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none">Açık</Badge>
+                                                    ) : a.durum === "SERVISTE" ? (
+                                                        <Badge className="bg-amber-100 text-amber-700 border-0 shadow-none">Serviste</Badge>
+                                                    ) : a.durum === "TAMAMLANDI" ? (
+                                                        <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none">Tamamlandı</Badge>
+                                                    ) : (
+                                                        <Badge className="bg-slate-100 text-slate-700 border-0 shadow-none">İptal</Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-slate-600 max-w-[260px] truncate" title={a.aciklama || "-"}>
+                                                    {a.aciklama || "-"}
+                                                </TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">
+                                                    ₺{Number(a.tutar || 0).toLocaleString("tr-TR")}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="h-32 text-center text-slate-400 italic">
+                                                Bu personele ait arıza kaydı bulunmuyor.
                                             </TableCell>
                                         </TableRow>
                                     )}

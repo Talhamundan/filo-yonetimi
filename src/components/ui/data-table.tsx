@@ -77,6 +77,12 @@ function getDownloadFileName(contentDisposition: string | null, fallback: string
     return fallback
 }
 
+const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidIsoDate(value: string) {
+    return ISO_DATE_REGEX.test(value)
+}
+
 export function DataTable<TData, TValue>({
     columns,
     data,
@@ -109,6 +115,8 @@ export function DataTable<TData, TValue>({
     const currentServerFrom = searchParams.get("from") || ""
     const currentServerTo = searchParams.get("to") || ""
     const [serverQuery, setServerQuery] = React.useState(currentServerQ)
+    const [serverFrom, setServerFrom] = React.useState(currentServerFrom)
+    const [serverTo, setServerTo] = React.useState(currentServerTo)
 
     const table = useReactTable({
         data,
@@ -134,6 +142,16 @@ export function DataTable<TData, TValue>({
         setServerQuery(currentServerQ)
     }, [currentServerQ, isServerFilteringEnabled])
 
+    React.useEffect(() => {
+        if (!isServerFilteringEnabled) return
+        setServerFrom(currentServerFrom)
+    }, [currentServerFrom, isServerFilteringEnabled])
+
+    React.useEffect(() => {
+        if (!isServerFilteringEnabled) return
+        setServerTo(currentServerTo)
+    }, [currentServerTo, isServerFilteringEnabled])
+
     const setServerParam = React.useCallback(
         (key: "q" | "status" | "type" | "from" | "to", value: string) => {
             const params = new URLSearchParams(searchParamsString)
@@ -158,6 +176,32 @@ export function DataTable<TData, TValue>({
         }, 320)
         return () => window.clearTimeout(timeout)
     }, [currentServerQ, isServerFilteringEnabled, serverQuery, setServerParam])
+
+    React.useEffect(() => {
+        if (!isServerFilteringEnabled) return
+        if (serverFrom === currentServerFrom) return
+
+        const normalized = serverFrom.trim()
+        if (normalized !== "" && !isValidIsoDate(normalized)) return
+
+        const timeout = window.setTimeout(() => {
+            setServerParam("from", normalized)
+        }, 320)
+        return () => window.clearTimeout(timeout)
+    }, [currentServerFrom, isServerFilteringEnabled, serverFrom, setServerParam])
+
+    React.useEffect(() => {
+        if (!isServerFilteringEnabled) return
+        if (serverTo === currentServerTo) return
+
+        const normalized = serverTo.trim()
+        if (normalized !== "" && !isValidIsoDate(normalized)) return
+
+        const timeout = window.setTimeout(() => {
+            setServerParam("to", normalized)
+        }, 320)
+        return () => window.clearTimeout(timeout)
+    }, [currentServerTo, isServerFilteringEnabled, serverTo, setServerParam])
 
     const resetServerFilters = React.useCallback(() => {
         const params = new URLSearchParams(searchParamsString)
@@ -319,7 +363,7 @@ export function DataTable<TData, TValue>({
                             isReportRightScroll
                                 ? "w-full min-w-0 flex items-center justify-start gap-2 overflow-x-auto pb-1"
                                 : isCompactToolbar
-                                ? "w-full grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-end xl:w-auto xl:flex-nowrap"
+                                ? "w-full grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-start xl:flex-1 xl:min-w-0 xl:flex-nowrap"
                                 : "w-full sm:w-auto flex items-center justify-end gap-2 flex-wrap"
                         }
                     >
@@ -367,8 +411,8 @@ export function DataTable<TData, TValue>({
                             <>
                                 <Input
                                     type="date"
-                                    value={currentServerFrom}
-                                    onChange={(event) => setServerParam("from", event.target.value)}
+                                    value={serverFrom}
+                                    onChange={(event) => setServerFrom(event.target.value)}
                                     className={
                                         isReportRightScroll
                                             ? "h-10 w-[150px] min-w-[150px] shrink-0 bg-white"
@@ -379,8 +423,8 @@ export function DataTable<TData, TValue>({
                                 />
                                 <Input
                                     type="date"
-                                    value={currentServerTo}
-                                    onChange={(event) => setServerParam("to", event.target.value)}
+                                    value={serverTo}
+                                    onChange={(event) => setServerTo(event.target.value)}
                                     className={
                                         isReportRightScroll
                                             ? "h-10 w-[150px] min-w-[150px] shrink-0 bg-white"
@@ -414,8 +458,8 @@ export function DataTable<TData, TValue>({
                                 className={
                                     isReportRightScroll
                                         ? "shrink-0"
-                                        : isCompactToolbar
-                                        ? "order-[30] sm:order-none w-full col-span-2 sm:col-span-1 sm:w-auto"
+                                    : isCompactToolbar
+                                        ? "order-[30] sm:order-[30] w-full col-span-2 sm:col-span-1 sm:w-auto"
                                         : "w-full sm:w-auto"
                                 }
                             >
@@ -435,8 +479,8 @@ export function DataTable<TData, TValue>({
                                     className={
                                         isReportRightScroll
                                             ? "ml-auto flex shrink-0 items-center gap-2"
-                                            : isCompactToolbar
-                                            ? "order-[40] col-span-2 grid grid-cols-2 gap-2 sm:order-none sm:w-auto sm:flex sm:items-center sm:gap-2"
+                                        : isCompactToolbar
+                                            ? "order-[40] col-span-2 grid grid-cols-2 gap-2 sm:order-[40] sm:ml-auto sm:w-auto sm:flex sm:items-center sm:gap-2"
                                             : "w-full sm:w-auto flex items-center gap-2"
                                     }
                                 >
@@ -486,8 +530,8 @@ export function DataTable<TData, TValue>({
                                 className={
                                     isReportRightScroll
                                         ? "inline-flex shrink-0 items-center gap-1 text-xs text-slate-500"
-                                        : isCompactToolbar
-                                        ? "order-[40] sm:order-none inline-flex items-center gap-1 text-xs text-slate-500 col-span-2 sm:col-span-1"
+                                    : isCompactToolbar
+                                        ? "order-[50] sm:order-[50] inline-flex items-center gap-1 text-xs text-slate-500 col-span-2 sm:col-span-1"
                                         : "inline-flex items-center gap-1 text-xs text-slate-500 col-span-2 sm:col-span-1"
                                 }
                             >

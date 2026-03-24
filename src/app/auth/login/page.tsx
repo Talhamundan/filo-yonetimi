@@ -4,13 +4,19 @@ import React, { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { LogIn, Mail, Lock, ArrowRight, ShieldCheck } from "lucide-react";
-import Link from "next/link";
+import { Mail, Lock } from "lucide-react";
+import Image from "next/image";
+
+const REMEMBERED_USERNAME_KEY = "auth.rememberedUsername";
 
 export default function LoginPage() {
+    const rememberedUsername =
+        typeof window !== "undefined" ? window.localStorage.getItem(REMEMBERED_USERNAME_KEY) ?? "" : "";
+
     const router = useRouter();
     const [loading, setLoading] = useState(false);
-    const [formData, setFormData] = useState({ eposta: "", sifre: "" });
+    const [rememberMe, setRememberMe] = useState(Boolean(rememberedUsername));
+    const [formData, setFormData] = useState({ kullaniciAdi: rememberedUsername, sifre: "" });
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -18,7 +24,7 @@ export default function LoginPage() {
         
         try {
             const res = await signIn("credentials", {
-                eposta: formData.eposta,
+                kullaniciAdi: formData.kullaniciAdi,
                 sifre: formData.sifre,
                 redirect: false
             });
@@ -26,11 +32,16 @@ export default function LoginPage() {
             if (res?.error) {
                 toast.error("Giriş bilgileri hatalı veya hesabınız onaylanmamış olabilir.");
             } else {
+                if (rememberMe) {
+                    window.localStorage.setItem(REMEMBERED_USERNAME_KEY, formData.kullaniciAdi.trim().toLowerCase());
+                } else {
+                    window.localStorage.removeItem(REMEMBERED_USERNAME_KEY);
+                }
                 toast.success("Başarıyla giriş yapıldı!");
                 router.push("/dashboard");
                 router.refresh();
             }
-        } catch (error) {
+        } catch {
             toast.error("Bir sistem hatası oluştu.");
         }
         
@@ -38,75 +49,71 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8FAFC] flex flex-col justify-center items-center p-4">
-            <div className="w-full max-w-[400px] bg-white rounded-3xl shadow-2xl shadow-slate-200 border border-slate-100 overflow-hidden">
-                <div className="p-8 pt-10 text-center">
-                    <div className="inline-flex items-center justify-center h-16 w-16 bg-indigo-50 text-indigo-600 rounded-2xl mb-6">
-                        <ShieldCheck size={32} />
+        <div className="relative min-h-screen overflow-hidden bg-[#a6efe5] px-4 py-8">
+            <div
+                className="pointer-events-none absolute inset-0 opacity-35"
+                style={{
+                    backgroundImage:
+                        "linear-gradient(rgba(255,255,255,0.35) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.35) 1px, transparent 1px)",
+                    backgroundSize: "18px 18px",
+                }}
+            />
+            <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center rounded-2xl border border-[#d7eeea] bg-[#edf5f4] px-6 py-10 shadow-[0_20px_45px_rgba(15,23,42,0.12)]">
+                <div className="w-full max-w-md">
+                    <div className="mb-8 flex justify-center">
+                        <Image src="/logo-bera.png" alt="Bera Logo" width={190} height={70} priority className="h-auto w-auto" />
                     </div>
-                    <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Hoş Geldiniz</h1>
-                    <p className="text-slate-500 mt-2 font-medium">Lütfen bilgilerinizi kullanarak giriş yapın.</p>
+                    <form onSubmit={handleSubmit} className="space-y-5">
+                        <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-slate-900">Kullanıcı Adı</label>
+                            <div className="relative">
+                                <Mail size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    required
+                                    type="text"
+                                    value={formData.kullaniciAdi}
+                                    onChange={(e) => setFormData({ ...formData, kullaniciAdi: e.target.value })}
+                                    className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                                    placeholder="Kullanıcı Adı Giriniz"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <label className="block text-sm font-semibold text-slate-900">Parola</label>
+                            <div className="relative">
+                                <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                <input
+                                    required
+                                    type="password"
+                                    value={formData.sifre}
+                                    onChange={(e) => setFormData({ ...formData, sifre: e.target.value })}
+                                    className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                                    placeholder="Parola Giriniz"
+                                />
+                            </div>
+                        </div>
+
+                        <label className="inline-flex items-center gap-2 text-sm font-medium text-slate-700">
+                            <input
+                                type="checkbox"
+                                checked={rememberMe}
+                                onChange={(e) => setRememberMe(e.target.checked)}
+                                className="h-4 w-4 rounded border-slate-300 text-slate-700"
+                            />
+                            Beni Hatırla
+                        </label>
+
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="h-11 w-full rounded-lg bg-slate-500 text-sm font-semibold text-white transition hover:bg-slate-600 disabled:opacity-50"
+                        >
+                            {loading ? "Giriş Yapılıyor..." : "GİRİŞ YAP"}
+                        </button>
+                    </form>
                 </div>
-
-                <form onSubmit={handleSubmit} className="p-8 pt-0 space-y-5">
-                    <div className="space-y-2">
-                        <label className="text-sm font-bold text-slate-700 ml-1">E-Posta</label>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
-                                <Mail size={18} />
-                            </div>
-                            <input 
-                                required
-                                type="email"
-                                value={formData.eposta}
-                                onChange={(e) => setFormData({...formData, eposta: e.target.value})}
-                                className="w-full h-12 pl-12 pr-4 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-slate-900" 
-                                placeholder="ornek@sirket.com"
-                            />
-                        </div>
-                    </div>
-
-                    <div className="space-y-2">
-                        <div className="flex justify-between items-center ml-1">
-                            <label className="text-sm font-bold text-slate-700">Şifre</label>
-                            <Link href="#" className="text-xs font-bold text-indigo-600 hover:text-indigo-700">Şifremi Unuttum</Link>
-                        </div>
-                        <div className="relative group">
-                            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400 group-focus-within:text-indigo-600 transition-colors">
-                                <Lock size={18} />
-                            </div>
-                            <input 
-                                required
-                                type="password"
-                                value={formData.sifre}
-                                onChange={(e) => setFormData({...formData, sifre: e.target.value})}
-                                className="w-full h-12 pl-12 pr-4 rounded-2xl border border-slate-200 focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-medium text-slate-900" 
-                                placeholder="••••••••"
-                            />
-                        </div>
-                    </div>
-
-                    <button 
-                        type="submit" 
-                        disabled={loading}
-                        className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl font-bold shadow-xl shadow-indigo-100 transition-all flex items-center justify-center gap-3 disabled:opacity-50 mt-6 active:scale-[0.98]"
-                    >
-                        {loading ? "Giriş Yapılıyor..." : (
-                            <>Sisteme Giriş Yap <ArrowRight size={20} /></>
-                        )}
-                    </button>
-
-                    <div className="mt-8 pt-6 border-t border-slate-100 text-center">
-                        <p className="text-slate-500 text-sm font-medium">
-                            Hesabınız yok mu? <Link href="/auth/register" className="text-indigo-600 font-bold hover:text-indigo-700 decoration-2 underline-offset-4 hover:underline">Şimdi Kayıt Talebi Oluştur</Link>
-                        </p>
-                    </div>
-                </form>
             </div>
-            
-            <p className="mt-8 text-slate-400 text-xs font-medium uppercase tracking-widest">
-                © 2026 Filo Yönetim Sistemleri v5.0
-            </p>
         </div>
     );
 }

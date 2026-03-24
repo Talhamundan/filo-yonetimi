@@ -87,7 +87,7 @@ export default function CezalarClient({
     initialData,
     araclar,
     soforler,
-    ozet
+    ozet,
 }: {
     initialData: CezaRow[];
     araclar: { id: string; plaka: string; marka?: string | null; model?: string | null; bulunduguIl?: string | null }[];

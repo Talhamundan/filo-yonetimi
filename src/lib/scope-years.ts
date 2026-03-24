@@ -20,6 +20,7 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         yakitFilter,
         masrafFilter,
         bakimFilter,
+        arizaFilter,
         muayeneFilter,
         kaskoFilter,
         trafikFilter,
@@ -31,6 +32,7 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         getModelFilter("yakit", selectedSirketId),
         getModelFilter("masraf", selectedSirketId),
         getModelFilter("bakim", selectedSirketId),
+        getModelFilter("arizaKaydi", selectedSirketId),
         getModelFilter("muayene", selectedSirketId),
         getModelFilter("kasko", selectedSirketId),
         getModelFilter("trafikSigortasi", selectedSirketId),
@@ -40,10 +42,16 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
 
+    const arizaKaydiModel = (prisma as any).arizaKaydi;
+    if (!arizaKaydiModel) {
+        console.warn("Prisma client üzerinde arizaKaydi modeli bulunamadı. scope-years arıza yıllarını atlayacak.");
+    }
+
     const [
         yakitRows,
         masrafRows,
         bakimRows,
+        arizaRows,
         muayeneRows,
         kaskoRows,
         trafikRows,
@@ -55,6 +63,9 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         (prisma as any).yakit.findMany({ where: yakitFilter as any, select: { tarih: true } }).catch(() => []),
         (prisma as any).masraf.findMany({ where: masrafFilter as any, select: { tarih: true } }).catch(() => []),
         (prisma as any).bakim.findMany({ where: bakimFilter as any, select: { bakimTarihi: true } }).catch(() => []),
+        arizaKaydiModel
+            ? arizaKaydiModel.findMany({ where: arizaFilter as any, select: { bildirimTarihi: true } }).catch(() => [])
+            : Promise.resolve([]),
         (prisma as any).muayene
             .findMany({ where: muayeneFilter as any, select: { muayeneTarihi: true, gecerlilikTarihi: true } })
             .catch(() => []),
@@ -77,6 +88,7 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
     (yakitRows as Array<{ tarih?: Date | null }>).forEach((row) => addYear(years, row.tarih));
     (masrafRows as Array<{ tarih?: Date | null }>).forEach((row) => addYear(years, row.tarih));
     (bakimRows as Array<{ bakimTarihi?: Date | null }>).forEach((row) => addYear(years, row.bakimTarihi));
+    (arizaRows as Array<{ bildirimTarihi?: Date | null }>).forEach((row) => addYear(years, row.bildirimTarihi));
     (muayeneRows as Array<{ muayeneTarihi?: Date | null; gecerlilikTarihi?: Date | null }>).forEach((row) => {
         addYear(years, row.muayeneTarihi);
         addYear(years, row.gecerlilikTarihi);

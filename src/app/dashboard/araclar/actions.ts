@@ -7,6 +7,7 @@ import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { getSirketFilter } from "@/lib/auth-utils";
 import { assertAuthenticatedUser, getScopedKullaniciOrThrow, resolveActionSirketId } from "@/lib/action-scope";
 import { assertKmWriteConsistency, normalizeKmInput, resolveAracGuncelKmForUpdate, syncAracGuncelKm } from "@/lib/km-consistency";
+import { syncAracDurumu } from "@/lib/arac-durum";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 
@@ -31,10 +32,6 @@ export async function createArac(data: {
     try {
         const actor = await assertAuthenticatedUser();
         const sirketId = await resolveActionSirketId(data.sirketId);
-
-        if (!sirketId) {
-            return { success: false, error: "Şirket bilgisi olmadan araç ekleyemezsiniz." };
-        }
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true })
             : null;
@@ -53,7 +50,7 @@ export async function createArac(data: {
                 hgsNo: data.hgsNo || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
-                durum: 'AKTIF',
+                durum: kullanici ? "AKTIF" : "BOSTA",
                 kategori: data.kategori || 'BINEK'
             }
         });
@@ -88,6 +85,7 @@ export async function createArac(data: {
         }
 
         await syncAracGuncelKm(arac.id);
+        await syncAracDurumu(arac.id);
 
         await logEntityActivity({
             actionType: ActivityActionType.CREATE,
@@ -187,6 +185,7 @@ export async function updateArac(id: string, data: any) {
         }
 
         await syncAracGuncelKm(id);
+        await syncAracDurumu(id);
 
         const nextPlaka = data.plaka?.replace(/\s+/g, "").toUpperCase() || oldArac.plaka;
         await logEntityActivity({
@@ -253,6 +252,7 @@ export async function unassignArac(id: string, bitisKm?: number) {
         });
 
         await syncAracGuncelKm(id);
+        await syncAracDurumu(id);
 
         await logEntityActivity({
             actionType: ActivityActionType.STATUS_CHANGE,
@@ -368,7 +368,7 @@ export async function importAraclarFromExcel(formData: FormData) {
             bulunduguIl: String(row.BulunduguIl || row.Il || row.il || 'İSTANBUL').toUpperCase() as any,
             guncelKm: parseInt(row.GuncelKm || row.Km || row.km) || 0,
             sirketId,
-            durum: 'AKTIF' as const,
+            durum: 'BOSTA' as const,
             kategori: (row.Kategori || row.kategori || 'BINEK') as any
         })).filter(r => r.plaka && r.marka);
         

@@ -2,13 +2,13 @@
 import { toast } from "sonner";
 
 import { useConfirm } from "@/components/ui/confirm-modal";
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, Fuel, Trash2, Pencil } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, YakitRow } from "./columns";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createYakit, updateYakit, deleteYakit } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
@@ -131,7 +131,19 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
     const [editRow, setEditRow] = useState<YakitRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
+    const searchParams = useSearchParams();
+    const shouldOpenCreate = searchParams.get("add") === "true";
 
+    useEffect(() => {
+        if (shouldOpenCreate) {
+            setCreateOpen(true);
+            // URL'den parametreyi temizle (isteğe bağlı, ama kullanıcı sayfada kalırsa tekrar açılmasın diye iyi olur)
+            const params = new URLSearchParams(searchParams.toString());
+            params.delete("add");
+            const query = params.toString();
+            router.replace(`/dashboard/yakitlar${query ? `?${query}` : ""}`, { scroll: false });
+        }
+    }, [shouldOpenCreate, router, searchParams]);
     const handleCreate = async () => {
         if (!formData.aracId) {
             return toast.warning("Araç Seçilmedi", { description: "Lütfen yakıt alımı için bir araç seçin." });
@@ -239,7 +251,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                     </button>
                 </div>
             )
-        }
+        },
     ];
 
     return (
@@ -282,6 +294,13 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                 searchKey="arac_plaka"
                 searchPlaceholder="Yakıt kaydı için araç plakası ara..."
                 toolbarArrangement="report-right-scroll"
+                serverFiltering={{
+                    statusOptions: [
+                        { value: "NAKIT", label: "Nakit" },
+                        { value: "TASIT_TANIMA", label: "Taşıt Tanıma" },
+                    ],
+                    showDateRange: true,
+                }}
                 excelEntity="yakit"
             />
 
@@ -289,7 +308,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                 <DialogContent className="sm:max-w-[425px]">
                     <DialogHeader>
                         <DialogTitle>Yakıt Kaydını Düzenle</DialogTitle>
-                        <DialogDescription>"{editRow?.arac.plaka}" plakalı aracın yakıt alım bilgisini güncelleyin.</DialogDescription>
+                        <DialogDescription>&quot;{editRow?.arac.plaka}&quot; plakalı aracın yakıt alım bilgisini güncelleyin.</DialogDescription>
                     </DialogHeader>
                     <FormFields formData={formData} setFormData={setFormData} araclar={araclar} />
                     <DialogFooter>

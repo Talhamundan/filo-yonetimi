@@ -37,7 +37,7 @@ export default function KaskoClient({ initialData }: { initialData: KaskoRow[] }
             const daysLeft = differenceInDays(new Date(item.bitisTarihi), new Date());
             let status = "GÜVENLİ";
             if (daysLeft < 0) status = "GECİKTİ";
-            else if (daysLeft <= 15) status = "KRİTİK";
+            else if (daysLeft <= 15) status = "YÜKSEK";
             else if (daysLeft <= 30) status = "YAKLAŞIYOR";
 
             const matchesStatus = filterStatus === "TÜMÜ" || status === filterStatus;
@@ -52,7 +52,7 @@ export default function KaskoClient({ initialData }: { initialData: KaskoRow[] }
             return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 border-0 shadow-none px-2 py-0.5 text-[10px] font-bold">Gecikti ({Math.abs(daysLeft)} Gün)</Badge>;
         }
         if (daysLeft <= 15) {
-            return <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-0 shadow-none px-2 py-0.5 text-[10px] font-bold">Kritik ({daysLeft} Gün)</Badge>;
+            return <Badge className="bg-red-100 text-red-800 hover:bg-red-200 border-0 shadow-none px-2 py-0.5 text-[10px] font-bold">Yüksek ({daysLeft} Gün)</Badge>;
         }
         if (daysLeft <= 30) {
             return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 border-0 shadow-none px-2 py-0.5 text-[10px] font-bold">Yaklaşıyor ({daysLeft} Gün)</Badge>;
@@ -60,7 +60,7 @@ export default function KaskoClient({ initialData }: { initialData: KaskoRow[] }
         return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border-0 shadow-none px-2 py-0.5 text-[10px] font-bold">Güvenli ({daysLeft} Gün)</Badge>;
     };
 
-    const kritikSayisi = filteredData.filter(d => differenceInDays(new Date(d.bitisTarihi), new Date()) <= 15).length;
+    const yuksekSayisi = filteredData.filter(d => differenceInDays(new Date(d.bitisTarihi), new Date()) <= 15).length;
 
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
@@ -75,7 +75,7 @@ export default function KaskoClient({ initialData }: { initialData: KaskoRow[] }
                 <div className="flex gap-4 items-center">
                     <div className="bg-red-50 text-red-700 px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2 border border-red-100 shadow-sm">
                         <ShieldAlert size={16} />
-                        {kritikSayisi} Kritik Kasko
+                        {yuksekSayisi} Yüksek Kasko
                     </div>
                 </div>
             </header>
@@ -98,7 +98,7 @@ export default function KaskoClient({ initialData }: { initialData: KaskoRow[] }
                         onChange={(e) => setFilterStatus(e.target.value)}
                     >
                         <option value="TÜMÜ">Tüm Durumlar</option>
-                        <option value="KRİTİK">Kritik (&lt;15 Gün)</option>
+                        <option value="YÜKSEK">Yüksek (&lt;15 Gün)</option>
                         <option value="YAKLAŞIYOR">Yaklaşıyor (15-30 Gün)</option>
                         <option value="GÜVENLİ">Güvenli (&gt;30 Gün)</option>
                         <option value="GECİKTİ">Gecikmiş Poliçeler</option>

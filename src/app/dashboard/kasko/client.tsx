@@ -406,7 +406,7 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
                     statusOptions: [
                         { value: "GECERLI", label: "Geçerli" },
                         { value: "YAKLASIYOR", label: "Yaklaşıyor" },
-                        { value: "KRITIK", label: "Kritik" },
+                        { value: "YUKSEK", label: "Yüksek" },
                         { value: "GECIKTI", label: "Gecikti" },
                         { value: "PASIF", label: "Geçmiş Kayıt" },
                     ],

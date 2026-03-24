@@ -7,29 +7,42 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Users, Trash2, Pencil } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
-import { columns, PersonelRow } from "./columns";
+import { getColumns, PersonelRow } from "./columns";
 import { createPersonel, updatePersonel, deletePersonel } from "./actions";
-import { FormFields, ROLLER } from "./PersonelForm";
+import { FormFields, ROLLER, type PersonelFormData } from "./PersonelForm";
+import type { ColumnDef } from "@tanstack/react-table";
+import type { Rol } from "@prisma/client";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
-const EMPTY = { ad: '', soyad: '', eposta: '', telefon: '', rol: 'SOFOR', sirketId: '', sehir: '', tcNo: '' };
+const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'SOFOR', sirketId: '', sehir: '', tcNo: '' };
 
-export default function PersonelClient({ initialData, sirketler }: { initialData: PersonelRow[], sirketler: { id: string, ad: string, bulunduguIl: string }[] }) {
+export default function PersonelClient({
+    initialData,
+    sirketler,
+    isTeknik = false,
+}: {
+    initialData: PersonelRow[];
+    sirketler: { id: string, ad: string, bulunduguIl: string }[];
+    isTeknik?: boolean;
+}) {
     const { confirmModal, openConfirm } = useConfirm();
-        const router = useRouter();
+    const { isAdmin, canAssignIndependentRecords } = useDashboardScope();
+    const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
+    const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<PersonelRow | null>(null);
-    const [formData, setFormData] = useState({ ...EMPTY });
+    const [formData, setFormData] = useState<PersonelFormData>({ ...EMPTY, sirketId: defaultCreateSirketId });
     const [loading, setLoading] = useState(false);
 
     const handleCreate = async () => {
         if (!formData.ad || !formData.soyad) {
-            return toast.warning("Eksik Bilgi", { description: "Lütfen Ad ve Soyad alanlarını doldurun." });
+            return toast.warning("Eksik Bilgi", { description: "Ad ve Soyad alanları zorunludur." });
         }
         setLoading(true);
-        const res = await createPersonel(formData as any);
+        const res = await createPersonel(formData);
         if (res.success) { 
             setCreateOpen(false); 
-            setFormData({ ...EMPTY }); 
+            setFormData({ ...EMPTY, sirketId: defaultCreateSirketId }); 
             toast.success("Personel Kaydedildi", { description: "Yeni personel başarıyla sisteme eklendi." });
             router.refresh(); 
         } else {
@@ -40,8 +53,11 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
 
     const handleUpdate = async () => {
         if (!editRow) return;
+        if (!formData.ad || !formData.soyad) {
+            return toast.warning("Eksik Bilgi", { description: "Ad ve Soyad alanları zorunludur." });
+        }
         setLoading(true);
-        const res = await updatePersonel(editRow.id, formData as any);
+        const res = await updatePersonel(editRow.id, formData);
         if (res.success) { 
             setEditRow(null); 
             toast.success("Güncelleme Başarılı", { description: "Personel bilgileri güncellendi." });
@@ -68,41 +84,41 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
         setFormData({
             ad: row.adSoyad.split(' ')[0] || '',
             soyad: row.adSoyad.split(' ').slice(1).join(' ') || '',
-            eposta: row.eposta === "-" ? "" : row.eposta,
             telefon: row.telefon === "-" ? "" : row.telefon,
-            rol: row.rol,
+            rol: row.rol as Rol,
             sirketId: row.sirketId || '',
-            sehir: row.sehir === "-" ? "" : row.sehir,
-            tcNo: row.tcNo === "-" ? "" : (row.tcNo || '')
+            sehir: (row.sehir === "-" ? "" : row.sehir) as PersonelFormData["sehir"],
+            tcNo: row.tcNo === "-" ? "" : (row.tcNo || ''),
         });
         setEditRow(row);
     };
 
 
-    const columnsWithActions = [
-        {
-            id: 'actions',
-            header: 'İşlemler',
-            cell: ({ row }: any) => (
-                <div className="flex items-center gap-2">
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); openEdit(row.original); }} 
-                        className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors"
-                        title="Düzenle"
-                    >
-                        <Pencil size={15} />
-                    </button>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id); }} 
-                        className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                        title="Sil"
-                    >
-                        <Trash2 size={15} />
-                    </button>
-                </div>
-            )
-        },
-        ...columns
+    const actionColumn: ColumnDef<PersonelRow> = {
+        id: 'actions',
+        header: 'İşlemler',
+        cell: ({ row }) => (
+            <div className="flex items-center gap-2">
+                <button
+                    onClick={(e) => { e.stopPropagation(); openEdit(row.original); }}
+                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors"
+                    title="Düzenle"
+                >
+                    <Pencil size={15} />
+                </button>
+                <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id); }}
+                    className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
+                    title="Sil"
+                >
+                    <Trash2 size={15} />
+                </button>
+            </div>
+        ),
+    };
+    const columnsWithActions: ColumnDef<PersonelRow>[] = [
+        ...getColumns(isTeknik),
+        actionColumn,
     ];
 
     return (
@@ -111,11 +127,19 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                        <Users className="text-indigo-600" /> Personel & Kullanıcı İşlemleri
+                        <Users className="text-indigo-600" /> Personel
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Sistemdeki tüm şirket çalışanlarını ve yöneticileri görüntüleyin.</p>
+                    <p className="text-slate-500 text-sm mt-1">Sistemdeki tüm şirket personellerini görüntüleyin.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog
+                    open={createOpen}
+                    onOpenChange={(open) => {
+                        setCreateOpen(open);
+                        if (open) {
+                            setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                        }
+                    }}
+                >
                     <DialogTrigger asChild>
                         <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} /> Personel Ekle
@@ -124,9 +148,15 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
                     <DialogContent className="sm:max-w-[450px]">
                         <DialogHeader>
                             <DialogTitle>Yeni Personel Kaydı</DialogTitle>
-                            <DialogDescription>Filo yönetim sistemine yeni bir kullanıcı veya çalışan ekleyin.</DialogDescription>
+                            <DialogDescription>Filo yönetim sistemine yeni bir personel ekleyin.</DialogDescription>
                         </DialogHeader>
-                        <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} />
+                        <FormFields
+                            formData={formData}
+                            setFormData={setFormData}
+                            sirketler={sirketler}
+                            allowAdminRole={isAdmin}
+                            allowIndependentOption={canAssignIndependentRecords}
+                        />
                         <DialogFooter>
                             <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                                 {loading ? 'Kaydediliyor...' : 'Kaydet'}
@@ -142,7 +172,13 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
                         <DialogTitle>Personeli Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.adSoyad} kişisinin bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} />
+                    <FormFields
+                        formData={formData}
+                        setFormData={setFormData}
+                        sirketler={sirketler}
+                        allowAdminRole={isAdmin}
+                        allowIndependentOption={canAssignIndependentRecords}
+                    />
                     <DialogFooter>
                         <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                             {loading ? 'Güncelleniyor...' : 'Güncelle'}
@@ -152,7 +188,7 @@ export default function PersonelClient({ initialData, sirketler }: { initialData
             </Dialog>
 
             <DataTable 
-                columns={columnsWithActions as any} 
+                columns={columnsWithActions}
                 data={initialData} 
                 searchKey="adSoyad" 
                 searchPlaceholder="İsim ile ara..." 

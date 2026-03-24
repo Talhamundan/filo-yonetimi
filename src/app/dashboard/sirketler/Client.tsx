@@ -11,10 +11,16 @@ import { DataTable } from "../../../components/ui/data-table";
 import { columns, SirketRow } from "./columns";
 import { createSirket, updateSirket, deleteSirket } from "./actions";
 
-const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+const ILLER = [
+    { value: 'ISTANBUL', label: 'İSTANBUL' },
+    { value: 'BURSA', label: 'BURSA' },
+    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
+    { value: 'ANKARA', label: 'ANKARA' },
+    { value: 'DIGER', label: 'DİĞER' }
+];
 const EMPTY = { ad: '', bulunduguIl: 'BURSA', vergiNo: '' };
 
-const FormFields = ({ formData, setFormData, ILLER }: { formData: any, setFormData: any, ILLER: string[] }) => (
+const FormFields = ({ formData, setFormData, ILLER }: { formData: any, setFormData: any, ILLER: { value: string; label: string }[] }) => (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Şirket Adı <span className="text-red-500">*</span></label>
@@ -24,7 +30,7 @@ const FormFields = ({ formData, setFormData, ILLER }: { formData: any, setFormDa
             <label className="text-sm font-medium">Faaliyet İli</label>
             <select value={formData.bulunduguIl} onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                {ILLER.map(il => <option key={il} value={il}>{il}</option>)}
+                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
             </select>
         </div>
         <div className="space-y-1.5">

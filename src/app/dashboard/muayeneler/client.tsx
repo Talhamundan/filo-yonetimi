@@ -225,7 +225,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
                         { value: "GECMEDI", label: "Muayene Geçmedi" },
                         { value: "GECERLI", label: "Geçerli" },
                         { value: "YAKLASIYOR", label: "Yaklaşıyor" },
-                        { value: "KRITIK", label: "Kritik" },
+                        { value: "YUKSEK", label: "Yüksek" },
                         { value: "GECIKTI", label: "Gecikti" },
                         { value: "PASIF", label: "Geçmiş Kayıt" },
                     ],

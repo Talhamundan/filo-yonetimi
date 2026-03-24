@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { useConfirm } from "@/components/ui/confirm-modal";
 import { cleanupExpiredTrashNow, permanentlyDeleteTrashRecord, restoreTrashRecord } from "./actions";
 
 export type TrashEntity = "arac" | "masraf" | "bakim" | "dokuman" | "ceza" | "kullanici";
@@ -22,16 +23,46 @@ export type TrashRow = {
     deletedBy: string | null;
 };
 
+type DeletedDataStats = {
+    total: number;
+    pendingPermanentDelete: number;
+    oldestDeletedAt: string | null;
+    byEntity: {
+        arac: number;
+        masraf: number;
+        bakim: number;
+        dokuman: number;
+        ceza: number;
+        kullanici: number;
+    };
+};
+
 const ENTITY_LABELS: Record<TrashEntity, string> = {
     arac: "Araç",
     masraf: "Masraf",
     bakim: "Bakım",
     dokuman: "Doküman",
     ceza: "Ceza",
-    kullanici: "Kullanıcı",
+    kullanici: "Personel",
 };
 
-export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sirketler: Array<{ id: string; ad: string }> }) {
+function getPermanentDeleteConfirmMessage(row: TrashRow) {
+    if (row.entity === "kullanici") {
+        return "Bu personel kaydı kalıcı olarak silinecek. Devam etmek istiyor musunuz?";
+    }
+    return `Bu ${ENTITY_LABELS[row.entity].toLocaleLowerCase("tr-TR")} kaydı kalıcı olarak silinecek. Devam etmek istiyor musunuz?`;
+}
+
+export default function TrashClient({
+    rows,
+    sirketler,
+    deletedStats,
+}: {
+    rows: TrashRow[];
+    sirketler: Array<{ id: string; ad: string }>;
+    deletedStats: DeletedDataStats;
+}) {
+    const { confirmModal, openConfirm } = useConfirm();
     const router = useRouter();
     const searchParams = useSearchParams();
     const { isAdmin } = useDashboardScope();
@@ -42,6 +73,9 @@ export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sir
     const entity = searchParams.get("entity") || "";
     const from = searchParams.get("from") || "";
     const to = searchParams.get("to") || "";
+    const oldestDeletedText = deletedStats.oldestDeletedAt
+        ? new Date(deletedStats.oldestDeletedAt).toLocaleDateString("tr-TR")
+        : "-";
 
     const filteredRows = useMemo(() => {
         const qNormalized = q.toLocaleLowerCase("tr-TR").trim();
@@ -82,8 +116,15 @@ export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sir
         });
     };
 
-    const handleDeletePermanently = (row: TrashRow) => {
-        if (!confirm("Bu kayıt kalıcı olarak silinecek. Devam etmek istiyor musunuz?")) return;
+    const handleDeletePermanently = async (row: TrashRow) => {
+        const confirmed = await openConfirm({
+            title: row.entity === "kullanici" ? "Personeli Kalıcı Sil" : "Kaydı Kalıcı Sil",
+            message: getPermanentDeleteConfirmMessage(row),
+            confirmText: "Evet, Kalıcı Sil",
+            cancelText: "Vazgeç",
+            variant: "danger",
+        });
+        if (!confirmed) return;
         setBusyKey(`${row.entity}:${row.id}:delete`);
         startTransition(async () => {
             const result = await permanentlyDeleteTrashRecord(row.entity, row.id);
@@ -92,13 +133,20 @@ export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sir
                 toast.error(result.error || "Kalıcı silme başarısız.");
                 return;
             }
-            toast.success("Kayıt kalıcı olarak silindi.");
+            toast.success(row.entity === "kullanici" ? "Personel kalıcı olarak silindi." : "Kayıt kalıcı olarak silindi.");
             router.refresh();
         });
     };
 
-    const handleCleanup = () => {
-        if (!confirm("30 günden eski tüm çöp kayıtları kalıcı silinecek. Devam edilsin mi?")) return;
+    const handleCleanup = async () => {
+        const confirmed = await openConfirm({
+            title: "Çöp Kutusunu Temizle",
+            message: "30 günden eski tüm çöp kayıtları kalıcı silinecek. Devam edilsin mi?",
+            confirmText: "Evet, Temizle",
+            cancelText: "Vazgeç",
+            variant: "warning",
+        });
+        if (!confirmed) return;
         startTransition(async () => {
             const result = await cleanupExpiredTrashNow();
             if (!result.success) {
@@ -112,6 +160,7 @@ export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sir
 
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto space-y-4">
+            {confirmModal}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900">Çöp Kutusu</h1>
@@ -122,6 +171,48 @@ export default function TrashClient({ rows, sirketler }: { rows: TrashRow[]; sir
                         <RefreshCcw className="h-4 w-4" /> 30+ Gün Temizle
                     </Button>
                 ) : null}
+            </div>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Silinen Veriler Özeti</h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                            Çöp kutusundaki toplam kayıt: <span className="font-semibold text-slate-900">{deletedStats.total}</span>
+                        </p>
+                        <p className="text-sm text-slate-600">
+                            30+ gün dolduğu için kalıcı silinmeye aday kayıt:{" "}
+                            <span className="font-semibold text-amber-700">{deletedStats.pendingPermanentDelete}</span>
+                        </p>
+                        <p className="text-xs text-slate-500">En eski silinme tarihi: {oldestDeletedText}</p>
+                    </div>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 lg:grid-cols-6">
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Araç</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.arac}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Masraf</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.masraf}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Bakım</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.bakim}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Doküman</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.dokuman}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Ceza</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.ceza}</p>
+                    </div>
+                    <div className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs">
+                        <p className="text-slate-500">Personel</p>
+                        <p className="text-sm font-semibold text-slate-900">{deletedStats.byEntity.kullanici}</p>
+                    </div>
+                </div>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">

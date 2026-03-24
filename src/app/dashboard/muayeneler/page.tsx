@@ -76,6 +76,7 @@ export default async function MuayenelerPage(props: { searchParams?: Promise<Das
             case "GECIKTI":
                 whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { lt: now } });
                 break;
+            case "YUKSEK":
             case "KRITIK":
                 whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { gte: now, lte: criticalDate } });
                 break;

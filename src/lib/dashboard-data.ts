@@ -7,11 +7,13 @@ import { getDashboardDriverData } from "@/lib/dashboard-driver.service";
 
 export type {
     DashboardCalendarEvent,
+    DashboardCompanyCostItem,
     DashboardComparisonGranularity,
     DashboardData,
     DashboardDriverCostItem,
     DashboardEventStatus,
     DashboardEventType,
+    DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
     DashboardVehicleCostItem,
 } from "@/lib/dashboard-types";
@@ -30,20 +32,32 @@ function getEmptyDashboardData(): DashboardData {
             aktifArac: 0,
             toplamArac: 0,
             servisteArac: 0,
+            arizaliArac: 0,
             comparisonLabel: "geçen aya göre",
             giderDegisimYuzdesi: 0,
+            servisMaliyetDegisimYuzdesi: 0,
             aracMaliyetDegisimYuzdesi: 0,
             soforMaliyetDegisimYuzdesi: 0,
             yakitDegisimYuzdesi: 0,
         },
         durumData: [],
         alerts: [],
+        operationSummary: {
+            kritik: 0,
+            yuksek: 0,
+            orta: 0,
+            dusuk: 0,
+            toplam: 0,
+            serviste: 0,
+        },
+        operationArizalar: [],
         sixMonthsTrend: [],
         top5Expenses: [],
         calendarEvents: [],
         monthlyExpenseTrend: [],
         vehicleCostReport: [],
         driverCostReport: [],
+        companyCostReport: [],
     };
 }
 
@@ -86,8 +100,10 @@ async function getDashboardDataUnsafe(
             aktifArac: fleetData.aktifArac,
             toplamArac: fleetData.toplamArac,
             servisteArac: fleetData.servisteArac,
+            arizaliArac: fleetData.arizaliArac,
             comparisonLabel,
             giderDegisimYuzdesi: getDegisimYuzdesi(aylikToplamGider, oncekiDonemToplamGider),
+            servisMaliyetDegisimYuzdesi: getDegisimYuzdesi(costData.current.bakim, costData.previous.bakim),
             aracMaliyetDegisimYuzdesi: getDegisimYuzdesi(
                 vehicleData.ortalamaAracMaliyeti,
                 vehicleData.oncekiOrtalamaAracMaliyeti
@@ -100,12 +116,15 @@ async function getDashboardDataUnsafe(
         },
         durumData: fleetData.durumData,
         alerts: calendarData.alerts,
+        operationSummary: calendarData.operationSummary,
+        operationArizalar: calendarData.operationArizalar,
         sixMonthsTrend: costData.sixMonthsTrend,
         top5Expenses: vehicleData.top5Expenses,
         calendarEvents: calendarData.calendarEvents,
         monthlyExpenseTrend: costData.monthlyExpenseTrend,
         vehicleCostReport: vehicleData.vehicleCostReport,
         driverCostReport: driverData.driverCostReport,
+        companyCostReport: costData.companyCostReport,
     };
 }
 

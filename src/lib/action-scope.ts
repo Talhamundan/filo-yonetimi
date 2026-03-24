@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
 import { canAccessAllCompanies, getCurrentSirketId, getModelFilter } from "@/lib/auth-utils";
+import { canRoleAssignIndependentRecords } from "@/lib/policy";
 
 export async function assertAuthenticatedUser() {
     const session = await auth();
@@ -12,13 +13,23 @@ export async function assertAuthenticatedUser() {
 }
 
 export async function resolveActionSirketId(inputSirketId?: string | null) {
-    const [hasGlobalAccess, currentSirketId] = await Promise.all([
+    const [actor, hasGlobalAccess, currentSirketId] = await Promise.all([
+        assertAuthenticatedUser(),
         canAccessAllCompanies(),
         getCurrentSirketId(),
     ]);
+    const requestedSirketId = inputSirketId?.trim() || null;
 
-    if (hasGlobalAccess) {
-        return inputSirketId?.trim() || null;
+    if (currentSirketId) {
+        return currentSirketId;
+    }
+
+    if (hasGlobalAccess && requestedSirketId) {
+        return requestedSirketId;
+    }
+
+    if (hasGlobalAccess && canRoleAssignIndependentRecords((actor as any).rol, currentSirketId)) {
+        return null;
     }
 
     return currentSirketId || null;

@@ -54,20 +54,20 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<HgsRow>[] => [
         ),
     },
     {
-        accessorKey: "tutar",
-        header: () => <div className="text-right">Yükleme Tutarı</div>,
-        cell: ({ row }) => (
-            <div className="text-right font-black text-indigo-600">
-                ₺{row.original.tutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
-            </div>
-        ),
-    },
-    {
         accessorKey: "km",
         header: "İşlem KM",
         cell: ({ row }) => (
             <div className="text-slate-600 font-medium">
                 {row.original.km ? `${row.original.km.toLocaleString('tr-TR')} km` : '-'}
+            </div>
+        ),
+    },
+    {
+        accessorKey: "tutar",
+        header: () => <div className="text-right">Yükleme Tutarı</div>,
+        cell: ({ row }) => (
+            <div className="text-right font-black text-indigo-600">
+                ₺{row.original.tutar.toLocaleString('tr-TR', { minimumFractionDigits: 2 })}
             </div>
         ),
     },

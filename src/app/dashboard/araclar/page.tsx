@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
 import { getModelFilter, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
-import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { getCommonListFilters } from "@/lib/list-filters";
 import { sortByTextValue } from "@/lib/sort-utils";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT", "HGS_YUKLEME"] as const;
@@ -213,8 +213,6 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         getCurrentUserRole()
     ]);
     const filterParts: Record<string, unknown>[] = [];
-    const createdAtRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
-
     if (commonFilters.q) {
         const q = commonFilters.q;
         filterParts.push({
@@ -240,9 +238,6 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     }
     if (commonFilters.type) {
         filterParts.push({ kategori: commonFilters.type });
-    }
-    if (createdAtRange) {
-        filterParts.push({ olusturmaTarihi: createdAtRange });
     }
     const filter = filterParts.length
         ? { AND: [(rawFilter || {}) as Record<string, unknown>, ...filterParts] }
@@ -277,6 +272,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
             initialAraclar={araclar as any} 
             sirketler={sirketler}
             kullanicilar={kullanicilar.map((u: any) => ({ id: u.id, adSoyad: `${u.ad} ${u.soyad}` }))}
+            role={rol}
         />
     );
 }

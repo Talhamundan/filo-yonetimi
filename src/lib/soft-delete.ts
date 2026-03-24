@@ -1,8 +1,14 @@
 import prisma from "@/lib/prisma";
 import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { logActivity } from "@/lib/activity-log";
+import { syncAracDurumu } from "@/lib/arac-durum";
 
 export type SoftDeleteEntity = "arac" | "masraf" | "bakim" | "dokuman" | "ceza" | "kullanici";
+type HardDeleteMode = "default" | "trash";
+
+type HardDeleteOptions = {
+    mode?: HardDeleteMode;
+};
 
 export type SoftDeleteSnapshot = {
     id: string;
@@ -168,7 +174,13 @@ export async function softDeleteEntity(entity: SoftDeleteEntity, id: string, del
             result = await prisma.ceza.update({ where: { id }, data: { deletedAt, deletedBy } });
             break;
         case "kullanici":
-            result = await prisma.kullanici.update({ where: { id }, data: { deletedAt, deletedBy } });
+            result = await prisma.kullanici.update({
+                where: { id },
+                data: {
+                    deletedAt,
+                    deletedBy,
+                },
+            });
             break;
     }
 
@@ -187,8 +199,11 @@ export async function softDeleteEntity(entity: SoftDeleteEntity, id: string, del
 
 export async function restoreEntity(entity: SoftDeleteEntity, id: string) {
     switch (entity) {
-        case "arac":
-            return prisma.arac.update({ where: { id }, data: { deletedAt: null, deletedBy: null, durum: "AKTIF" } });
+        case "arac": {
+            const restored = await prisma.arac.update({ where: { id }, data: { deletedAt: null, deletedBy: null } });
+            await syncAracDurumu(id);
+            return restored;
+        }
         case "masraf":
             return prisma.masraf.update({ where: { id }, data: { deletedAt: null, deletedBy: null } });
         case "bakim":
@@ -202,7 +217,9 @@ export async function restoreEntity(entity: SoftDeleteEntity, id: string) {
     }
 }
 
-export async function hardDeleteEntity(entity: SoftDeleteEntity, id: string) {
+export async function hardDeleteEntity(entity: SoftDeleteEntity, id: string, options?: HardDeleteOptions) {
+    const mode = options?.mode ?? "default";
+
     switch (entity) {
         case "arac":
             return prisma.$transaction([
@@ -226,8 +243,60 @@ export async function hardDeleteEntity(entity: SoftDeleteEntity, id: string) {
             return prisma.dokuman.delete({ where: { id } });
         case "ceza":
             return prisma.ceza.delete({ where: { id } });
-        case "kullanici":
+        case "kullanici": {
+            if (mode === "trash") {
+                return prisma.$transaction(async (tx) => {
+                    const now = new Date();
+                    const affectedVehicleRows = await tx.arac.findMany({
+                        where: { kullaniciId: id },
+                        select: { id: true },
+                    });
+                    const activeZimmetler = await tx.kullaniciZimmet.findMany({
+                        where: { kullaniciId: id, bitis: null },
+                        select: { id: true, notlar: true },
+                    });
+
+                    for (const zimmet of activeZimmetler) {
+                        const ekNot = "Kalıcı silme öncesi sistem tarafından sonlandırıldı.";
+                        await tx.kullaniciZimmet.update({
+                            where: { id: zimmet.id },
+                            data: {
+                                bitis: now,
+                                notlar: zimmet.notlar ? `${zimmet.notlar} | ${ekNot}` : ekNot,
+                            },
+                        });
+                    }
+
+                    await Promise.all([
+                        tx.arac.updateMany({
+                            where: { kullaniciId: id },
+                            data: { kullaniciId: null },
+                        }),
+                        tx.ceza.updateMany({
+                            where: { soforId: id },
+                            data: { soforId: null },
+                        }),
+                        tx.yakit.updateMany({
+                            where: { soforId: id },
+                            data: { soforId: null },
+                        }),
+                    ]);
+                    for (const arac of affectedVehicleRows) {
+                        await syncAracDurumu(arac.id, tx);
+                    }
+
+                    // Personel satırı fiziksel olarak silineceği için FK blokajını kaldır.
+                    await tx.kullaniciZimmet.deleteMany({ where: { kullaniciId: id } });
+                    return tx.kullanici.delete({ where: { id } });
+                });
+            }
+
+            const zimmetCount = await prisma.kullaniciZimmet.count({ where: { kullaniciId: id } });
+            if (zimmetCount > 0) {
+                throw new Error("Zimmet geçmişi olan personel kalıcı silinemez.");
+            }
             return prisma.kullanici.delete({ where: { id } });
+        }
     }
 }
 
@@ -240,13 +309,23 @@ export async function purgeExpiredSoftDeletedRecords(cutoffDate: Date) {
         await hardDeleteEntity("arac", aracId);
     }
 
-    const [masrafCount, bakimCount, dokumanCount, cezaCount, kullaniciCount] = await Promise.all([
+    const [masrafCount, bakimCount, dokumanCount, cezaCount, oldKullaniciIds] = await Promise.all([
         prisma.masraf.deleteMany({ where: { deletedAt: { lt: cutoffDate } } }),
         prisma.bakim.deleteMany({ where: { deletedAt: { lt: cutoffDate } } }),
         prisma.dokuman.deleteMany({ where: { deletedAt: { lt: cutoffDate } } }),
         prisma.ceza.deleteMany({ where: { deletedAt: { lt: cutoffDate } } }),
-        prisma.kullanici.deleteMany({ where: { deletedAt: { lt: cutoffDate } } }),
+        prisma.kullanici.findMany({ where: { deletedAt: { lt: cutoffDate } }, select: { id: true } }),
     ]);
+
+    let deletedUserCount = 0;
+    for (const row of oldKullaniciIds) {
+        try {
+            await hardDeleteEntity("kullanici", row.id);
+            deletedUserCount += 1;
+        } catch {
+            // Zimmet geçmişi olan personeller arşivde tutulur.
+        }
+    }
 
     return {
         aracDeleted: oldAracIds.length,
@@ -254,6 +333,6 @@ export async function purgeExpiredSoftDeletedRecords(cutoffDate: Date) {
         bakimDeleted: bakimCount.count,
         dokumanDeleted: dokumanCount.count,
         cezaDeleted: cezaCount.count,
-        kullaniciDeleted: kullaniciCount.count,
+        kullaniciDeleted: deletedUserCount,
     };
 }

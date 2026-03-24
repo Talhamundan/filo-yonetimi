@@ -80,10 +80,11 @@ async function groupMasraf(where: Prisma.MasrafWhereInput) {
 }
 
 export async function getFleetStatusData(scope: GenericWhere) {
-    const [toplamArac, aktifArac, servisteArac, durumDagitimi] = await Promise.all([
+    const [toplamArac, aktifArac, servisteArac, arizaliArac, durumDagitimi] = await Promise.all([
         prisma.arac.count({ where: scope as Prisma.AracWhereInput }),
         prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "AKTIF" } }),
         prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "SERVISTE" } }),
+        prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "ARIZALI" } }),
         prisma.arac.groupBy({
             by: ["durum"],
             where: scope as Prisma.AracWhereInput,
@@ -95,6 +96,7 @@ export async function getFleetStatusData(scope: GenericWhere) {
         toplamArac,
         aktifArac,
         servisteArac,
+        arizaliArac,
         verimlilikOrani: toplamArac > 0 ? Math.round((aktifArac / toplamArac) * 100) : 0,
         durumData: durumDagitimi.map((row) => ({ name: row.durum, value: row._count.durum })),
     };

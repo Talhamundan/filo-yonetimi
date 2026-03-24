@@ -2,20 +2,47 @@
 
 import React from "react";
 import { Input } from "../../../components/ui/input";
+import type { Rol, iller } from "@prisma/client";
 
-export const ROLLER = ['ADMIN', 'YETKILI', 'SOFOR'];
-export const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+export type PersonelFormData = {
+    ad: string;
+    soyad: string;
+    telefon: string;
+    rol: Rol;
+    sirketId: string;
+    sehir: iller | "";
+    tcNo: string;
+};
+
+export const ROLLER: Rol[] = ['ADMIN', 'YETKILI', 'TEKNIK', 'SOFOR'];
+export const ILLER = [
+    { value: 'ISTANBUL', label: 'İSTANBUL' },
+    { value: 'BURSA', label: 'BURSA' },
+    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
+    { value: 'ANKARA', label: 'ANKARA' },
+    { value: 'DIGER', label: 'DİĞER' }
+];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 export const FormFields = ({
     formData,
     setFormData,
-    sirketler
+    sirketler,
+    allowAdminRole = false,
+    allowIndependentOption = true,
 }: {
-    formData: any,
-    setFormData: any,
-    sirketler: { id: string; ad: string; bulunduguIl?: string }[]
-}) => (
+    formData: PersonelFormData,
+    setFormData: React.Dispatch<React.SetStateAction<PersonelFormData>>,
+    sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    allowAdminRole?: boolean,
+    allowIndependentOption?: boolean,
+}) => {
+    const baseRoleOptions = allowAdminRole ? ROLLER : ROLLER.filter((item) => item !== "ADMIN");
+    const roleOptions = baseRoleOptions.includes(formData.rol)
+        ? baseRoleOptions
+        : [formData.rol, ...baseRoleOptions];
+
+    return (
     <div className="grid gap-4 py-4">
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
@@ -36,10 +63,6 @@ export const FormFields = ({
             </div>
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">E-Posta</label>
-            <Input type="email" value={formData.eposta} onChange={e => setFormData({...formData, eposta: e.target.value})} className="h-9" />
-        </div>
-        <div className="space-y-1.5">
             <label className="text-sm font-medium">Telefon</label>
             <Input value={formData.telefon} onChange={e => setFormData({...formData, telefon: e.target.value})} placeholder="0532 xxx xx xx" className="h-9" />
         </div>
@@ -50,9 +73,9 @@ export const FormFields = ({
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Rol</label>
-                <select value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value})}
+                <select value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value as Rol})}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                    {ROLLER.map(r => <option key={r} value={r}>{r}</option>)}
+                    {roleOptions.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
             </div>
         </div>
@@ -65,22 +88,29 @@ export const FormFields = ({
                     setFormData({
                         ...formData,
                         sirketId: nextSirketId,
-                        sehir: selectedSirket?.bulunduguIl || formData.sehir
+                        sehir: (selectedSirket?.bulunduguIl as iller | undefined) || formData.sehir
                     });
                 }}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                    <option value="">Bağımsız (Yok)</option>
+                    {allowIndependentOption ? (
+                        <option value="">Bağımsız (Yok)</option>
+                    ) : (
+                        <option value="" disabled>
+                            Şirket Seçiniz
+                        </option>
+                    )}
                     {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
                 </select>
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Şehir</label>
-                <select value={formData.sehir} onChange={e => setFormData({...formData, sehir: e.target.value})}
+                <select value={formData.sehir} onChange={e => setFormData({...formData, sehir: e.target.value as iller | ""})}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
                     <option value="">Seçiniz</option>
-                    {ILLER.map(il => <option key={il} value={il}>{il}</option>)}
+                    {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
                 </select>
             </div>
         </div>
     </div>
-);
+    );
+};

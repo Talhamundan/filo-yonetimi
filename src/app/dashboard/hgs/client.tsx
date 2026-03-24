@@ -186,9 +186,14 @@ export default function HgsClient({
                 </div>
 
                 <DataTable
-                    columns={[actionsCol, ...getColumns(canAccessAllCompanies)]}
+                    columns={[...getColumns(canAccessAllCompanies), actionsCol]}
                     data={initialHgs}
+                    searchKey="arac_plaka"
+                    searchPlaceholder="HGS kaydı için araç plakası ara..."
                     toolbarArrangement="report-right-scroll"
+                    serverFiltering={{
+                        showDateRange: true,
+                    }}
                     excelEntity="hgs"
                 />
 

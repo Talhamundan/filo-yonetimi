@@ -84,7 +84,7 @@ export default function ActivityLogClient({
         <div className="p-6 md:p-8 xl:p-10 max-w-[1500px] mx-auto space-y-4">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight text-slate-900">Aktivite Geçmişi</h1>
-                <p className="text-sm text-slate-500">Sistemde gerçekleşen kritik işlemler.</p>
+                <p className="text-sm text-slate-500">Sistemde gerçekleşen önemli işlemler.</p>
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">

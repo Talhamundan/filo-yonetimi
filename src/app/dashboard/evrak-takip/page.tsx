@@ -3,6 +3,7 @@ import EvrakTakipClient from "./EvrakTakipClient";
 import { differenceInDays } from "date-fns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
+import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 
 type AracLite = {
     id: string;
@@ -19,7 +20,7 @@ type EvrakKaydi = {
 
 function getDurum(kalanGun: number) {
     if (kalanGun < 0) return "GECIKTI";
-    if (kalanGun <= 15) return "KRITIK";
+    if (kalanGun <= 15) return "YUKSEK";
     if (kalanGun <= 30) return "YAKLASTI";
     return "GECERLI";
 }
@@ -41,9 +42,10 @@ function buildLatestMap<T extends EvrakKaydi>(records: T[]) {
 }
 
 export default async function EvrakTakipPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil] = await Promise.all([
+    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getCommonListFilters(props.searchParams),
     ]);
     const { start: yilBasi, end: yilSonu } = getYilDateRange(selectedYil);
     const [aracFilter, muayeneFilter, kaskoFilter, trafikFilter] = await Promise.all([
@@ -216,15 +218,38 @@ export default async function EvrakTakipPage(props: { searchParams?: Promise<Das
                 plaka: arac.plaka,
                 marka: arac.marka,
                 sirketAd: arac.sirket?.ad || null,
-                tur: "Trafik Sigortasi",
+                tur: "Trafik Sigortası",
                 gecerlilikTarihi: trafik.gecerlilikTarihi,
                 kalanGun,
                 durum: getDurum(kalanGun),
             });
         }
     }
+    const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+    const q = commonFilters.q.trim().toLocaleLowerCase("tr-TR");
+    const filteredEvrakListesi = evrakListesi
+        .filter((row) => {
+            if (q) {
+                const haystack = [
+                    row.plaka,
+                    row.marka,
+                    row.tur,
+                    row.sirketAd || "",
+                ]
+                    .join(" ")
+                    .toLocaleLowerCase("tr-TR");
+                if (!haystack.includes(q)) return false;
+            }
+            if (commonFilters.status) {
+                const normalizedStatus = commonFilters.status === "KRITIK" ? "YUKSEK" : commonFilters.status;
+                if (row.durum !== normalizedStatus) return false;
+            }
+            if (commonFilters.type && row.tur !== commonFilters.type) return false;
+            if (dateRange?.gte && row.gecerlilikTarihi < dateRange.gte) return false;
+            if (dateRange?.lte && row.gecerlilikTarihi > dateRange.lte) return false;
+            return true;
+        })
+        .sort((a, b) => a.kalanGun - b.kalanGun);
 
-    evrakListesi.sort((a, b) => a.kalanGun - b.kalanGun);
-
-    return <EvrakTakipClient initialEvraklar={evrakListesi} />;
+    return <EvrakTakipClient initialEvraklar={filteredEvrakListesi} />;
 }

@@ -3,10 +3,12 @@ import { differenceInCalendarDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
 import { formatDateKey } from "@/lib/dashboard-helpers";
 import type {
+    DashboardArizaOncelik,
     DashboardCalendarEvent,
     DashboardDateContext,
     DashboardData,
     DashboardEventStatus,
+    DashboardOperationArizaItem,
     GenericWhere,
 } from "@/lib/dashboard-types";
 
@@ -15,6 +17,18 @@ type EvrakLatestRecord = {
     aracId: string;
     gecerlilikTarihi: Date;
 };
+
+const ARIZA_PRIORITY_ORDER: Record<DashboardArizaOncelik, number> = {
+    KRITIK: 0,
+    YUKSEK: 0,
+    ORTA: 2,
+    DUSUK: 3,
+};
+
+function normalizeArizaOncelik(oncelik: DashboardArizaOncelik | null | undefined): DashboardArizaOncelik {
+    if (oncelik === "KRITIK") return "YUKSEK";
+    return oncelik || "ORTA";
+}
 
 function isWithinSelectedRange(date: Date | null | undefined, rangeStart: Date, rangeEnd: Date) {
     if (!date) return false;
@@ -35,7 +49,7 @@ function buildLatestMap<T extends EvrakLatestRecord>(records: T[]) {
 
 function getEventStatus(daysLeft: number): DashboardEventStatus {
     if (daysLeft < 0) return "GECIKTI";
-    if (daysLeft <= 15) return "KRITIK";
+    if (daysLeft <= 15) return "YUKSEK";
     if (daysLeft <= 30) return "YAKLASTI";
     return "PLANLI";
 }
@@ -66,10 +80,20 @@ export async function getDashboardCalendarData(params: {
             alerts: [] as DashboardData["alerts"],
             kritikUyariSayisi: 0,
             calendarEvents: [] as DashboardCalendarEvent[],
+            operationSummary: {
+                kritik: 0,
+                yuksek: 0,
+                orta: 0,
+                dusuk: 0,
+                toplam: 0,
+                serviste: 0,
+            },
+            operationArizalar: [] as DashboardOperationArizaItem[],
         };
     }
 
-    const [muayeneRows, kaskoRows, trafikRows, unpaidCezalar] = await Promise.all([
+    const arizaModel = (prisma as any).arizaKaydi;
+    const [muayeneRows, kaskoRows, trafikRows, unpaidCezalar, arizaRows] = await Promise.all([
         prisma.muayene.findMany({
             where: { ...(scope as Prisma.MuayeneWhereInput), aracId: { in: aracIds } },
             orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { muayeneTarihi: "desc" }, { gecerlilikTarihi: "desc" }],
@@ -109,6 +133,23 @@ export async function getDashboardCalendarData(params: {
                 },
             },
         }),
+        arizaModel?.findMany
+            ? arizaModel.findMany({
+                  where: {
+                      ...(scope as Record<string, unknown>),
+                      durum: { in: ["ACIK", "SERVISTE"] },
+                  },
+                  select: {
+                      id: true,
+                      aracId: true,
+                      oncelik: true,
+                      durum: true,
+                      aciklama: true,
+                      bildirimTarihi: true,
+                      arac: { select: { plaka: true } },
+                  },
+              })
+            : Promise.resolve([]),
     ]);
 
     const latestMuayene = buildLatestMap(
@@ -237,9 +278,36 @@ export async function getDashboardCalendarData(params: {
     alerts.sort((a, b) => new Date(a.tarih).getTime() - new Date(b.tarih).getTime());
     calendarEvents.sort((a, b) => a.date.localeCompare(b.date));
 
+    const operationArizalar: DashboardOperationArizaItem[] = (arizaRows as Array<any>)
+        .map((row) => ({
+            id: row.id,
+            aracId: row.aracId,
+            plaka: row.arac?.plaka || "-",
+            oncelik: normalizeArizaOncelik((row.oncelik || "ORTA") as DashboardArizaOncelik),
+            durum: (row.durum === "SERVISTE" ? "SERVISTE" : "ACIK") as "SERVISTE" | "ACIK",
+            aciklama: row.aciklama || "Arıza kaydı",
+            bildirimTarihi: new Date(row.bildirimTarihi || new Date()).toISOString(),
+        }))
+        .sort((a, b) => {
+            const priorityDiff = ARIZA_PRIORITY_ORDER[a.oncelik] - ARIZA_PRIORITY_ORDER[b.oncelik];
+            if (priorityDiff !== 0) return priorityDiff;
+            return new Date(b.bildirimTarihi).getTime() - new Date(a.bildirimTarihi).getTime();
+        });
+
+    const operationSummary = {
+        kritik: 0,
+        yuksek: operationArizalar.filter((row) => row.oncelik === "YUKSEK").length,
+        orta: operationArizalar.filter((row) => row.oncelik === "ORTA").length,
+        dusuk: operationArizalar.filter((row) => row.oncelik === "DUSUK").length,
+        toplam: operationArizalar.length,
+        serviste: operationArizalar.filter((row) => row.durum === "SERVISTE").length,
+    };
+
     return {
         alerts: alerts.slice(0, 4),
         kritikUyariSayisi: alerts.length,
         calendarEvents,
+        operationSummary,
+        operationArizalar,
     };
 }

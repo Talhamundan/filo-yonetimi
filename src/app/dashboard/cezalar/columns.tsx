@@ -15,7 +15,8 @@ export type CezaRow = {
     tutar: number;
 }
 
-export const getColumns = (): ColumnDef<CezaRow>[] => [
+export const getColumns = (): ColumnDef<CezaRow>[] => {
+    const columns: ColumnDef<CezaRow>[] = [
     {
         accessorKey: "plaka",
         header: "Plaka",
@@ -52,11 +53,14 @@ export const getColumns = (): ColumnDef<CezaRow>[] => [
     },
     {
         accessorKey: "tutar",
-        header: () => <div className="text-right">Tutar (₺)</div>,
+        header: () => <div className="text-right font-semibold">Tutar (₺)</div>,
         cell: ({ row }) => (
-            <div className="text-right font-semibold text-rose-600">
+            <div className="text-right font-black text-rose-600">
                 ₺{row.original.tutar.toLocaleString("tr-TR")}
             </div>
         )
-    }
-]
+    },
+    ];
+
+    return columns;
+};
