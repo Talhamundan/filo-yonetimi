@@ -3,9 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import SirketlerClient from "./Client";
 import { canAccessAllCompanies, getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { redirect } from "next/navigation";
-import { endOfMonth, startOfMonth } from "date-fns";
 import { getCezaScopeWhere } from "@/lib/dashboard-helpers";
 import { getCompanyCostReportForPeriod } from "@/lib/dashboard-cost.service";
 
@@ -22,8 +21,7 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
         getSelectedAy(props.searchParams),
     ]);
     const filter = await getModelFilter('sirket', selectedSirketId);
-    const periodStart = startOfMonth(new Date(selectedYil, selectedAy - 1, 1));
-    const periodEnd = endOfMonth(new Date(selectedYil, selectedAy - 1, 1));
+    const { start: periodStart, end: periodEnd } = getAyDateRange(selectedYil, selectedAy);
     const companyScope = selectedSirketId ? { sirketId: selectedSirketId } : {};
     const companyCostReport = await getCompanyCostReportForPeriod({
         scope: companyScope,

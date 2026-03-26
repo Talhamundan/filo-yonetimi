@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, Receipt, Trash2, Pencil } from "lucide-react";
+import { Plus, Receipt } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, MasrafRow } from "./columns";
@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { createMasraf, updateMasraf, deleteMasraf } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const TUR_LIST = [
     'BAKIM_ONARIM',
@@ -154,12 +155,8 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
             header: 'İşlemler',
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
-                    <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors">
-                        <Pencil size={15} />
-                    </button>
-                    <button onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors">
-                        <Trash2 size={15} />
-                    </button>
+                    <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} />
                 </div>
             )
         },

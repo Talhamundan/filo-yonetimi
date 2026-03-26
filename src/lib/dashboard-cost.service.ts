@@ -1,10 +1,12 @@
 import { MasrafKategorisi, Prisma } from "@prisma/client";
-import { endOfMonth, format, startOfMonth } from "date-fns";
+import { eachDayOfInterval, endOfMonth, format, startOfMonth } from "date-fns";
 import { tr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import type {
+    DashboardComparisonGranularity,
     CostBreakdown,
     DashboardCompanyCostItem,
+    DashboardDailyTrendItem,
     DashboardDateContext,
     DashboardMonthlyTrendItem,
     GenericWhere,
@@ -66,6 +68,7 @@ type DashboardCostServiceResult = {
     current: CostBreakdown;
     previous: CostBreakdown;
     monthlyExpenseTrend: DashboardMonthlyTrendItem[];
+    dailyExpenseTrend: DashboardDailyTrendItem[];
     sixMonthsTrend: { name: string; gider: number }[];
     companyCostReport: DashboardCompanyCostItem[];
 };
@@ -260,17 +263,116 @@ async function getBreakdownForPeriod(params: {
     };
 }
 
+function createEmptyDailyTrendItem(date: Date): DashboardDailyTrendItem {
+    const dateKey = format(date, "yyyy-MM-dd");
+    return {
+        dateKey,
+        gun: Number(format(date, "d")),
+        name: format(date, "d"),
+        yakit: 0,
+        bakim: 0,
+        muayene: 0,
+        hgs: 0,
+        ceza: 0,
+        kasko: 0,
+        trafik: 0,
+        diger: 0,
+        toplam: 0,
+    };
+}
+
+function addDailyAmount(
+    map: Map<string, DashboardDailyTrendItem>,
+    date: Date,
+    category: "yakit" | "bakim" | "muayene" | "hgs" | "ceza" | "kasko" | "trafik" | "diger",
+    amount: number
+) {
+    const dateKey = format(date, "yyyy-MM-dd");
+    const item = map.get(dateKey);
+    if (!item) return;
+    item[category] += amount;
+    item.toplam += amount;
+}
+
+async function getDailyExpenseTrendForPeriod(params: {
+    scope: GenericWhere;
+    cezaScope: GenericWhere;
+    start: Date;
+    end: Date;
+}): Promise<DashboardDailyTrendItem[]> {
+    const { scope, cezaScope, start, end } = params;
+    const dayMap = new Map<string, DashboardDailyTrendItem>();
+
+    for (const day of eachDayOfInterval({ start, end })) {
+        const item = createEmptyDailyTrendItem(day);
+        dayMap.set(item.dateKey, item);
+    }
+
+    const [yakitRows, bakimRows, muayeneRows, hgsRows, cezaRows, kaskoRows, trafikRows, digerRows] =
+        await Promise.all([
+            prisma.yakit.findMany({
+                where: { ...(scope as Prisma.YakitWhereInput), tarih: { gte: start, lte: end } },
+                select: { tarih: true, tutar: true },
+            }),
+            prisma.bakim.findMany({
+                where: { ...(scope as Prisma.BakimWhereInput), bakimTarihi: { gte: start, lte: end } },
+                select: { bakimTarihi: true, tutar: true },
+            }),
+            prisma.muayene.findMany({
+                where: { ...(scope as Prisma.MuayeneWhereInput), muayeneTarihi: { gte: start, lte: end } },
+                select: { muayeneTarihi: true, tutar: true },
+            }),
+            prisma.hgsYukleme.findMany({
+                where: { ...(scope as Prisma.HgsYuklemeWhereInput), tarih: { gte: start, lte: end } },
+                select: { tarih: true, tutar: true },
+            }),
+            prisma.ceza.findMany({
+                where: { ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: start, lte: end } },
+                select: { tarih: true, tutar: true },
+            }),
+            prisma.kasko.findMany({
+                where: { ...(scope as Prisma.KaskoWhereInput), baslangicTarihi: { gte: start, lte: end } },
+                select: { baslangicTarihi: true, tutar: true },
+            }),
+            prisma.trafikSigortasi.findMany({
+                where: { ...(scope as Prisma.TrafikSigortasiWhereInput), baslangicTarihi: { gte: start, lte: end } },
+                select: { baslangicTarihi: true, tutar: true },
+            }),
+            prisma.masraf.findMany({
+                where: {
+                    ...(scope as Prisma.MasrafWhereInput),
+                    tur: { notIn: [...EXCLUDED_MASRAF_TURLERI] },
+                    tarih: { gte: start, lte: end },
+                },
+                select: { tarih: true, tutar: true },
+            }),
+        ]);
+
+    for (const row of yakitRows) addDailyAmount(dayMap, row.tarih, "yakit", toNumber(row.tutar));
+    for (const row of bakimRows) addDailyAmount(dayMap, row.bakimTarihi, "bakim", toNumber(row.tutar));
+    for (const row of muayeneRows) addDailyAmount(dayMap, row.muayeneTarihi, "muayene", toNumber(row.tutar));
+    for (const row of hgsRows) addDailyAmount(dayMap, row.tarih, "hgs", toNumber(row.tutar));
+    for (const row of cezaRows) addDailyAmount(dayMap, row.tarih, "ceza", toNumber(row.tutar));
+    for (const row of kaskoRows) addDailyAmount(dayMap, row.baslangicTarihi, "kasko", toNumber(row.tutar));
+    for (const row of trafikRows) addDailyAmount(dayMap, row.baslangicTarihi, "trafik", toNumber(row.tutar));
+    for (const row of digerRows) addDailyAmount(dayMap, row.tarih, "diger", toNumber(row.tutar));
+
+    return [...dayMap.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
 export async function getDashboardCostData(params: {
     scope: GenericWhere;
     cezaScope: GenericWhere;
     dateContext: DashboardDateContext;
+    comparisonGranularity: DashboardComparisonGranularity;
 }): Promise<DashboardCostServiceResult> {
-    const { scope, cezaScope, dateContext } = params;
+    const { scope, cezaScope, dateContext, comparisonGranularity } = params;
     const { seciliAyBasi, seciliAySonu, oncekiDonemBasi, oncekiDonemSonu, normalizedYear, normalizedMonth } = dateContext;
 
-    const [current, previous] = await Promise.all([
+    const [current, previous, dailyExpenseTrend] = await Promise.all([
         getBreakdownForPeriod({ scope, cezaScope, start: seciliAyBasi, end: seciliAySonu }),
         getBreakdownForPeriod({ scope, cezaScope, start: oncekiDonemBasi, end: oncekiDonemSonu }),
+        getDailyExpenseTrendForPeriod({ scope, cezaScope, start: seciliAyBasi, end: seciliAySonu }),
     ]);
     const companyCostReport = await getCompanyCostReportForPeriod({
         scope,
@@ -279,8 +381,17 @@ export async function getDashboardCostData(params: {
         end: seciliAySonu,
     });
 
-    const endMonthIndex = normalizedMonth - 1;
-    const startMonthIndex = Math.max(0, endMonthIndex - 5);
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1;
+    const effectiveEndMonth =
+        comparisonGranularity === "YIL"
+            ? normalizedYear < currentYear
+                ? 12
+                : Math.min(normalizedMonth, currentMonth)
+            : normalizedMonth;
+    const endMonthIndex = Math.max(0, effectiveEndMonth - 1);
+    const startMonthIndex = comparisonGranularity === "YIL" ? 0 : Math.max(0, endMonthIndex - 5);
     const periods = Array.from({ length: endMonthIndex - startMonthIndex + 1 }, (_, idx) => {
         const month = startMonthIndex + idx;
         const date = new Date(normalizedYear, month, 1);
@@ -301,6 +412,7 @@ export async function getDashboardCostData(params: {
         current,
         previous,
         monthlyExpenseTrend,
+        dailyExpenseTrend,
         sixMonthsTrend: monthlyExpenseTrend.map((item) => ({ name: item.name, gider: item.toplam })),
         companyCostReport,
     };

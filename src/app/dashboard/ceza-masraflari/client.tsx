@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Plus, Pencil, Trash2, ShieldAlert } from "lucide-react";
+import { Plus, ShieldAlert } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -14,6 +14,7 @@ import { CezaMasrafRow, getColumns } from "./columns";
 import { createCezaMasraf, deleteCezaMasraf, updateCezaMasraf } from "./actions";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const todayDate = () => new Date().toISOString().slice(0, 10);
 const oneMonthAfter = () => {
@@ -306,18 +307,8 @@ export default function CezaMasraflariClient({
             header: "Islemler",
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => openEdit(row.original)}
-                        className="p-1.5 rounded-md hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors"
-                    >
-                        <Pencil size={15} />
-                    </button>
-                    <button
-                        onClick={() => handleDelete(row.original.id)}
-                        className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                    >
-                        <Trash2 size={15} />
-                    </button>
+                    <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id)} />
                 </div>
             ),
         },

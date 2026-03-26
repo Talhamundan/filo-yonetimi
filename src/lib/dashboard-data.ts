@@ -13,6 +13,7 @@ export type {
     DashboardDriverCostItem,
     DashboardEventStatus,
     DashboardEventType,
+    DashboardDailyTrendItem,
     DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
     DashboardVehicleCostItem,
@@ -55,6 +56,7 @@ function getEmptyDashboardData(): DashboardData {
         top5Expenses: [],
         calendarEvents: [],
         monthlyExpenseTrend: [],
+        dailyExpenseTrend: [],
         vehicleCostReport: [],
         driverCostReport: [],
         companyCostReport: [],
@@ -73,7 +75,7 @@ async function getDashboardDataUnsafe(
 
     const [fleetData, costData, calendarData, vehicleData, driverData] = await Promise.all([
         getFleetStatusData(scope),
-        getDashboardCostData({ scope, cezaScope, dateContext }),
+        getDashboardCostData({ scope, cezaScope, dateContext, comparisonGranularity }),
         getDashboardCalendarData({ scope, cezaScope, dateContext }),
         getDashboardVehicleData({ scope, cezaScope, dateContext }),
         getDashboardDriverData({ scope, cezaScope, dateContext }),
@@ -122,6 +124,7 @@ async function getDashboardDataUnsafe(
         top5Expenses: vehicleData.top5Expenses,
         calendarEvents: calendarData.calendarEvents,
         monthlyExpenseTrend: costData.monthlyExpenseTrend,
+        dailyExpenseTrend: costData.dailyExpenseTrend,
         vehicleCostReport: vehicleData.vehicleCostReport,
         driverCostReport: driverData.driverCostReport,
         companyCostReport: costData.companyCostReport,

@@ -13,6 +13,7 @@ import { createCeza, updateCeza, deleteCeza } from "./actions";
 import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui/card";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const EMPTY = {
     aracId: "",
@@ -197,8 +198,8 @@ export default function CezalarClient({
             header: "İşlemler",
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
-                    <button onClick={() => openEdit(row.original)} className="text-indigo-600 hover:text-indigo-800 text-xs font-semibold">Düzenle</button>
-                    <button onClick={() => handleDelete(row.original.id)} className="text-rose-600 hover:text-rose-800 text-xs font-semibold">Sil</button>
+                    <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id)} />
                 </div>
             )
         }

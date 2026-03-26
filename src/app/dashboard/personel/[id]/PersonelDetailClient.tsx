@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../../components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import {
-    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Pencil, Trash2, Plus, Wrench
+    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Plus, Wrench
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { createZimmet } from "../../zimmetler/actions";
 import { AracLink } from "@/components/links/RecordLinks";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 export default function PersonelDetailClient({
     initialPersonel: p,
@@ -185,18 +186,8 @@ export default function PersonelDetailClient({
                             </div>
 
                             <div className="flex items-center gap-2 mt-2">
-                                <button 
-                                    onClick={() => setEditOpen(true)}
-                                    className="flex items-center gap-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
-                                >
-                                    <Pencil size={16} /> Düzenle
-                                </button>
-                                <button 
-                                    onClick={handleDelete}
-                                    className="flex items-center gap-2 bg-rose-50 text-rose-700 hover:bg-rose-100 px-4 py-2 rounded-lg font-bold text-sm transition-all"
-                                >
-                                    <Trash2 size={16} /> Sil
-                                </button>
+                                <RowActionButton variant="edit" onClick={() => setEditOpen(true)} />
+                                <RowActionButton variant="delete" onClick={handleDelete} />
                             </div>
                         </div>
                     </div>

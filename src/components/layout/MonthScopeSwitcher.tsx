@@ -25,22 +25,51 @@ export default function MonthScopeSwitcher() {
     const searchParams = useSearchParams();
     const [pending, setPending] = useState(false);
 
+    const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
-    const rawSelectedMonth = Number(searchParams.get("ay"));
-    const selectedMonth =
-        Number.isInteger(rawSelectedMonth) && rawSelectedMonth >= 1 && rawSelectedMonth <= 12
-            ? rawSelectedMonth
-            : currentMonth;
+    const selectedYearRaw = Number(searchParams.get("yil"));
+    const selectedYear =
+        Number.isInteger(selectedYearRaw) && selectedYearRaw >= 2000 && selectedYearRaw <= 2100
+            ? selectedYearRaw
+            : currentYear;
+    const rawAy = searchParams.get("ay");
+    const parsedMonth = Number(rawAy);
+    const isAllSelected = rawAy?.trim().toLowerCase() === "all" || rawAy?.trim().toLowerCase() === "__all__";
+    const maxMonth =
+        selectedYear < currentYear ? 12 : selectedYear === currentYear ? currentMonth : 0;
+    const visibleMonths = useMemo(
+        () => MONTHS.filter((month) => month.value <= maxMonth),
+        [maxMonth]
+    );
+    const selectedValue = useMemo(() => {
+        if (isAllSelected) return "all";
+        if (
+            Number.isInteger(parsedMonth) &&
+            parsedMonth >= 1 &&
+            parsedMonth <= 12 &&
+            visibleMonths.some((month) => month.value === parsedMonth)
+        ) {
+            return String(parsedMonth);
+        }
+        if (visibleMonths.some((month) => month.value === currentMonth)) {
+            return String(currentMonth);
+        }
+        return "all";
+    }, [currentMonth, isAllSelected, parsedMonth, visibleMonths]);
 
     const selectedLabel = useMemo(
-        () => MONTHS.find((month) => month.value === selectedMonth)?.label || "Ay",
-        [selectedMonth]
+        () => (selectedValue === "all" ? "Tümü" : MONTHS.find((month) => String(month.value) === selectedValue)?.label || "Ay"),
+        [selectedValue]
     );
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
-        const value = Number(event.target.value);
+        const value = event.target.value;
         const nextParams = new URLSearchParams(searchParams.toString());
-        nextParams.set("ay", String(value));
+        if (value === "all") {
+            nextParams.set("ay", "all");
+        } else {
+            nextParams.set("ay", value);
+        }
 
         setPending(true);
         startTransition(() => {
@@ -56,12 +85,13 @@ export default function MonthScopeSwitcher() {
             <select
                 aria-label="Ay filtresi"
                 title={`Aktif ay: ${selectedLabel}`}
-                value={String(selectedMonth)}
+                value={selectedValue}
                 onChange={handleChange}
                 disabled={pending}
                 className="h-9 md:h-10 w-full appearance-none rounded-lg md:rounded-xl border border-slate-200 bg-white pl-2.5 md:pl-2.5 pr-7 md:pr-7 text-left text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
-                {MONTHS.map((month) => (
+                <option value="all">Tümü</option>
+                {visibleMonths.map((month) => (
                     <option key={month.value} value={month.value}>
                         {month.label}
                     </option>

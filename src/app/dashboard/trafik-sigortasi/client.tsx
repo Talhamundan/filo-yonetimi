@@ -4,7 +4,7 @@ import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, ShieldAlert, Trash2, Pencil, RefreshCw } from "lucide-react";
+import { Plus, ShieldAlert, RefreshCw } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, SigortaRow } from "./columns";
@@ -13,6 +13,7 @@ import { createSigorta, updateSigorta, deleteSigorta, renewSigorta } from "./act
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const EMPTY = {
     aracId: '',
@@ -321,12 +322,8 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
                     <button onClick={() => openRenew(row.original)} className="p-1.5 rounded-md hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 transition-colors">
                         <RefreshCw size={15} />
                     </button>
-                    <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors">
-                        <Pencil size={15} />
-                    </button>
-                    <button onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors">
-                        <Trash2 size={15} />
-                    </button>
+                    <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} />
                 </div>
             )
         }

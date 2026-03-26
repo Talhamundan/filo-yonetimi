@@ -1,17 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
 import { getModelFilter, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { sortByTextValue } from "@/lib/sort-utils";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT", "HGS_YUKLEME"] as const;
-
-function getMonthDateRange(yil: number, ay: number) {
-    const start = new Date(yil, ay - 1, 1, 0, 0, 0, 0);
-    const end = new Date(yil, ay, 0, 23, 59, 59, 999);
-    return { start, end };
-}
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -204,7 +198,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
-    const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
+    const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
         getModelFilter('arac', selectedSirketId),

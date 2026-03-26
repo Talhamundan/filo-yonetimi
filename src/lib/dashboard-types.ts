@@ -42,6 +42,21 @@ export interface DashboardMonthlyTrendItem {
     toplam: number;
 }
 
+export interface DashboardDailyTrendItem {
+    dateKey: string;
+    gun: number;
+    name: string;
+    yakit: number;
+    bakim: number;
+    muayene: number;
+    hgs: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+}
+
 export interface DashboardVehicleCostItem {
     aracId: string;
     plaka: string;
@@ -116,6 +131,7 @@ export interface DashboardData {
     top5Expenses: { plaka: string; tutar: number }[];
     calendarEvents: DashboardCalendarEvent[];
     monthlyExpenseTrend: DashboardMonthlyTrendItem[];
+    dailyExpenseTrend: DashboardDailyTrendItem[];
     vehicleCostReport: DashboardVehicleCostItem[];
     driverCostReport: DashboardDriverCostItem[];
     companyCostReport: DashboardCompanyCostItem[];

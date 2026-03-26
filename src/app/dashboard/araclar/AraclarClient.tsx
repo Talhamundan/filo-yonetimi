@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, Trash2, Pencil, Car, Building2, User } from "lucide-react";
+import { Plus, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
@@ -12,6 +12,7 @@ import { getColumns, AracRow } from "./columns";
 import { createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const ILLER = [
     { value: 'ISTANBUL', label: 'İSTANBUL' },
@@ -303,20 +304,14 @@ export default function AraclarClient({
             header: 'İşlemler',
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
-                    <button 
+                    <RowActionButton
+                        variant="edit"
                         onClick={(e) => { e.stopPropagation(); openEdit(row.original); }} 
-                        className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors"
-                        title="Düzenle"
-                    >
-                        <Pencil size={15} />
-                    </button>
-                    <button 
+                    />
+                    <RowActionButton
+                        variant="delete"
                         onClick={(e) => { e.stopPropagation(); handleDelete(row.original as AracRow); }} 
-                        className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                        title="Sil"
-                    >
-                        <Trash2 size={15} />
-                    </button>
+                    />
                 </div>
             )
         }

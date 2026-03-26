@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { CheckCircle2, Pencil, Plus, Trash2, TriangleAlert, Wrench, XCircle } from "lucide-react";
+import { CheckCircle2, Plus, TriangleAlert, Wrench, XCircle } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { DataTable } from "@/components/ui/data-table";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { ArizaRow, getColumns } from "./columns";
+import { RowActionButton } from "@/components/ui/row-action-button";
 import {
     createArizaKaydi,
     deleteArizaKaydi,
@@ -258,13 +259,7 @@ export default function ArizalarClient({
                 const canTransition = item.durum === "ACIK" || item.durum === "SERVISTE";
                 return (
                     <div className="flex items-center gap-1.5">
-                        <button
-                            onClick={() => openEdit(item)}
-                            className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors"
-                            title="Düzenle"
-                        >
-                            <Pencil size={15} />
-                        </button>
+                        <RowActionButton variant="edit" onClick={() => openEdit(item)} />
                         {item.durum === "ACIK" ? (
                             <button
                                 onClick={() => handleSeviseGonder(item)}
@@ -292,13 +287,7 @@ export default function ArizalarClient({
                                 <XCircle size={15} />
                             </button>
                         ) : null}
-                        <button
-                            onClick={() => handleDelete(item)}
-                            className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                            title="Sil"
-                        >
-                            <Trash2 size={15} />
-                        </button>
+                        <RowActionButton variant="delete" onClick={() => handleDelete(item)} />
                     </div>
                 );
             },

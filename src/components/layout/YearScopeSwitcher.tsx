@@ -30,15 +30,28 @@ export default function YearScopeSwitcher() {
         revalidateOnFocus: false,
     });
 
-    const years = useMemo(() => {
-        const options = new Set<number>([currentYear, selectedYear]);
-        for (const year of data?.years || []) {
-            if (Number.isInteger(year)) {
-                options.add(year);
-            }
-        }
-        return Array.from(options).sort((a, b) => b - a);
-    }, [currentYear, data?.years, selectedYear]);
+    const dataYears = useMemo(
+        () =>
+            (data?.years || [])
+                .filter((year): year is number => Number.isInteger(year))
+                .sort((a, b) => b - a),
+        [data?.years]
+    );
+    const years = useMemo(
+        () => (dataYears.length > 0 ? dataYears : [currentYear]),
+        [currentYear, dataYears]
+    );
+    const effectiveSelectedYear = years.includes(selectedYear) ? selectedYear : years[0];
+
+    React.useEffect(() => {
+        if (dataYears.length === 0) return;
+        if (dataYears.includes(selectedYear)) return;
+
+        const nextParams = new URLSearchParams(searchParams.toString());
+        nextParams.set("yil", String(dataYears[0]));
+        const query = nextParams.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname);
+    }, [dataYears, pathname, router, searchParams, selectedYear]);
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const value = Number(event.target.value);
@@ -58,8 +71,8 @@ export default function YearScopeSwitcher() {
         <div className="relative w-[70px] md:w-[92px]">
             <select
                 aria-label="Yıl filtresi"
-                title={`Aktif yıl: ${selectedYear}`}
-                value={String(selectedYear)}
+                title={`Aktif yıl: ${effectiveSelectedYear}`}
+                value={String(effectiveSelectedYear)}
                 onChange={handleChange}
                 disabled={pending}
                 className="h-9 md:h-10 w-full appearance-none rounded-lg md:rounded-xl border border-slate-200 bg-white pl-2.5 md:pl-2.5 pr-7 md:pr-7 text-left text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"

@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, Users, Trash2, Pencil } from "lucide-react";
+import { Plus, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, PersonelRow } from "./columns";
@@ -13,6 +13,7 @@ import { FormFields, ROLLER, type PersonelFormData } from "./PersonelForm";
 import type { ColumnDef } from "@tanstack/react-table";
 import type { Rol } from "@prisma/client";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'SOFOR', sirketId: '', sehir: '', tcNo: '' };
 
@@ -99,20 +100,14 @@ export default function PersonelClient({
         header: 'İşlemler',
         cell: ({ row }) => (
             <div className="flex items-center gap-2">
-                <button
+                <RowActionButton
+                    variant="edit"
                     onClick={(e) => { e.stopPropagation(); openEdit(row.original); }}
-                    className="p-1.5 rounded-md hover:bg-slate-100 text-slate-600 hover:text-indigo-600 transition-colors"
-                    title="Düzenle"
-                >
-                    <Pencil size={15} />
-                </button>
-                <button
+                />
+                <RowActionButton
+                    variant="delete"
                     onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id); }}
-                    className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                    title="Sil"
-                >
-                    <Trash2 size={15} />
-                </button>
+                />
             </div>
         ),
     };

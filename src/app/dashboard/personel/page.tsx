@@ -2,7 +2,7 @@ import React from "react";
 import { prisma } from "@/lib/prisma";
 import PersonelClient from "./Client";
 import { getCurrentUserRole, getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 
@@ -15,12 +15,6 @@ const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR" | "
     MUDUR: "YETKILI",
     MUHASEBECI: "YETKILI",
 };
-
-function getMonthDateRange(yil: number, ay: number) {
-    const start = new Date(yil, ay - 1, 1, 0, 0, 0, 0);
-    const end = new Date(yil, ay, 0, 23, 59, 59, 999);
-    return { start, end };
-}
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -53,7 +47,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         getCommonListFilters(props.searchParams),
         getCurrentUserRole(),
     ]);
-    const { start: rangeStart, end: rangeEnd } = getMonthDateRange(selectedYil, selectedAy);
+    const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [filter, sirketListFilter, cezaFilter, yakitFilter, bakimFilter, zimmetFilter] = await Promise.all([
         getModelFilter('personel', selectedSirketId),

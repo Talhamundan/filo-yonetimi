@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Upload, FolderOpen, Trash2, Download } from "lucide-react";
+import { Upload, FolderOpen, Download } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, DokumanRow } from "./columns";
@@ -12,6 +12,7 @@ import { createDokuman, deleteDokuman } from "./actions";
 import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const EMPTY = {
     ad: "",
@@ -89,13 +90,10 @@ export default function DokumanlarClient({
                     >
                         <Download size={15} />
                     </a>
-                    <button 
-                        onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id, row.original.ad); }} 
-                        className="p-1.5 rounded-md hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-colors"
-                        title="Sil"
-                    >
-                        <Trash2 size={15} />
-                    </button>
+                    <RowActionButton
+                        variant="delete"
+                        onClick={(e) => { e.stopPropagation(); handleDelete(row.original.id, row.original.ad); }}
+                    />
                 </div>
             )
         }

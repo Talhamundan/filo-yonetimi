@@ -5,13 +5,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUserAccount, deleteUserAccount, updateUserAccount } from "./actions";
 import { toast } from "sonner";
-import { ShieldCheck, Trash2, UserPlus, Lock, User, Pencil, Eye, EyeOff } from "lucide-react";
+import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff } from "lucide-react";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DataTable } from "@/components/ui/data-table";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import type { ColumnDef } from "@tanstack/react-table";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 type AssignablePersonel = {
     id: string;
@@ -183,7 +184,7 @@ export default function OnayMerkeziClient({
         },
         {
             accessorKey: "rol",
-            header: "Yetki",
+            header: "Rol",
             cell: ({ row }) => (
                 <span className="inline-flex rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
                     {row.original.rol}
@@ -199,20 +200,8 @@ export default function OnayMerkeziClient({
             header: "İşlemler",
             cell: ({ row }) => (
                 <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => openUserEdit(row.original)}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-slate-200 px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                        <Pencil size={12} />
-                        Düzenle
-                    </button>
-                    <button
-                        onClick={() => handleDeleteUser(row.original)}
-                        className="inline-flex h-8 items-center gap-1 rounded-md border border-rose-200 px-2 text-xs font-medium text-rose-700 hover:bg-rose-50"
-                    >
-                        <Trash2 size={12} />
-                        Sil
-                    </button>
+                    <RowActionButton variant="edit" onClick={() => openUserEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDeleteUser(row.original)} />
                 </div>
             ),
         },
@@ -354,13 +343,14 @@ export default function OnayMerkeziClient({
                             <p className="text-[11px] text-slate-500">Mevcut şifre güvenlik nedeniyle gösterilmez. Yeni şifre girerseniz güncellenir.</p>
                         </div>
                         <div className="space-y-1">
-                            <label className="text-xs font-semibold text-slate-600">Yetki</label>
+                            <label className="text-xs font-semibold text-slate-600">Rol</label>
                             <select
                                 value={editForm.rol}
                                 onChange={(event) => setEditForm((prev) => ({ ...prev, rol: event.target.value as Rol }))}
                                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500"
                             >
                                 <option value="SOFOR">Şoför</option>
+                                <option value="TEKNIK">Teknik</option>
                                 <option value="YETKILI">Yetkili</option>
                                 <option value="ADMIN">Admin</option>
                             </select>

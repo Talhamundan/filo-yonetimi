@@ -13,8 +13,7 @@ function addYear(years: Set<number>, value: unknown) {
 }
 
 export async function getAvailableYears(selectedSirketId?: string | null) {
-    const currentYear = new Date().getFullYear();
-    const years = new Set<number>([currentYear]);
+    const years = new Set<number>();
 
     const [
         yakitFilter,

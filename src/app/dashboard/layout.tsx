@@ -31,30 +31,35 @@ async function getScopeOptions() {
         getCurrentSirketId(),
     ]);
     const canAssignIndependentRecords = canRoleAssignIndependentRecords(currentUserRole, currentSirketId);
+    const isIndependentUser = !currentSirketId;
+    let currentCompany: { id: string; ad: string } | null = null;
+    if (currentSirketId) {
+        try {
+            currentCompany = await prisma.sirket.findUnique({
+                where: { id: currentSirketId },
+                select: { id: true, ad: true },
+            });
+        } catch (error) {
+            console.warn("Kullaniciya bagli sirket bilgisi getirilemedi.", error);
+        }
+    }
+    const userCompanyName = currentCompany?.ad || (currentSirketId ? "Şirket Bulunamadı" : "Bağımsız");
 
     if (!hasGlobalCompanyAccess) {
         let sirketler: { id: string; ad: string }[] = [];
-        if (currentSirketId) {
-            try {
-                const currentCompany = await prisma.sirket.findUnique({
-                    where: { id: currentSirketId },
-                    select: { id: true, ad: true },
-                });
-                if (currentCompany) {
-                    sirketler = [currentCompany];
-                }
-            } catch (error) {
-                console.warn("Mevcut sirket bilgisi getirilemedi, bos liste ile devam ediliyor.", error);
-            }
+        if (currentCompany) {
+            sirketler = [currentCompany];
         }
 
         return {
             canAccessAllCompanies: false,
             isAdmin: currentUserRole === "ADMIN",
             canAssignIndependentRecords,
+            isIndependentUser,
             role: currentUserRole,
             sirketler,
-            userName
+            userName,
+            userCompanyName,
         };
     }
 
@@ -72,8 +77,10 @@ async function getScopeOptions() {
         canAccessAllCompanies: true,
         isAdmin: currentUserRole === "ADMIN",
         canAssignIndependentRecords,
+        isIndependentUser,
         role: currentUserRole,
         sirketler,
-        userName
+        userName,
+        userCompanyName,
     };
 }

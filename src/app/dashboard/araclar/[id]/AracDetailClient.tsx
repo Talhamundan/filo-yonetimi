@@ -25,9 +25,11 @@ import { createSigorta } from "../../trafik-sigortasi/actions";
 import { createKasko } from "../../kasko/actions";
 import { createMuayene } from "../../muayeneler/actions";
 import { createDokuman } from "../../dokumanlar/actions";
+import { deleteArizaKaydi, seviseGonderArizaKaydi, updateArizaKaydi } from "../../arizalar/actions";
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { PersonelLink } from "@/components/links/RecordLinks";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AracDetaySaaS = any;
@@ -148,6 +150,18 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
         baslangicKm: String(arac.guncelKm || 0),
         notlar: "",
     });
+    const [editArizaRow, setEditArizaRow] = React.useState<AracDetaySaaS | null>(null);
+    const [arizaActionLoading, setArizaActionLoading] = React.useState(false);
+    const [arizaEditForm, setArizaEditForm] = React.useState({
+        soforId: "",
+        aciklama: "",
+        oncelik: "ORTA" as "DUSUK" | "ORTA" | "YUKSEK",
+        km: "",
+        servisAdi: "",
+        yapilanIslemler: "",
+        tutar: "",
+        bildirimTarihi: nowDateTimeLocal(),
+    });
     const sortedKullanicilar = React.useMemo(
         () => sortByTextValue(kullanicilar, (k) => k.adSoyad),
         [kullanicilar]
@@ -202,6 +216,104 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
             toast.error(res.error || "Şoför ataması başarısız.");
         }
         setLoading(false);
+    };
+
+    const openArizaEdit = (row: AracDetaySaaS) => {
+        setArizaEditForm({
+            soforId: row.soforId || "",
+            aciklama: row.aciklama || "",
+            oncelik: row.oncelik === "KRITIK" ? "YUKSEK" : (row.oncelik || "ORTA"),
+            km: row.km != null ? String(row.km) : "",
+            servisAdi: row.servisAdi || "",
+            yapilanIslemler: row.yapilanIslemler || "",
+            tutar: row.tutar ? String(row.tutar) : "",
+            bildirimTarihi: row.bildirimTarihi ? new Date(row.bildirimTarihi).toISOString().slice(0, 16) : nowDateTimeLocal(),
+        });
+        setEditArizaRow(row);
+    };
+
+    const closeArizaEdit = () => {
+        setEditArizaRow(null);
+        setArizaEditForm({
+            soforId: "",
+            aciklama: "",
+            oncelik: "ORTA",
+            km: "",
+            servisAdi: "",
+            yapilanIslemler: "",
+            tutar: "",
+            bildirimTarihi: nowDateTimeLocal(),
+        });
+    };
+
+    const handleUpdateAriza = async () => {
+        if (!editArizaRow || !arizaEditForm.aciklama.trim()) {
+            toast.warning("Eksik Bilgi", { description: "Arıza açıklaması zorunludur." });
+            return;
+        }
+
+        setArizaActionLoading(true);
+        const res = await updateArizaKaydi(editArizaRow.id, {
+            soforId: arizaEditForm.soforId || null,
+            aciklama: arizaEditForm.aciklama.trim(),
+            oncelik: arizaEditForm.oncelik,
+            km: arizaEditForm.km ? Number(arizaEditForm.km) : null,
+            servisAdi: arizaEditForm.servisAdi || null,
+            yapilanIslemler: arizaEditForm.yapilanIslemler || null,
+            tutar: arizaEditForm.tutar ? Number(arizaEditForm.tutar) : 0,
+            bildirimTarihi: arizaEditForm.bildirimTarihi ? new Date(arizaEditForm.bildirimTarihi) : new Date(),
+        });
+        setArizaActionLoading(false);
+
+        if (res.success) {
+            toast.success("Arıza kaydı güncellendi.");
+            closeArizaEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleSeviseGonderAriza = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Servise Gönder",
+            message: `${arac.plaka} için açılan arıza kaydı servise gönderilecek. Onaylıyor musunuz?`,
+            confirmText: "Gönder",
+            variant: "warning",
+        });
+        if (!confirmed) return;
+
+        setArizaActionLoading(true);
+        const res = await seviseGonderArizaKaydi(row.id);
+        setArizaActionLoading(false);
+
+        if (res.success) {
+            toast.success("Araç servise alındı.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteAriza = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Arıza Kaydını Sil",
+            message: `${arac.plaka} için arıza kaydını silmek istediğinize emin misiniz?`,
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+
+        setArizaActionLoading(true);
+        const res = await deleteArizaKaydi(row.id);
+        setArizaActionLoading(false);
+
+        if (res.success) {
+            toast.success("Arıza kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
     };
 
     const getStatusBadge = (durum: string) => {
@@ -875,6 +987,111 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     </div>
                 </div>
 
+                <Dialog open={!!editArizaRow} onOpenChange={(open) => !open && closeArizaEdit()}>
+                    <DialogContent className="sm:max-w-[520px]">
+                        <DialogHeader>
+                            <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>{arac.plaka} için kayıt bilgilerini güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-2">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">KM</label>
+                                    <Input
+                                        type="number"
+                                        value={arizaEditForm.km}
+                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, km: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Bildirim Zamanı</label>
+                                    <Input
+                                        type="datetime-local"
+                                        value={arizaEditForm.bildirimTarihi}
+                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, bildirimTarihi: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Öncelik</label>
+                                    <select
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                        value={arizaEditForm.oncelik}
+                                        onChange={(event) =>
+                                            setArizaEditForm((prev) => ({ ...prev, oncelik: event.target.value as typeof prev.oncelik }))
+                                        }
+                                    >
+                                        <option value="DUSUK">Düşük</option>
+                                        <option value="ORTA">Orta</option>
+                                        <option value="YUKSEK">Yüksek</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Personel / Şoför</label>
+                                    <select
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                        value={arizaEditForm.soforId}
+                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, soforId: event.target.value }))}
+                                    >
+                                        <option value="">Seçilmedi</option>
+                                        {sortedKullanicilar.map((k) => (
+                                            <option key={k.id} value={k.id}>
+                                                {k.adSoyad}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Arıza Açıklaması <span className="text-red-500">*</span></label>
+                                <textarea
+                                    value={arizaEditForm.aciklama}
+                                    onChange={(event) => setArizaEditForm((prev) => ({ ...prev, aciklama: event.target.value }))}
+                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none"
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Servis Adı</label>
+                                    <Input
+                                        value={arizaEditForm.servisAdi}
+                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, servisAdi: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tutar (₺)</label>
+                                    <Input
+                                        type="number"
+                                        step="0.01"
+                                        value={arizaEditForm.tutar}
+                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, tutar: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Yapılan / Planlanan İşlemler</label>
+                                <textarea
+                                    value={arizaEditForm.yapilanIslemler}
+                                    onChange={(event) => setArizaEditForm((prev) => ({ ...prev, yapilanIslemler: event.target.value }))}
+                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={handleUpdateAriza}
+                                disabled={arizaActionLoading}
+                                className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                            >
+                                {arizaActionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                     <TabsList className="flex flex-nowrap h-auto gap-2 bg-transparent overflow-x-auto justify-start pb-2 border-b border-slate-200 w-full rounded-none scrollbar-hide">
                         <TabsTrigger value="ozet" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
@@ -1153,6 +1370,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                             <TableHead className="font-semibold text-slate-500">Durum</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Açıklama</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1195,11 +1413,37 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                                     <TableCell className="font-bold text-slate-900 text-right">
                                                         ₺{Number(a.tutar || 0).toLocaleString("tr-TR")}
                                                     </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1.5">
+                                                            <RowActionButton
+                                                                variant="edit"
+                                                                onClick={() => openArizaEdit(a)}
+                                                                disabled={arizaActionLoading}
+                                                            />
+                                                            {a.durum === "ACIK" ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => handleSeviseGonderAriza(a)}
+                                                                    disabled={arizaActionLoading}
+                                                                    className="inline-flex size-8 items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-amber-50 hover:text-amber-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-200 disabled:pointer-events-none disabled:opacity-50"
+                                                                    title="Servise Gönder"
+                                                                    aria-label="Servise Gönder"
+                                                                >
+                                                                    <Wrench size={15} />
+                                                                </button>
+                                                            ) : null}
+                                                            <RowActionButton
+                                                                variant="delete"
+                                                                onClick={() => handleDeleteAriza(a)}
+                                                                disabled={arizaActionLoading}
+                                                            />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="h-32 text-center text-slate-500">
+                                                <TableCell colSpan={7} className="h-32 text-center text-slate-500">
                                                     Arıza kaydı bulunmuyor.
                                                 </TableCell>
                                             </TableRow>

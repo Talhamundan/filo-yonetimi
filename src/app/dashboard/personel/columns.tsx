@@ -92,7 +92,6 @@ const baseColumns: ColumnDef<PersonelRow>[] = [
             );
         }
     },
-    { accessorKey: "girisAdi", header: "Giriş Adı", cell: ({ row }) => <span className="font-mono text-xs text-slate-500">{row.getValue("girisAdi")}</span> },
     { accessorKey: "telefon", header: "Telefon", cell: ({ row }) => <span className="text-slate-500">{row.getValue("telefon")}</span> },
 ];
 

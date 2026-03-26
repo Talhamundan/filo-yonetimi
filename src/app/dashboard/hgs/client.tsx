@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, CreditCard, Trash2, Pencil } from "lucide-react";
+import { Plus, CreditCard } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, HgsRow } from "./columns";
@@ -12,6 +12,7 @@ import { useRouter } from "next/navigation";
 import { createHgs, updateHgs, deleteHgs } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { RowActionButton } from "@/components/ui/row-action-button";
 
 const EMPTY = {
     aracId: '',
@@ -142,12 +143,8 @@ export default function HgsClient({
         header: "İşlemler",
         cell: ({ row }: any) => (
             <div className="flex gap-2">
-                <button onClick={() => openEdit(row.original)} className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-indigo-600 transition-colors">
-                    <Pencil size={14} />
-                </button>
-                <button onClick={() => handleDelete(row.original.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-500 hover:text-red-600 transition-colors">
-                    <Trash2 size={14} />
-                </button>
+                <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
+                <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id)} />
             </div>
         ),
     };

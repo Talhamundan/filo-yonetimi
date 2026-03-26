@@ -20,9 +20,11 @@ type DashboardShellProps = {
         canAccessAllCompanies: boolean;
         isAdmin: boolean;
         canAssignIndependentRecords: boolean;
+        isIndependentUser: boolean;
         sirketler: { id: string; ad: string }[];
         userName?: string;
         role?: string | null;
+        userCompanyName?: string | null;
     };
 };
 
@@ -141,7 +143,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const closeMobileSidebar = React.useCallback(() => setIsMobileSidebarOpen(false), []);
 
     const scopedQuery = searchParams.toString();
-    const shouldShowCompanySwitcher = scopeOptions.sirketler.length > 0;
+    const shouldShowCompanySwitcher = scopeOptions.isIndependentUser && scopeOptions.sirketler.length > 0;
     const dashboardHref = scopedQuery ? `/dashboard?${scopedQuery}` : "/dashboard";
     const adminHref = scopedQuery ? `/dashboard/yetkilendirme-paneli?${scopedQuery}` : "/dashboard/yetkilendirme-paneli";
     const activityHref = scopedQuery ? `/dashboard/aktivite-gecmisi?${scopedQuery}` : "/dashboard/aktivite-gecmisi";
@@ -149,7 +151,9 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const roleLabel = scopeOptions.role ? (ROLE_LABELS[scopeOptions.role] || scopeOptions.role) : null;
     const identityName = (scopeOptions.userName || "Kullanıcı").trim();
     const roleText = roleLabel ? `Rol: ${roleLabel}` : "Rol: -";
-    const shouldUseCompactIdentityText = identityName.length > 16 || roleText.length > 12;
+    const companyText = (scopeOptions.userCompanyName || "Bağımsız").trim();
+    const roleAndCompanyText = `${roleText} • Şirket: ${companyText}`;
+    const shouldUseCompactIdentityText = identityName.length > 16 || roleAndCompanyText.length > 28;
 
     return (
         <DashboardScopeProvider
@@ -188,14 +192,14 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                     >
                                         {identityName}
                                     </span>
-                                    <span
-                                        className={cn(
-                                            "font-medium leading-tight text-slate-600 whitespace-nowrap",
-                                            shouldUseCompactIdentityText ? "text-[9px]" : "text-[10px]"
-                                        )}
-                                        title={roleText}
-                                    >
-                                        {roleText}
+                                        <span
+                                            className={cn(
+                                                "font-medium leading-tight text-slate-600 whitespace-nowrap",
+                                                shouldUseCompactIdentityText ? "text-[9px]" : "text-[10px]"
+                                            )}
+                                            title={roleAndCompanyText}
+                                        >
+                                        {roleAndCompanyText}
                                     </span>
                                 </div>
                             </div>
@@ -246,7 +250,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 <Link
                                                     href={adminHref}
                                                     className={cn(
-                                                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition hover:bg-slate-50",
+                                                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold transition hover:bg-slate-50",
                                                         pathname.startsWith("/dashboard/yetkilendirme-paneli")
                                                             ? "bg-indigo-50 text-indigo-700"
                                                             : "text-slate-700 hover:text-slate-900"
@@ -258,7 +262,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 </Link>
                                                 <Link
                                                     href={activityHref}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <History size={16} className="text-indigo-500" />
@@ -266,7 +270,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 </Link>
                                                 <Link
                                                     href={trashHref}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <Trash2 size={16} className="text-amber-500" />
@@ -275,7 +279,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 <button
                                                     type="button"
                                                     onClick={() => signOut({ callbackUrl: "/auth/login" })}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <LogOut size={16} className="text-rose-500" />
@@ -342,9 +346,9 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 "truncate font-medium leading-tight text-slate-600 whitespace-nowrap",
                                                 shouldUseCompactIdentityText ? "text-[9px]" : "text-[10px]"
                                             )}
-                                            title={roleText}
+                                            title={roleAndCompanyText}
                                         >
-                                            {roleText}
+                                            {roleAndCompanyText}
                                         </span>
                                     </div>
                                     <button
@@ -396,7 +400,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 <Link
                                                     href={adminHref}
                                                     className={cn(
-                                                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition hover:bg-slate-50",
+                                                        "flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold transition hover:bg-slate-50",
                                                         pathname.startsWith("/dashboard/yetkilendirme-paneli")
                                                             ? "bg-indigo-50 text-indigo-700"
                                                             : "text-slate-700 hover:text-slate-900"
@@ -408,7 +412,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 </Link>
                                                 <Link
                                                     href={activityHref}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <History size={16} className="text-indigo-500" />
@@ -416,7 +420,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 </Link>
                                                 <Link
                                                     href={trashHref}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <Trash2 size={16} className="text-amber-500" />
@@ -425,7 +429,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                 <button
                                                     type="button"
                                                     onClick={() => signOut({ callbackUrl: "/auth/login" })}
-                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
+                                                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50 hover:text-slate-900"
                                                     role="menuitem"
                                                 >
                                                     <LogOut size={16} className="text-rose-500" />
