@@ -1,7 +1,7 @@
 "use server";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
-import { ActivityActionType, ActivityEntityType, iller, Prisma, Rol } from "@prisma/client";
+import { ActivityActionType, ActivityEntityType, Prisma, Rol } from "@prisma/client";
 import { auth } from "@/auth";
 import { isAdmin } from "@/lib/auth-utils";
 import { logEntityActivity } from "@/lib/activity-log";
@@ -13,6 +13,7 @@ const PATH = "/dashboard/personel";
 const SIRKETLER_PATH = "/dashboard/sirketler";
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const PERSONEL_ID_RETRY_LIMIT = 6;
+let hasCachedCalistigiKurumColumn: boolean | null = null;
 
 type ActorUser = {
     id: string;
@@ -44,16 +45,57 @@ async function getNextSequentialPersonelId() {
     return String(currentMax + 1).padStart(4, "0");
 }
 
-export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; sehir?: iller | ""; tcNo?: string }) {
+async function hasPersonelCalistigiKurumColumn() {
+    if (hasCachedCalistigiKurumColumn !== null) {
+        return hasCachedCalistigiKurumColumn;
+    }
+    try {
+        const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'Personel'
+                  AND column_name = 'calistigiKurum'
+            ) AS "exists"
+        `;
+        hasCachedCalistigiKurumColumn = Boolean(rows?.[0]?.exists);
+    } catch {
+        hasCachedCalistigiKurumColumn = false;
+    }
+    return hasCachedCalistigiKurumColumn;
+}
+
+export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; calistigiKurum?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
+        const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
+        const personelWriteSelect: any = {
+            id: true,
+            ad: true,
+            soyad: true,
+            rol: true,
+            sirketId: true,
+        };
+        if (canWriteCalistigiKurum) {
+            personelWriteSelect.calistigiKurum = true;
+        }
 
-        let created: Awaited<ReturnType<typeof prisma.kullanici.create>> | null = null;
+        let created:
+            | {
+                  id: string;
+                  ad: string;
+                  soyad: string;
+                  rol: Rol;
+                  sirketId: string | null;
+                  calistigiKurum?: string | null;
+              }
+            | null = null;
         for (let attempt = 0; attempt < PERSONEL_ID_RETRY_LIMIT; attempt += 1) {
             const nextId = await getNextSequentialPersonelId();
             try {
-                created = await prisma.kullanici.create({
+                created = (await prisma.kullanici.create({
                     data: {
                         id: nextId,
                         ad: forceUppercase(data.ad || ""),
@@ -62,12 +104,13 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
                         sifre: null,
                         telefon: data.telefon || null,
                         rol: data.rol,
-                        sirketId,
-                        sehir: data.sehir ? (data.sehir as iller) : null,
+                        ...(sirketId ? { sirket: { connect: { id: sirketId } } } : {}),
+                        ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
                         tcNo: data.tcNo || null,
                         onayDurumu: "ONAYLANDI",
-                    }
-                });
+                    },
+                    select: personelWriteSelect,
+                })) as any;
                 break;
             } catch (error) {
                 const isIdConflict =
@@ -92,11 +135,12 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
             entityId: created.id,
             summary: `${created.ad} ${created.soyad} personeli oluşturuldu.`,
             actor,
-            companyId: created.sirketId || actor.sirketId || null,
+            companyId: sirketId || actor.sirketId || null,
             metadata: {
                 rol: created.rol,
                 eposta: null,
-                sirketId: created.sirketId,
+                sirketId: sirketId || null,
+                calistigiKurum: canWriteCalistigiKurum ? ((created as any).calistigiKurum || null) : null,
             },
         });
 
@@ -106,32 +150,50 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
         return { success: true };
     } catch (e: any) {
         console.error("CreatePersonel Error:", e);
+        const message = e instanceof Error ? e.message : "";
+        if (message.includes("Invalid `prisma.kullanici.create()` invocation")) {
+            return { success: false, error: "Personel kaydı sırasında şema uyumsuzluğu oluştu. Sunucuyu yeniden başlatıp tekrar deneyin." };
+        }
         if (e.message) return { success: false, error: e.message };
         return { success: false, error: "Personel kaydedilemedi. Beklenmedik bir hata oluştu." };
     }
 }
 
-export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; sehir?: iller | ""; tcNo?: string }) {
+export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; calistigiKurum?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
+        const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
+        const personelWriteSelect: any = {
+            id: true,
+            ad: true,
+            soyad: true,
+            rol: true,
+            sirketId: true,
+        };
+        if (canWriteCalistigiKurum) {
+            personelWriteSelect.calistigiKurum = true;
+        }
         const oncekiKayit = await prisma.kullanici.findUnique({
             where: { id },
             select: { rol: true, ad: true, soyad: true, sirketId: true },
         });
 
-        const updated = await prisma.kullanici.update({
+        const updated = (await prisma.kullanici.update({
             where: { id },
             data: {
                 ad: forceUppercase(data.ad || ""),
                 soyad: forceUppercase(data.soyad || ""),
                 telefon: data.telefon || null,
                 rol: data.rol,
-                sirketId,
-                sehir: data.sehir ? (data.sehir as iller) : null,
+                ...(sirketId
+                    ? { sirket: { connect: { id: sirketId } } }
+                    : { sirket: { disconnect: true } }),
+                ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
                 tcNo: data.tcNo || null,
-            }
-        });
+            },
+            select: personelWriteSelect,
+        })) as any;
 
         const roleChanged = Boolean(oncekiKayit && oncekiKayit.rol !== updated.rol);
         await logEntityActivity({
@@ -142,12 +204,13 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                 ? `${updated.ad} ${updated.soyad} personelinin rolü değiştirildi.`
                 : `${updated.ad} ${updated.soyad} personeli güncellendi.`,
             actor,
-            companyId: updated.sirketId || actor.sirketId || null,
+            companyId: sirketId || actor.sirketId || null,
             metadata: {
                 oncekiRol: oncekiKayit?.rol || null,
                 yeniRol: updated.rol,
                 oncekiSirketId: oncekiKayit?.sirketId || null,
-                yeniSirketId: updated.sirketId || null,
+                yeniSirketId: sirketId || null,
+                calistigiKurum: canWriteCalistigiKurum ? ((updated as any).calistigiKurum || null) : null,
             },
         });
 
@@ -155,8 +218,35 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
         revalidatePath(`${PATH}/${id}`);
         revalidatePath(SIRKETLER_PATH);
         return { success: true };
-    } catch (e) {
-        console.error(e);
+    } catch (e: unknown) {
+        console.error("UpdatePersonel Error:", e);
+        const message = e instanceof Error ? e.message : "";
+
+        if (
+            message.includes("Invalid `prisma.kullanici.update()` invocation") ||
+            message.includes("Unknown argument `sirketId`") ||
+            message.includes("Unknown argument `calistigiKurum`") ||
+            message.includes("column \"calistigiKurum\" does not exist") ||
+            message.includes("column \"sehir\" does not exist")
+        ) {
+            return {
+                success: false,
+                error:
+                    "Personel kurum alanı için şema güncel değil. `npx prisma generate` çalıştırıp dev sunucuyu yeniden başlatın, ardından migration'ı uygulayın.",
+            };
+        }
+
+        if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") {
+            const target = Array.isArray(e.meta?.target)
+                ? e.meta.target.join(", ")
+                : String(e.meta?.target || "benzersiz alan");
+            return { success: false, error: `Aynı değerle başka personel kaydı var (${target}).` };
+        }
+
+        if (message) {
+            return { success: false, error: message };
+        }
+
         return { success: false, error: "Personel güncellenemedi." };
     }
 }

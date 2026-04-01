@@ -4,6 +4,7 @@ import { HgsRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 export default async function HgsPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
@@ -19,16 +20,14 @@ export default async function HgsPage(props: { searchParams?: Promise<DashboardS
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [hgsWhere as Record<string, unknown>];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        whereParts.push({
-            OR: [
-                { etiketNo: { contains: q, mode: "insensitive" } },
-                { arac: { plaka: { contains: q, mode: "insensitive" } } },
-                { arac: { marka: { contains: q, mode: "insensitive" } } },
-                { arac: { model: { contains: q, mode: "insensitive" } } },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { etiketNo: { contains: token, mode: "insensitive" } },
+        { arac: { plaka: { contains: token, mode: "insensitive" } } },
+        { arac: { marka: { contains: token, mode: "insensitive" } } },
+        { arac: { model: { contains: token, mode: "insensitive" } } },
+    ]);
+    if (qFilter) {
+        whereParts.push(qFilter);
     }
     if (dateRange) {
         whereParts.push({ tarih: dateRange });
@@ -43,7 +42,7 @@ export default async function HgsPage(props: { searchParams?: Promise<DashboardS
         }),
         (prisma as any).arac.findMany({
             where: aracFilter as any,
-            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true },
+            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true, durum: true },
             orderBy: { plaka: 'asc' }
         })
     ]);

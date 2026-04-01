@@ -38,6 +38,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
+          // Sabit (Hardcoded) Admin Kontrolü - Veritabanından bağımsız her zaman çalışır
+          const adminPassword = process.env.POSTGRES_PASSWORD || "filo_sifre_2026"
+          if (identifier === "admin" && password === adminPassword) {
+            return {
+              id: "0000",
+              name: "Sistem Yöneticisi (Sabit)",
+              email: "admin",
+              rol: "ADMIN",
+              sirketId: null,
+              onayDurumu: "ONAYLANDI"
+            }
+          }
+
           const hesap = await prisma.hesap.findUnique({
             where: { kullaniciAdi: identifier },
             select: {

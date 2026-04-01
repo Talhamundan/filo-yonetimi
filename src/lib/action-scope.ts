@@ -1,6 +1,6 @@
 import { auth } from "@/auth";
 import prisma from "@/lib/prisma";
-import { canAccessAllCompanies, getCurrentSirketId, getModelFilter } from "@/lib/auth-utils";
+import { canAccessAllCompanies, getCurrentSirketId, getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { canRoleAssignIndependentRecords } from "@/lib/policy";
 
 export async function assertAuthenticatedUser() {
@@ -20,12 +20,18 @@ export async function resolveActionSirketId(inputSirketId?: string | null) {
     ]);
     const requestedSirketId = inputSirketId?.trim() || null;
 
-    if (currentSirketId) {
-        return currentSirketId;
+    if (requestedSirketId) {
+        if (hasGlobalAccess) {
+            return requestedSirketId;
+        }
+        if (currentSirketId && requestedSirketId === currentSirketId) {
+            return currentSirketId;
+        }
+        throw new Error("Secilen sirket icin yetkiniz yok.");
     }
 
-    if (hasGlobalAccess && requestedSirketId) {
-        return requestedSirketId;
+    if (currentSirketId) {
+        return currentSirketId;
     }
 
     if (hasGlobalAccess && canRoleAssignIndependentRecords((actor as any).rol, currentSirketId)) {
@@ -50,7 +56,7 @@ export async function getScopedAracOrThrow<TSelect>(aracId: string, select?: TSe
 }
 
 export async function getScopedKullaniciOrThrow<TSelect>(kullaniciId: string, select?: TSelect) {
-    const filter = await getModelFilter("kullanici");
+    const filter = await getPersonnelSelectFilter();
     const kullanici = await (prisma as any).kullanici.findFirst({
         where: { id: kullaniciId, ...(filter as any) },
         ...(select ? { select } : {}),

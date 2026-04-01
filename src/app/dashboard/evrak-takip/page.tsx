@@ -4,6 +4,7 @@ import { differenceInDays } from "date-fns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { matchesTokenizedSearch } from "@/lib/search-query";
 
 type AracLite = {
     id: string;
@@ -226,19 +227,12 @@ export default async function EvrakTakipPage(props: { searchParams?: Promise<Das
         }
     }
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
-    const q = commonFilters.q.trim().toLocaleLowerCase("tr-TR");
+    const q = commonFilters.q.trim();
     const filteredEvrakListesi = evrakListesi
         .filter((row) => {
             if (q) {
-                const haystack = [
-                    row.plaka,
-                    row.marka,
-                    row.tur,
-                    row.sirketAd || "",
-                ]
-                    .join(" ")
-                    .toLocaleLowerCase("tr-TR");
-                if (!haystack.includes(q)) return false;
+                const haystack = [row.plaka, row.marka, row.tur, row.sirketAd || ""].join(" ");
+                if (!matchesTokenizedSearch(haystack, q)) return false;
             }
             if (commonFilters.status) {
                 const normalizedStatus = commonFilters.status === "KRITIK" ? "YUKSEK" : commonFilters.status;

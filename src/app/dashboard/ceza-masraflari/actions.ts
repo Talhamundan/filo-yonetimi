@@ -34,6 +34,18 @@ function revalidateCezaPages() {
     revalidatePath("/dashboard/cezalar");
 }
 
+async function getAracActiveSoforId(aracId: string) {
+    const aktifZimmet = await (prisma as any).kullaniciZimmet
+        .findFirst({
+            where: { aracId, bitis: null },
+            orderBy: { baslangic: "desc" },
+            select: { kullaniciId: true },
+        })
+        .catch(() => null);
+
+    return aktifZimmet?.kullaniciId || null;
+}
+
 export async function createCezaMasraf(data: CezaMasrafPayload) {
     try {
         const actor = await assertAuthenticatedUser();
@@ -46,6 +58,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
         const sofor = data.soforId
             ? await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true })
             : null;
+        const resolvedSoforId = sofor?.id || (await getAracActiveSoforId(arac.id));
         const normalizedKm =
             data.km !== undefined
                 ? await assertKmWriteConsistency({
@@ -60,7 +73,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
         const baseData = {
             plaka: arac.plaka,
             aracId: arac.id,
-            soforId: sofor?.id || null,
+            soforId: resolvedSoforId,
             tarih: new Date(data.tarih),
             cezaMaddesi: data.cezaMaddesi?.trim() || "Belirtilmedi",
             tutar: Number(data.tutar) || 0,
@@ -142,6 +155,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
         const sofor = data.soforId
             ? await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true })
             : null;
+        const resolvedSoforId = sofor?.id || (await getAracActiveSoforId(arac.id));
         const kmInput =
             data.km !== undefined
                 ? data.km
@@ -163,7 +177,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
         const baseData = {
             plaka: arac.plaka,
             aracId: arac.id,
-            soforId: sofor?.id || null,
+            soforId: resolvedSoforId,
             tarih: new Date(data.tarih),
             cezaMaddesi: data.cezaMaddesi?.trim() || "Belirtilmedi",
             tutar: Number(data.tutar) || 0,

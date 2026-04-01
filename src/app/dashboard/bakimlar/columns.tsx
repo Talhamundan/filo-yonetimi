@@ -5,6 +5,8 @@ import { Badge } from "../../../components/ui/badge"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
+import { PersonelLink } from "@/components/links/RecordLinks"
+import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display"
 
 export type BakimRow = {
     id: string;
@@ -16,10 +18,19 @@ export type BakimRow = {
     tutar: number;
     kategori?: "PERIYODIK_BAKIM" | "ARIZA";
     tur?: string;
-    arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
+    soforId?: string | null;
+    sofor?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
+    arac: {
+        id: string;
+        plaka: string;
+        marka: string;
+        model: string;
+        sirket?: { ad: string } | null;
+        kullanici?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
+    };
 }
 
-const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 
 export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => {
     const columns: ColumnDef<BakimRow>[] = [
@@ -35,12 +46,25 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => {
         header: "Araç",
         accessorFn: (row) => row.arac.plaka,
         cell: ({ row }) => {
+            const seciliPersonel = row.original.sofor || row.original.arac.kullanici || null;
+            const personelText = seciliPersonel
+                ? getPersonelDisplayName(seciliPersonel)
+                : (row.original.soforId ? ESKI_PERSONEL_ETIKETI : null);
+            const personelId = getActivePersonelId(seciliPersonel);
             return <VehicleIdentityCell
                 aracId={row.original.arac.id}
                 plaka={row.original.arac.plaka}
                 subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
                 companyName={row.original.arac.sirket?.ad}
                 showCompanyInfo={showCompanyInfo}
+                extra={personelText ? (
+                    <PersonelLink
+                        personelId={personelId}
+                        className="text-[11px] text-indigo-500 font-semibold mt-0.5 hover:underline"
+                    >
+                        👤 {personelText}
+                    </PersonelLink>
+                ) : null}
             />
         },
     },

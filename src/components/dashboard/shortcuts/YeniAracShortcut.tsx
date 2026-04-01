@@ -5,13 +5,20 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { Car, Building2, User } from "lucide-react";
 import { getSirketlerSelect, getKullanicilarSelect } from "./actions";
 import { createArac } from "@/app/dashboard/araclar/actions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
-const ILLER = ['İSTANBUL', 'BURSA', 'ŞANLIURFA', 'ANKARA', 'DİĞER'];
+const ILLER = [
+    { value: "ISTANBUL", label: "İSTANBUL" },
+    { value: "BURSA", label: "BURSA" },
+    { value: "SANLIURFA", label: "ŞANLIURFA" },
+    { value: "ANKARA", label: "ANKARA" },
+    { value: "DIGER", label: "DİĞER" },
+];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const EMPTY = {
@@ -20,8 +27,9 @@ const EMPTY = {
     model: '',
     yil: new Date().getFullYear(),
     muayeneGecerlilikTarihi: '',
-    bulunduguIl: 'İSTANBUL',
+    bulunduguIl: 'ISTANBUL',
     guncelKm: 0,
+    aciklama: '',
     sirketId: '',
     kullaniciId: '',
     hgsNo: '',
@@ -42,7 +50,7 @@ const FormFields = ({
     setFormData: any,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
     kullanicilar: any[],
-    ILLER: string[],
+    ILLER: { value: string; label: string }[],
     allowIndependentOption?: boolean,
 }) => (
     <div className="grid grid-cols-2 gap-4 py-2">
@@ -77,7 +85,7 @@ const FormFields = ({
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Muayene Geçerlilik Tarihi</label>
             <Input
-                type="date"
+                type="datetime-local"
                 value={formData.muayeneGecerlilikTarihi}
                 onChange={e => setFormData({ ...formData, muayeneGecerlilikTarihi: e.target.value })}
                 className="h-9"
@@ -90,13 +98,13 @@ const FormFields = ({
             <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Bulunduğu İl</label>
+            <label className="text-sm font-medium">Bulunduğu Şantiye</label>
             <select 
                 value={formData.bulunduguIl} 
                 onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
-                {ILLER.map(il => <option key={il} value={il}>{il}</option>)}
+                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
             </select>
         </div>
         <div className="space-y-1.5">
@@ -107,8 +115,7 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="BINEK">Binek Araç</option>
-                <option value="KAMYON_TIR">Kamyon / Tır</option>
-                <option value="IS_MAKINESI">İş Makinesi</option>
+                <option value="SANTIYE">Şantiye Aracı</option>
             </select>
         </div>
         <div className="col-span-2 pt-1">
@@ -147,14 +154,29 @@ const FormFields = ({
                 <User size={14} className="text-slate-400" />
                 Mevcut Şoför (Zimmet)
             </label>
-            <select 
+            <SearchableSelect
                 value={formData.kullaniciId} 
-                onChange={e => setFormData({...formData, kullaniciId: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Şoför Seçiniz (Atanmamış)</option>
-                {kullanicilar.map(u => <option key={u.id} value={u.id}>{u.adSoyad}</option>)}
-            </select>
+                onValueChange={(value) => setFormData({ ...formData, kullaniciId: value })}
+                placeholder="Şoför Seçiniz (Atanmamış)"
+                searchPlaceholder="Personel ara..."
+                options={[
+                    { value: "", label: "Şoför Seçiniz (Atanmamış)" },
+                    ...kullanicilar.map((u) => ({
+                        value: u.id,
+                        label: u.adSoyad,
+                        searchText: u.adSoyad,
+                    })),
+                ]}
+            />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+            <label className="text-sm font-medium">Açıklama (Opsiyonel)</label>
+            <textarea
+                value={formData.aciklama}
+                onChange={e => setFormData({ ...formData, aciklama: e.target.value })}
+                rows={2}
+                className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm"
+            />
         </div>
     </div>
 );
@@ -169,8 +191,21 @@ export default function YeniAracShortcut({ className, asDropdownItem }: { classN
     const [sirketler, setSirketler] = useState<any[]>([]);
     const [kullanicilar, setKullanicilar] = useState<any[]>([]);
     const router = useRouter();
+    const searchParams = useSearchParams();
     const { canAssignIndependentRecords } = useDashboardScope();
-    const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
+    const scopedSirketId = searchParams.get("sirket")?.trim() || "";
+    const defaultCreateSirketId = React.useMemo(() => {
+        if (scopedSirketId && sirketler.some((s) => s.id === scopedSirketId)) {
+            return scopedSirketId;
+        }
+        if (sirketler.length === 1) {
+            return sirketler[0]?.id || "";
+        }
+        if (!canAssignIndependentRecords && sirketler.length > 1) {
+            return sirketler[0]?.id || "";
+        }
+        return "";
+    }, [canAssignIndependentRecords, scopedSirketId, sirketler]);
 
     useEffect(() => {
         if (!open) return;

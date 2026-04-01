@@ -36,7 +36,7 @@ export type ArizaRow = {
 };
 
 const formatDate = (date: string | Date | null | undefined) =>
-    date ? format(new Date(date), "dd MMM yyyy HH:mm", { locale: tr }) : "-";
+    date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : "-";
 
 function renderDurumBadge(durum: ArizaRow["durum"]) {
     switch (durum) {

@@ -7,16 +7,16 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../../../components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, CreditCard, FileText, Plus
+    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, CreditCard, FileText, Plus, Pencil, Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
-import { unassignArac } from "../actions";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { createZimmet } from "../../zimmetler/actions";
+import { createZimmet, finalizeZimmet } from "../../zimmetler/actions";
 import { createHgs } from "../../hgs/actions";
 import { addBakim } from "../../bakimlar/actions";
 import { createYakit } from "../../yakitlar/actions";
@@ -26,29 +26,29 @@ import { createKasko } from "../../kasko/actions";
 import { createMuayene } from "../../muayeneler/actions";
 import { createDokuman } from "../../dokumanlar/actions";
 import { deleteArizaKaydi, seviseGonderArizaKaydi, updateArizaKaydi } from "../../arizalar/actions";
+import { deleteArac, updateArac } from "../actions";
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { PersonelLink } from "@/components/links/RecordLinks";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AracDetaySaaS = any;
 
-const todayDate = () => new Date().toISOString().split("T")[0];
+const todayDate = () => nowDateTimeLocal();
 const oneYearAfter = (dateStr: string) => {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return nowDateTimeLocal();
     date.setFullYear(date.getFullYear() + 1);
-    return date.toISOString().split("T")[0];
+    return toDateTimeLocalInput(date);
 };
 const twoYearsAfter = (dateStr: string) => {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return nowDateTimeLocal();
     date.setFullYear(date.getFullYear() + 2);
-    return date.toISOString().split("T")[0];
-};
-const nowDateTimeLocal = () => {
-    const now = new Date();
-    const offsetMs = now.getTimezoneOffset() * 60 * 1000;
-    return new Date(now.getTime() - offsetMs).toISOString().slice(0, 16);
+    return toDateTimeLocalInput(date);
 };
 
 const MASRAF_TURLERI = ['BAKIM_ONARIM', 'LASTIK', 'TEMIZLIK', 'OTOPARK', 'KOPRU_OBO', 'DIGER'];
@@ -59,6 +59,15 @@ const DOKUMAN_TURLERI = [
     { label: "Servis & Fatura", value: "SERVIS_FATURA" },
     { label: "Diğer", value: "DIGER" },
 ];
+
+const ILLER = [
+    { value: "ISTANBUL", label: "İSTANBUL" },
+    { value: "BURSA", label: "BURSA" },
+    { value: "SANLIURFA", label: "ŞANLIURFA" },
+    { value: "ANKARA", label: "ANKARA" },
+    { value: "DIGER", label: "DİĞER" },
+];
+const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; description: string }> = {
     soforGecmisi: { button: "Zimmet Ekle", title: "Yeni Zimmet Kaydı", description: "Bu araca yeni şoför ataması yapın." },
@@ -72,10 +81,24 @@ const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; descript
     dokuman: { button: "Evrak Ekle", title: "Yeni Evrak", description: "Araça ait dijital evrağı sisteme kaydedin." },
 };
 
-type SoforOption = { id: string; adSoyad: string };
+type SoforOption = {
+    id: string;
+    adSoyad: string;
+    sirketId?: string | null;
+    sirketAd?: string | null;
+};
 
-export default function AracDetailClient({ initialArac: arac, kullanicilar }: { initialArac: AracDetaySaaS; kullanicilar: SoforOption[] }) {
+export default function AracDetailClient({
+    initialArac: arac,
+    kullanicilar,
+    sirketler,
+}: {
+    initialArac: AracDetaySaaS;
+    kullanicilar: SoforOption[];
+    sirketler: Array<{ id: string; ad: string; bulunduguIl?: string | null }>;
+}) {
     const { confirmModal, openConfirm } = useConfirm();
+    const { canAssignIndependentRecords } = useDashboardScope();
     const router = useRouter();
     const [loading, setLoading] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState("ozet");
@@ -150,6 +173,12 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
         baslangicKm: String(arac.guncelKm || 0),
         notlar: "",
     });
+    const [soforIadeOpen, setSoforIadeOpen] = React.useState(false);
+    const [soforIadeForm, setSoforIadeForm] = React.useState({
+        bitis: nowDateTimeLocal(),
+        bitisKm: String(arac.guncelKm || 0),
+        notlar: "",
+    });
     const [editArizaRow, setEditArizaRow] = React.useState<AracDetaySaaS | null>(null);
     const [arizaActionLoading, setArizaActionLoading] = React.useState(false);
     const [arizaEditForm, setArizaEditForm] = React.useState({
@@ -162,25 +191,226 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
         tutar: "",
         bildirimTarihi: nowDateTimeLocal(),
     });
+    const [editAracOpen, setEditAracOpen] = React.useState(false);
+    const [updatingArac, setUpdatingArac] = React.useState(false);
+    const [aracEditForm, setAracEditForm] = React.useState({
+        plaka: forceUppercase(arac.plaka || ""),
+        marka: forceUppercase(arac.marka || ""),
+        model: forceUppercase(arac.model || ""),
+        yil: Number(arac.yil || new Date().getFullYear()),
+        muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
+        bulunduguIl: arac.bulunduguIl || "ISTANBUL",
+        guncelKm: Number(arac.guncelKm || 0),
+        bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
+        kategori: arac.kategori || "BINEK",
+        calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
+        sirketId: arac.sirket?.id || "",
+        hgsNo: arac.hgsNo || "",
+        ruhsatSeriNo: arac.ruhsatSeriNo || "",
+        aciklama: arac.aciklama || "",
+        saseNo: arac.saseNo || "",
+        kullaniciId: arac.kullanici?.id || "",
+    });
     const sortedKullanicilar = React.useMemo(
         () => sortByTextValue(kullanicilar, (k) => k.adSoyad),
         [kullanicilar]
     );
+    const editAracFormKullanicilar = React.useMemo(() => {
+        if (!arac.kullanici?.id) {
+            return sortedKullanicilar;
+        }
+
+        const alreadyExists = sortedKullanicilar.some((k) => k.id === arac.kullanici?.id);
+        if (alreadyExists) {
+            return sortedKullanicilar;
+        }
+
+        const mevcutKullanici = {
+            id: arac.kullanici.id,
+            adSoyad: `${arac.kullanici.ad || ""} ${arac.kullanici.soyad || ""}`.trim(),
+            sirketId: arac.kullanici.sirket?.id || null,
+            sirketAd: arac.kullanici.sirket?.ad || null,
+        };
+
+        return sortByTextValue([...sortedKullanicilar, mevcutKullanici], (u) => u.adSoyad);
+    }, [arac.kullanici, sortedKullanicilar]);
+    const kullaniciFirmaOptions = React.useMemo(() => {
+        const options = Array.from(
+            new Set(
+                sirketler
+                    .map((sirket) => (sirket.ad || "").trim())
+                    .filter((ad) => ad.length > 0)
+            )
+        );
+        if (!options.some((option) => option.toLocaleLowerCase("tr-TR") === "özel")) {
+            options.push("Özel");
+        }
+        if (aracEditForm.calistigiKurum?.trim()) {
+            const current = aracEditForm.calistigiKurum.trim();
+            if (!options.some((option) => option.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0)) {
+                options.push(current);
+            }
+        }
+        return sortByTextValue(options, (item) => item);
+    }, [aracEditForm.calistigiKurum, sirketler]);
+    const arizaSoforOptions = React.useMemo(() => {
+        if (!arac.kullanici?.id) {
+            return sortedKullanicilar;
+        }
+
+        const options = new Map<string, SoforOption>();
+        const ekle = (id?: string | null, adSoyad?: string | null) => {
+            if (!id) return;
+            const text = (adSoyad || "").trim();
+            if (!text) return;
+            options.set(id, { id, adSoyad: text });
+        };
+
+        ekle(arac.kullanici.id, `${arac.kullanici.ad || ""} ${arac.kullanici.soyad || ""}`);
+
+        const seciliSoforId = editArizaRow?.soforId || arizaEditForm.soforId;
+        const seciliSofor = sortedKullanicilar.find((k) => k.id === seciliSoforId);
+        if (seciliSofor) {
+            ekle(seciliSofor.id, seciliSofor.adSoyad);
+        }
+
+        return Array.from(options.values());
+    }, [arac.kullanici, arizaEditForm.soforId, editArizaRow?.soforId, sortedKullanicilar]);
 
     React.useEffect(() => {
         setQuickAddOpen(false);
     }, [activeTab]);
 
-    const handleUnassign = async () => {
-        const confirmed = await openConfirm({ title: "Şoförü Ayır", message: "Bu şoförü araçtan ayırmak istediğinize emin misiniz? Zimmet kaydı tamamlanmış olarak işaretlenecek.", confirmText: "Evet, Ayır", variant: "warning" });
+    const activeZimmet = React.useMemo(() => {
+        const gecmis = Array.isArray(arac.kullaniciGecmisi) ? arac.kullaniciGecmisi : [];
+        return gecmis.find((z: any) => !z.bitis) || null;
+    }, [arac.kullaniciGecmisi]);
+
+    const resetAracEditForm = React.useCallback(() => {
+        setAracEditForm({
+            plaka: forceUppercase(arac.plaka || ""),
+            marka: forceUppercase(arac.marka || ""),
+            model: forceUppercase(arac.model || ""),
+            yil: Number(arac.yil || new Date().getFullYear()),
+            muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
+            bulunduguIl: arac.bulunduguIl || "ISTANBUL",
+            guncelKm: Number(arac.guncelKm || 0),
+            bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
+            kategori: arac.kategori || "BINEK",
+            calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
+            sirketId: arac.sirket?.id || "",
+            hgsNo: arac.hgsNo || "",
+            ruhsatSeriNo: arac.ruhsatSeriNo || "",
+            aciklama: arac.aciklama || "",
+            saseNo: arac.saseNo || "",
+            kullaniciId: arac.kullanici?.id || "",
+        });
+    }, [arac]);
+
+    const handleUpdateAracBilgileri = async () => {
+        if (!aracEditForm.plaka.trim() || !aracEditForm.marka.trim() || !aracEditForm.model.trim()) {
+            toast.warning("Eksik Bilgi", { description: "Plaka, marka ve model alanları zorunludur." });
+            return;
+        }
+
+        const yil = Number(aracEditForm.yil);
+        const guncelKm = Number(aracEditForm.guncelKm);
+        if (!Number.isFinite(yil) || yil < 1900) {
+            toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
+            return;
+        }
+        if (!Number.isFinite(guncelKm) || guncelKm < 0) {
+            toast.warning("Geçersiz Değer", { description: "Güncel KM 0 veya daha büyük olmalıdır." });
+            return;
+        }
+
+        setUpdatingArac(true);
+        const res = await updateArac(arac.id, {
+            plaka: forceUppercase(aracEditForm.plaka),
+            marka: forceUppercase(aracEditForm.marka),
+            model: forceUppercase(aracEditForm.model),
+            yil,
+            muayeneGecerlilikTarihi: aracEditForm.muayeneGecerlilikTarihi || null,
+            bulunduguIl: aracEditForm.bulunduguIl,
+            guncelKm,
+            bedel: aracEditForm.bedel,
+            kategori: aracEditForm.kategori,
+            calistigiKurum: aracEditForm.calistigiKurum || null,
+            sirketId: aracEditForm.sirketId || null,
+            hgsNo: aracEditForm.hgsNo || null,
+            ruhsatSeriNo: aracEditForm.ruhsatSeriNo || null,
+            aciklama: aracEditForm.aciklama || null,
+            saseNo: forceUppercase(aracEditForm.saseNo || ""),
+            kullaniciId: aracEditForm.kullaniciId || null,
+        });
+        setUpdatingArac(false);
+
+        if (res.success) {
+            setEditAracOpen(false);
+            toast.success("Araç bilgileri güncellendi.");
+            if (res.info) {
+                toast.info(res.info);
+            }
+            router.refresh();
+            return;
+        }
+
+        toast.error("Güncelleme başarısız.", { description: res.error });
+    };
+
+    const handleDeleteArac = async () => {
+        const confirmed = await openConfirm({
+            title: "Aracı Sil",
+            message: `${arac.plaka} plakalı aracı silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.`,
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
         if (!confirmed) return;
-        
+
         setLoading(true);
-        const res = await unassignArac(arac.id);
+        const res = await deleteArac(arac.id);
+        setLoading(false);
+
+        if (res.success) {
+            toast.success("Araç silindi.");
+            router.push("/dashboard/araclar");
+            return;
+        }
+
+        if ((res as { code?: string }).code === "AKTIF_KULLANIM") {
+            toast.warning("Araç silinemedi.", { description: res.error });
+            return;
+        }
+
+        toast.error("Silme işlemi başarısız.", { description: res.error });
+    };
+
+    const handleUnassign = async () => {
+        if (!activeZimmet?.id) {
+            toast.warning("Aktif zimmet kaydı bulunamadı.");
+            return;
+        }
+        if (!soforIadeForm.bitis || !soforIadeForm.bitisKm) {
+            toast.warning("Eksik Bilgi", { description: "Teslim alma tarihi ve teslim alma KM zorunludur." });
+            return;
+        }
+
+        setLoading(true);
+        const res = await finalizeZimmet(activeZimmet.id, {
+            bitis: soforIadeForm.bitis,
+            bitisKm: Number(soforIadeForm.bitisKm),
+            notlar: soforIadeForm.notlar || null,
+        });
         setLoading(false);
 
         if (res.success) {
             toast.success("Şoför başarıyla ayrıldı.");
+            setSoforIadeOpen(false);
+            setSoforIadeForm({
+                bitis: nowDateTimeLocal(),
+                bitisKm: String(arac.guncelKm || 0),
+                notlar: "",
+            });
             router.refresh();
         } else {
             toast.error(res.error || "İşlem başarısız.");
@@ -227,7 +457,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
             servisAdi: row.servisAdi || "",
             yapilanIslemler: row.yapilanIslemler || "",
             tutar: row.tutar ? String(row.tutar) : "",
-            bildirimTarihi: row.bildirimTarihi ? new Date(row.bildirimTarihi).toISOString().slice(0, 16) : nowDateTimeLocal(),
+            bildirimTarihi: row.bildirimTarihi ? toDateTimeLocalInput(row.bildirimTarihi) : nowDateTimeLocal(),
         });
         setEditArizaRow(row);
     };
@@ -340,7 +570,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
         return <Badge className={`${badge.className} border-0 shadow-none`}>{badge.label}</Badge>;
     };
 
-    const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+    const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 
     const resetFormForTab = (tab: string) => {
         if (tab === "soforGecmisi") {
@@ -569,19 +799,25 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                 <div className="grid gap-4 py-4">
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Şoför <span className="text-red-500">*</span></label>
-                        <select
+                        <SearchableSelect
                             value={zimmetForm.kullaniciId}
-                            onChange={e => setZimmetForm({ ...zimmetForm, kullaniciId: e.target.value })}
-                            className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                        >
-                            <option value="">Şoför seçiniz...</option>
-                            {sortedKullanicilar.map((k) => <option key={k.id} value={k.id}>{k.adSoyad}</option>)}
-                        </select>
+                            onValueChange={(value) => setZimmetForm({ ...zimmetForm, kullaniciId: value })}
+                            placeholder="Şoför seçiniz..."
+                            searchPlaceholder="Personel ara..."
+                            options={[
+                                { value: "", label: "Şoför seçiniz..." },
+                                ...sortedKullanicilar.map((k) => ({
+                                    value: k.id,
+                                    label: k.adSoyad,
+                                    searchText: k.adSoyad,
+                                })),
+                            ]}
+                        />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Teslim Tarihi</label>
-                            <Input type="date" value={zimmetForm.baslangic} onChange={e => setZimmetForm({ ...zimmetForm, baslangic: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={zimmetForm.baslangic} onChange={e => setZimmetForm({ ...zimmetForm, baslangic: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Teslim KM</label>
@@ -616,7 +852,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                 <div className="grid gap-4 py-4">
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">İşlem Tarihi</label>
-                        <Input type="date" value={hgsForm.tarih} onChange={e => setHgsForm({ ...hgsForm, tarih: e.target.value })} className="h-9" />
+                        <Input type="datetime-local" value={hgsForm.tarih} onChange={e => setHgsForm({ ...hgsForm, tarih: e.target.value })} className="h-9" />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
@@ -649,7 +885,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                            <Input type="date" value={bakimForm.bakimTarihi} onChange={e => setBakimForm({ ...bakimForm, bakimTarihi: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={bakimForm.bakimTarihi} onChange={e => setBakimForm({ ...bakimForm, bakimTarihi: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
@@ -726,7 +962,7 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Tarih</label>
-                            <Input type="date" value={masrafForm.tarih} onChange={e => setMasrafForm({ ...masrafForm, tarih: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={masrafForm.tarih} onChange={e => setMasrafForm({ ...masrafForm, tarih: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
@@ -774,11 +1010,11 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Başlangıç</label>
-                            <Input type="date" value={sigortaForm.baslangicTarihi} onChange={e => setSigortaForm({ ...sigortaForm, baslangicTarihi: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={sigortaForm.baslangicTarihi} onChange={e => setSigortaForm({ ...sigortaForm, baslangicTarihi: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Bitiş</label>
-                            <Input type="date" value={sigortaForm.bitisTarihi} onChange={e => setSigortaForm({ ...sigortaForm, bitisTarihi: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={sigortaForm.bitisTarihi} onChange={e => setSigortaForm({ ...sigortaForm, bitisTarihi: e.target.value })} className="h-9" />
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -799,11 +1035,11 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Muayene Tarihi</label>
-                            <Input type="date" value={muayeneForm.muayeneTarihi} onChange={e => setMuayeneForm({ ...muayeneForm, muayeneTarihi: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={muayeneForm.muayeneTarihi} onChange={e => setMuayeneForm({ ...muayeneForm, muayeneTarihi: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Geçerlilik Bitiş</label>
-                            <Input type="date" value={muayeneForm.gecerlilikTarihi} onChange={e => setMuayeneForm({ ...muayeneForm, gecerlilikTarihi: e.target.value })} className="h-9" />
+                            <Input type="datetime-local" value={muayeneForm.gecerlilikTarihi} onChange={e => setMuayeneForm({ ...muayeneForm, gecerlilikTarihi: e.target.value })} className="h-9" />
                         </div>
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -867,6 +1103,246 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                     Araç Listesine Dön
                 </button>
 
+                <div className="mb-4 flex justify-end gap-2">
+                    <Dialog
+                        open={editAracOpen}
+                        onOpenChange={(open) => {
+                            setEditAracOpen(open);
+                            if (open) {
+                                resetAracEditForm();
+                            }
+                        }}
+                    >
+                        <DialogTrigger asChild>
+                            <button className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50">
+                                <Pencil size={15} />
+                                Araç Bilgilerini Düzenle
+                            </button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[560px] max-h-[88vh] overflow-y-auto">
+                            <DialogHeader>
+                                <DialogTitle>Araç Bilgilerini Düzenle</DialogTitle>
+                                <DialogDescription>
+                                    {arac.plaka} için temel bilgileri ve güncel KM değerini güncelleyin.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid grid-cols-2 gap-3 py-2">
+                                <div className="col-span-2">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Plaka <span className="text-rose-500">*</span></label>
+                                    <Input
+                                        value={aracEditForm.plaka}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, plaka: forceUppercase(event.target.value) }))}
+                                        className="h-9 uppercase font-mono"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Marka <span className="text-rose-500">*</span></label>
+                                    <Input
+                                        value={aracEditForm.marka}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, marka: forceUppercase(event.target.value) }))}
+                                        className="h-9 uppercase"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Model <span className="text-rose-500">*</span></label>
+                                    <Input
+                                        value={aracEditForm.model}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, model: forceUppercase(event.target.value) }))}
+                                        className="h-9 uppercase"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
+                                    <Input
+                                        type="number"
+                                        value={aracEditForm.yil}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, yil: Number(event.target.value || 0) }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
+                                    <Input
+                                        value={aracEditForm.saseNo}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, saseNo: forceUppercase(event.target.value) }))}
+                                        className="h-9 uppercase"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Muayene Geçerlilik Tarihi (Opsiyonel)</label>
+                                    <Input
+                                        type="datetime-local"
+                                        value={aracEditForm.muayeneGecerlilikTarihi}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, muayeneGecerlilikTarihi: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
+                                    <Input
+                                        type="number"
+                                        value={aracEditForm.guncelKm}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, guncelKm: Number(event.target.value || 0) }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">BEDEL</label>
+                                    <Input
+                                        type="number"
+                                        value={aracEditForm.bedel}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, bedel: event.target.value }))}
+                                        className="h-9"
+                                        placeholder="₺"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Bulunduğu Şantiye</label>
+                                    <select
+                                        value={aracEditForm.bulunduguIl}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, bulunduguIl: event.target.value }))}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        {ILLER.map((il) => (
+                                            <option key={il.value} value={il.value}>
+                                                {il.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Araç Kategorisi</label>
+                                    <select
+                                        value={aracEditForm.kategori}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, kategori: event.target.value }))}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        <option value="BINEK">Binek Araç</option>
+                                        <option value="SANTIYE">Şantiye Aracı</option>
+                                    </select>
+                                </div>
+                                <div className="col-span-2 pt-1">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ruhsat Sahibi Firma</label>
+                                    <select
+                                        value={aracEditForm.sirketId}
+                                        onChange={(event) => {
+                                            const nextSirketId = event.target.value;
+                                            const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                                            setAracEditForm((prev) => ({
+                                                ...prev,
+                                                sirketId: nextSirketId,
+                                                bulunduguIl: selectedSirket?.bulunduguIl || prev.bulunduguIl,
+                                            }));
+                                        }}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        {canAssignIndependentRecords ? (
+                                            <option value="">Şirket Seçiniz (Bağımsız)</option>
+                                        ) : (
+                                            <option value="" disabled>Şirket Seçiniz</option>
+                                        )}
+                                        {sirketler.map((sirket) => (
+                                            <option key={sirket.id} value={sirket.id}>
+                                                {sirket.ad}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kullanıcı Firma</label>
+                                    <select
+                                        value={aracEditForm.calistigiKurum}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, calistigiKurum: event.target.value }))}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        <option value="">Kullanıcı Firma Seçiniz</option>
+                                        {kullaniciFirmaOptions.map((firma) => (
+                                            <option key={firma} value={firma}>
+                                                {firma}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kullanıcı</label>
+                                    <SearchableSelect
+                                        value={aracEditForm.kullaniciId}
+                                        onValueChange={(value) => {
+                                            const selectedKullanici = editAracFormKullanicilar.find((u) => u.id === value);
+                                            setAracEditForm((prev) => ({
+                                                ...prev,
+                                                kullaniciId: value,
+                                                calistigiKurum: selectedKullanici?.sirketAd || prev.calistigiKurum,
+                                            }));
+                                        }}
+                                        placeholder="Kullanıcı Seçiniz (Atanmamış)"
+                                        searchPlaceholder="Personel ara..."
+                                        options={[
+                                            { value: "", label: "Kullanıcı Seçiniz (Atanmamış)" },
+                                            ...editAracFormKullanicilar.map((u) => ({
+                                                value: u.id,
+                                                label: `${u.adSoyad}${u.sirketAd ? ` - ${u.sirketAd}` : ""}`,
+                                                searchText: `${u.adSoyad} ${u.sirketAd || ""}`,
+                                            })),
+                                        ]}
+                                    />
+                                </div>
+                                <div className="col-span-2 pt-1">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">HGS No</label>
+                                    <Input
+                                        value={aracEditForm.hgsNo}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, hgsNo: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ruhsat Seri No</label>
+                                    <Input
+                                        value={aracEditForm.ruhsatSeriNo}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, ruhsatSeriNo: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5 sm:col-span-2">
+                                    <label className="text-sm font-medium">Açıklama</label>
+                                    <textarea
+                                        value={aracEditForm.aciklama}
+                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, aciklama: event.target.value }))}
+                                        rows={2}
+                                        className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm"
+                                    />
+                                </div>
+                            </div>
+                            <DialogFooter>
+                                <button
+                                    onClick={handleUpdateAracBilgileri}
+                                    disabled={updatingArac}
+                                    className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                                >
+                                    {updatingArac ? "Güncelleniyor..." : "Güncelle"}
+                                </button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                    <button
+                        onClick={handleDeleteArac}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 shadow-sm transition-colors hover:bg-rose-100 disabled:opacity-50"
+                    >
+                        <Trash2 size={15} />
+                        Aracı Sil
+                    </button>
+                </div>
+
                 {/* Hero / Header Card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] p-6 lg:p-8 mb-8 flex flex-col md:flex-row md:items-start justify-between gap-6">
                     <div className="flex items-start gap-6">
@@ -879,6 +1355,9 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                 {getStatusBadge(arac.kullanici ? 'AKTIF' : arac.durum)}
                             </div>
                             <h2 className="text-lg font-semibold text-slate-700 tracking-tight">{arac.marka} {arac.model} <span className="text-slate-400 font-medium ml-1">({arac.yil})</span></h2>
+                            {arac.aciklama ? (
+                                <p className="mt-2 text-sm text-slate-500">{arac.aciklama}</p>
+                            ) : null}
 
                             <div className="flex flex-wrap items-center gap-4 mt-4 text-sm font-medium text-slate-500">
                                 <div className="flex items-center gap-1.5"><MapPin size={16} /> {arac.bulunduguIl}</div>
@@ -902,13 +1381,57 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                         <div className="flex justify-between items-center mb-3">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Güncel Şoför</p>
                             {arac.kullanici && (
-                                <button 
-                                    onClick={handleUnassign}
-                                    disabled={loading}
-                                    className="text-[10px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-2 py-1 rounded font-bold uppercase transition-colors disabled:opacity-50"
+                                <Dialog
+                                    open={soforIadeOpen}
+                                    onOpenChange={(open) => {
+                                        setSoforIadeOpen(open);
+                                        if (open) {
+                                            setSoforIadeForm({
+                                                bitis: nowDateTimeLocal(),
+                                                bitisKm: String(arac.guncelKm || 0),
+                                                notlar: activeZimmet?.notlar || "",
+                                            });
+                                        }
+                                    }}
                                 >
-                                    {loading ? '...' : 'Şoförden Ayır'}
-                                </button>
+                                    <DialogTrigger asChild>
+                                        <button
+                                            disabled={loading}
+                                            className="text-[10px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-2 py-1 rounded font-bold uppercase transition-colors disabled:opacity-50"
+                                        >
+                                            Şoförden Ayır
+                                        </button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[420px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Zimmeti Sonlandır</DialogTitle>
+                                            <DialogDescription>
+                                                {arac.plaka} için teslim alma bilgilerini girin.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim Alma Tarihi</label>
+                                                    <Input type="datetime-local" value={soforIadeForm.bitis} onChange={e => setSoforIadeForm({ ...soforIadeForm, bitis: e.target.value })} className="h-9" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim Alma KM</label>
+                                                    <Input type="number" value={soforIadeForm.bitisKm} onChange={e => setSoforIadeForm({ ...soforIadeForm, bitisKm: e.target.value })} className="h-9" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Not</label>
+                                                <Input value={soforIadeForm.notlar} onChange={e => setSoforIadeForm({ ...soforIadeForm, notlar: e.target.value })} className="h-9" placeholder="Opsiyonel not" />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <button onClick={handleUnassign} disabled={loading} className="bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                                {loading ? "Sonlandırılıyor..." : "Zimmeti Sonlandır"}
+                                            </button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             )}
                             {!arac.kullanici && (
                                 <Dialog open={soforAtamaOpen} onOpenChange={setSoforAtamaOpen}>
@@ -930,21 +1453,25 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                         <div className="grid gap-4 py-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-sm font-medium">Şoför <span className="text-red-500">*</span></label>
-                                                <select
+                                                <SearchableSelect
                                                     value={soforAtamaForm.kullaniciId}
-                                                    onChange={e => setSoforAtamaForm({ ...soforAtamaForm, kullaniciId: e.target.value })}
-                                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                                >
-                                                    <option value="">Şoför seçiniz...</option>
-                                                    {sortedKullanicilar.map((k) => (
-                                                        <option key={k.id} value={k.id}>{k.adSoyad}</option>
-                                                    ))}
-                                                </select>
+                                                    onValueChange={(value) => setSoforAtamaForm({ ...soforAtamaForm, kullaniciId: value })}
+                                                    placeholder="Şoför seçiniz..."
+                                                    searchPlaceholder="Personel ara..."
+                                                    options={[
+                                                        { value: "", label: "Şoför seçiniz..." },
+                                                        ...sortedKullanicilar.map((k) => ({
+                                                            value: k.id,
+                                                            label: k.adSoyad,
+                                                            searchText: k.adSoyad,
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-sm font-medium">Teslim Tarihi</label>
-                                                    <Input type="date" value={soforAtamaForm.baslangic} onChange={e => setSoforAtamaForm({ ...soforAtamaForm, baslangic: e.target.value })} className="h-9" />
+                                                    <Input type="datetime-local" value={soforAtamaForm.baslangic} onChange={e => setSoforAtamaForm({ ...soforAtamaForm, baslangic: e.target.value })} className="h-9" />
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <label className="text-sm font-medium">Teslim KM</label>
@@ -1029,18 +1556,20 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Personel / Şoför</label>
-                                    <select
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    <SearchableSelect
                                         value={arizaEditForm.soforId}
-                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, soforId: event.target.value }))}
-                                    >
-                                        <option value="">Seçilmedi</option>
-                                        {sortedKullanicilar.map((k) => (
-                                            <option key={k.id} value={k.id}>
-                                                {k.adSoyad}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        onValueChange={(value) => setArizaEditForm((prev) => ({ ...prev, soforId: value }))}
+                                        placeholder="Seçilmedi"
+                                        searchPlaceholder="Personel ara..."
+                                        options={[
+                                            { value: "", label: "Seçilmedi" },
+                                            ...arizaSoforOptions.map((k) => ({
+                                                value: k.id,
+                                                label: k.adSoyad,
+                                                searchText: k.adSoyad,
+                                            })),
+                                        ]}
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
@@ -1177,6 +1706,10 @@ export default function AracDetailClient({ initialArac: arac, kullanicilar }: { 
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Ruhsat Seri No</span>
                                                 <span className="text-sm font-semibold text-slate-800">{arac.ruhsatSeriNo || '-'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Şase No</span>
+                                                <span className="text-sm font-semibold text-slate-800">{arac.saseNo || '-'}</span>
                                             </li>
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Filoya Katılım</span>

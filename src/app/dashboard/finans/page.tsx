@@ -115,7 +115,14 @@ export default async function FinansPage(props: { searchParams?: Promise<Dashboa
             tur: 'Muayene Ücreti',
             aracPlaka: m.arac?.plaka || "-",
             aracSirket: m.arac?.sirket?.ad || null,
-            detay: `Geçerlilik: ${new Date(m.gecerlilikTarihi).toLocaleDateString('tr-TR')}`,
+            detay: `Geçerlilik: ${new Date(m.gecerlilikTarihi).toLocaleString("tr-TR", {
+                day: "2-digit",
+                month: "2-digit",
+                year: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: false,
+            })}`,
             tutar: m.tutar || 0
         }))
     ].sort((a: any, b: any) => b.tarih.getTime() - a.tarih.getTime());

@@ -70,6 +70,32 @@ export async function getModelFilterWithOptions(
     });
 }
 
+/**
+ * Personel secim listeleri icin sabit kapsam kurali:
+ * - Bagimsiz kullanici (sirketi olmayan): tum personeller
+ * - Sirkete bagli kullanici: sadece kendi sirket personeli
+ * - Sofor rolu: politika geregi kendi kaydi
+ */
+export async function getPersonnelSelectFilter() {
+    const session = await getSession();
+    if (!session?.user) {
+        return { id: "blocked" };
+    }
+
+    const { rol, sirketId, id: userId } = session.user;
+    const currentSirketId = getRequestedCompanyId(sirketId);
+    const requestedSirketId = isDriverRole(rol) ? null : currentSirketId;
+
+    return getModelFilterByPolicy({
+        modelName: "kullanici",
+        role: rol,
+        currentSirketId: currentSirketId,
+        currentUserId: userId,
+        requestedSirketId,
+        includeDeleted: false,
+    });
+}
+
 export async function canAccessAllCompanies() {
     const session = await getSession();
     return canRoleAccessAllCompanies(session?.user?.rol, session?.user?.sirketId);

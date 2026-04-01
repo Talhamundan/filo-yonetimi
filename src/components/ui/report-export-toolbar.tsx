@@ -1,7 +1,7 @@
 "use client";
 
 import { useSearchParams } from "next/navigation";
-import { Download } from "lucide-react";
+import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type ReportExportToolbarProps = {
@@ -45,7 +45,7 @@ export default function ReportExportToolbar({
         <div className={`flex w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap ${className || ""}`}>
             <a href={buildUrl(report, params, extraParams)} className="flex-1 sm:flex-none">
                 <Button type="button" variant="outline" size="sm" className="h-10 w-full">
-                    <Download className="h-4 w-4" /> Dışa Aktar
+                    <Upload className="h-4 w-4" /> Dışa Aktar
                 </Button>
             </a>
         </div>

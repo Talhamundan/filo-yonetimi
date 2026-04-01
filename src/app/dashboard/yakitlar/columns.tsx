@@ -32,7 +32,7 @@ export type YakitRow = {
     ortalamaYakitDistanceKm?: number | null;
 }
 
-const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy HH:mm", { locale: tr }) : '-';
+const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 const formatDecimal = (value: number, fractionDigits = 2) =>
     value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 
@@ -88,9 +88,9 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
     },
     {
         accessorKey: "km",
-        header: "Alım Anındaki KM",
+        header: "Alım Anındaki km/saat",
         cell: ({ row }) => {
-            return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km</div>
+            return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km/saat</div>
         },
     },
     {

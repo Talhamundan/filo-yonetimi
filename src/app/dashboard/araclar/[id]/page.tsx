@@ -1,7 +1,7 @@
 import { prisma } from "../../../../lib/prisma";
 import AracDetailClient from "./AracDetailClient";
 import { notFound } from "next/navigation";
-import { getModelFilter, getCurrentUserRole } from "@/lib/auth-utils";
+import { getModelFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import { ensureMuayeneColumns } from "@/lib/muayene-schema-compat";
 
@@ -28,6 +28,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
                 yil: true,
                 bulunduguIl: true,
                 guncelKm: true,
+                aciklama: true,
                 hgsNo: true,
                 durum: true,
                 ruhsatSeriNo: true,
@@ -189,6 +190,7 @@ async function getSafeAracDetailLegacy(queryFilter: Record<string, unknown>) {
             yil: true,
             bulunduguIl: true,
             guncelKm: true,
+            aciklama: true,
             hgsNo: true,
             durum: true,
             ruhsatSeriNo: true,
@@ -201,14 +203,15 @@ async function getSafeAracDetailLegacy(queryFilter: Record<string, unknown>) {
 export default async function AracDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
     const selectedSirketId = await getSelectedSirketId(props.searchParams);
-    const [filter, kullaniciFilter, rol] = await Promise.all([
+    const [filter, kullaniciFilter, rol, sirketListFilter] = await Promise.all([
         getModelFilter("arac", selectedSirketId),
-        getModelFilter("kullanici", selectedSirketId),
-        getCurrentUserRole()
+        getPersonnelSelectFilter(),
+        getCurrentUserRole(),
+        getSirketListFilter(),
     ]);
     const queryFilter = { id: params.id, ...(filter as any) };
 
-    const [aracRaw, kullanicilar] = await Promise.all([
+    const [aracRaw, kullanicilar, sirketler] = await Promise.all([
         getSafeAracDetail(queryFilter).catch(async (error) => {
             console.warn("Arac detay birlesik sorgu basarisiz, legacy minimal sorgu ile devam ediliyor.", error);
             return getSafeAracDetailLegacy(queryFilter);
@@ -216,23 +219,48 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
         rol === "SOFOR"
             ? []
             : (prisma as any).kullanici.findMany({
-                where: kullaniciFilter as any,
-                select: { id: true, ad: true, soyad: true },
+                where: {
+                    ...(kullaniciFilter as any),
+                    arac: { is: null },
+                    zimmetler: {
+                        none: {
+                            bitis: null,
+                        },
+                    },
+                } as any,
+                select: {
+                    id: true,
+                    ad: true,
+                    soyad: true,
+                    sirketId: true,
+                    sirket: { select: { id: true, ad: true } },
+                },
                 orderBy: { ad: "asc" }
             }).catch((error: unknown) => {
                 console.warn("Sofor listesi getirilemedi, bos liste ile devam ediliyor.", error);
                 return [];
-            })
+            }),
+        (prisma as any).sirket.findMany({
+            where: sirketListFilter as any,
+            select: { id: true, ad: true, bulunduguIl: true },
+            orderBy: { ad: "asc" },
+        }).catch((error: unknown) => {
+            console.warn("Sirket listesi getirilemedi, bos liste ile devam ediliyor.", error);
+            return [];
+        }),
     ]);
 
     if (!aracRaw) {
         notFound();
     }
 
+    const activeZimmet = ((aracRaw as any).kullaniciGecmisi || []).find((z: any) => !z.bitis) || null;
+    const inferredKullanici = (aracRaw as any).kullanici || activeZimmet?.kullanici || null;
     const arac = {
         ...aracRaw,
         sirket: (aracRaw as any).sirket || null,
-        kullanici: (aracRaw as any).kullanici || null,
+        kullanici: inferredKullanici,
+        kullaniciId: (aracRaw as any).kullaniciId || inferredKullanici?.id || null,
         kullaniciGecmisi: (aracRaw as any).kullaniciGecmisi || [],
         muayene: (aracRaw as any).muayene || [],
         bakimlar: (aracRaw as any).bakimlar || [],
@@ -249,7 +277,13 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
     return (
         <AracDetailClient
             initialArac={arac as any}
-            kullanicilar={kullanicilar.map((u: any) => ({ id: u.id, adSoyad: `${u.ad} ${u.soyad}` }))}
+            kullanicilar={kullanicilar.map((u: any) => ({
+                id: u.id,
+                adSoyad: `${u.ad} ${u.soyad}`.trim(),
+                sirketId: u.sirketId || null,
+                sirketAd: u.sirket?.ad || null,
+            }))}
+            sirketler={sirketler as any[]}
         />
     );
 }

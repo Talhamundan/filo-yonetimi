@@ -118,7 +118,7 @@ export default function TrafikSigortasiClient({ initialData }: { initialData: Si
                                 <TableHead className="w-[50px]"></TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody className="text-sm">
+                        <TableBody className="text-[13px]">
                             {filteredData.length > 0 ? (
                                 filteredData.map((item, idx) => (
                                     <TableRow
@@ -138,7 +138,7 @@ export default function TrafikSigortasiClient({ initialData }: { initialData: Si
                                             </div>
                                         </TableCell>
                                         <TableCell className="px-4 py-2.5 align-middle font-medium text-slate-700">
-                                            {format(new Date(item.bitisTarihi), 'dd MMM yyyy', { locale: tr })}
+                                            {format(new Date(item.bitisTarihi), "dd.MM.yyyy HH:mm", { locale: tr })}
                                         </TableCell>
                                         <TableCell className="px-4 py-2.5 align-middle">
                                             {item.arac.sofor ? (

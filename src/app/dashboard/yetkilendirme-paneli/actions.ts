@@ -65,7 +65,7 @@ export async function createUserAccount(data: {
       return { success: false, error: "Personel bulunamadı." }
     }
     if (personel.rol === Rol.SOFOR) {
-      return { success: false, error: "Şoför rolündeki personel için giriş hesabı tanımlanamaz." }
+      return { success: false, error: "Personel rolündeki kullanıcı için giriş hesabı tanımlanamaz." }
     }
     if (personel.hesap) {
       return { success: false, error: "Bu personele zaten giriş hesabı tanımlı." }

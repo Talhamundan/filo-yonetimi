@@ -1,11 +1,34 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
-import { getModelFilter, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
+import { getModelFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT", "HGS_YUKLEME"] as const;
+const ARAC_FALLBACK_SELECT = {
+    id: true,
+    plaka: true,
+    marka: true,
+    model: true,
+    yil: true,
+    bulunduguIl: true,
+    guncelKm: true,
+    bedel: true,
+    hgsNo: true,
+    ruhsatSeriNo: true,
+    durum: true,
+    kullaniciId: true,
+    sirketId: true,
+    calistigiKurum: true,
+    kategori: true,
+    saseNo: true,
+    olusturmaTarihi: true,
+    guncellemeTarihi: true,
+    deletedAt: true,
+    deletedBy: true,
+} as const;
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -20,25 +43,131 @@ function toSumMap(rows: Array<{ aracId: string; _sum?: { tutar?: number | null }
     return map;
 }
 
-async function getAraclarWithTakipBilgileri(filter: Record<string, unknown>, rangeStart: Date, rangeEnd: Date) {
+async function getAraclarWithTakipBilgileri(
+    filter: Record<string, unknown>,
+    rangeStart: Date,
+    rangeEnd: Date,
+    safeScopeFilter?: Record<string, unknown>
+) {
     const araclar = await (prisma as any).arac.findMany({
         where: filter as any,
         orderBy: { plaka: "asc" },
         include: {
-            kullanici: true,
+            kullanici: {
+                include: {
+                    sirket: {
+                        select: { id: true, ad: true },
+                    },
+                },
+            },
             sirket: true,
         },
     }).catch(async (error: any) => {
         console.warn("Arac listesi sorgusu basarisiz, minimal sorgu ile devam ediliyor.", error);
+        const safeWhere = safeScopeFilter || filter;
         return (prisma as any).arac.findMany({
-            where: filter as any,
+            where: safeWhere as any,
             orderBy: { plaka: "asc" },
+            select: ARAC_FALLBACK_SELECT,
+        }).then((rows: any[]) => rows.map((row) => ({
+            ...row,
+            bedel: row.bedel ?? null,
+            aciklama: null,
+            calistigiKurum: row.calistigiKurum ?? null,
+            kullanici: null,
+            sirket: null,
+        }))).catch(async (fallbackError: any) => {
+            console.warn("Arac listesi fallback sorgusu da basarisiz, daha dar sorgu deneniyor.", fallbackError);
+            return (prisma as any).arac.findMany({
+                where: safeWhere as any,
+                orderBy: { plaka: "asc" },
+                select: {
+                    id: true,
+                    plaka: true,
+                    marka: true,
+                    model: true,
+                    yil: true,
+                    bulunduguIl: true,
+                    guncelKm: true,
+                    hgsNo: true,
+                    ruhsatSeriNo: true,
+                    durum: true,
+                    kullaniciId: true,
+                    sirketId: true,
+                    calistigiKurum: true,
+                    kategori: true,
+                    olusturmaTarihi: true,
+                    guncellemeTarihi: true,
+                    deletedAt: true,
+                    deletedBy: true,
+                },
+            }).then((rows: any[]) => rows.map((row) => ({
+                ...row,
+                bedel: null,
+                aciklama: null,
+                saseNo: null,
+                calistigiKurum: row.calistigiKurum ?? null,
+                kullanici: null,
+                sirket: null,
+            }))).catch((lastError: any) => {
+                console.error("Arac listesi en dar fallback sorgusu da basarisiz, bos liste donduruluyor.", lastError);
+                return [];
+            });
         });
     });
 
     const aracIds = (araclar || []).map((a: any) => a.id).filter(Boolean);
     if (aracIds.length === 0) {
         return araclar || [];
+    }
+    const sirketIds = Array.from(
+        new Set(
+            (araclar || [])
+                .map((a: any) => a?.sirketId)
+                .filter((id: unknown): id is string => typeof id === "string" && id.length > 0)
+        )
+    );
+    const sirketById = new Map<string, { id: string; ad: string }>();
+    if (sirketIds.length > 0) {
+        const sirketRows = await (prisma as any).sirket.findMany({
+            where: { id: { in: sirketIds } },
+            select: { id: true, ad: true },
+        }).catch((error: any) => {
+            console.warn("Arac listesi sirket verisi okunamadi.", error);
+            return [];
+        });
+        for (const row of sirketRows as any[]) {
+            if (!row?.id) continue;
+            sirketById.set(row.id, { id: row.id, ad: row.ad || "-" });
+        }
+    }
+
+    const aktifZimmetler = await (prisma as any).kullaniciZimmet.findMany({
+        where: {
+            aracId: { in: aracIds },
+            bitis: null,
+        },
+        select: {
+            aracId: true,
+            baslangic: true,
+            kullanici: {
+                select: {
+                    id: true,
+                    ad: true,
+                    soyad: true,
+                    sirket: { select: { id: true, ad: true } },
+                },
+            },
+        },
+        orderBy: [{ aracId: "asc" }, { baslangic: "desc" }],
+    }).catch((error: any) => {
+        console.warn("Arac listesi aktif zimmet verisi okunamadi.", error);
+        return [];
+    });
+    const aktifZimmetByAracId = new Map<string, any>();
+    for (const row of aktifZimmetler as any[]) {
+        if (!row?.aracId || aktifZimmetByAracId.has(row.aracId)) continue;
+        aktifZimmetByAracId.set(row.aracId, row);
     }
 
     const muayeneler = await (prisma as any).muayene.findMany({
@@ -162,8 +291,17 @@ async function getAraclarWithTakipBilgileri(filter: Record<string, unknown>, ran
         }
     }
 
-    const withTakip = (araclar || []).map((arac: any) => ({
+    const withTakip = (araclar || []).map((arac: any) => {
+        const aktifZimmet = aktifZimmetByAracId.get(arac.id);
+        const inferredKullanici = arac.kullanici || aktifZimmet?.kullanici || null;
+        const inferredKullaniciId = arac.kullaniciId || inferredKullanici?.id || null;
+        const inferredSirket = arac.sirket || (arac.sirketId ? sirketById.get(arac.sirketId) || null : null);
+
+        return {
         ...arac,
+        kullanici: inferredKullanici,
+        kullaniciId: inferredKullaniciId,
+        sirket: inferredSirket,
         muayene: muayeneMap.get(arac.id) ? [muayeneMap.get(arac.id)] : [],
         kasko: kaskoMap.get(arac.id) ? [kaskoMap.get(arac.id)] : [],
         trafikSigortasi: trafikMap.get(arac.id) ? [trafikMap.get(arac.id)] : [],
@@ -186,7 +324,8 @@ async function getAraclarWithTakipBilgileri(filter: Record<string, unknown>, ran
             (kaskoTutarMap.get(arac.id) || 0) +
             (trafikTutarMap.get(arac.id) || 0) +
             (digerMap.get(arac.id) || 0),
-    }));
+    };
+    });
 
     return sortByTextValue(withTakip, (arac: any) => arac.plaka);
 }
@@ -202,30 +341,27 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
         getModelFilter('arac', selectedSirketId),
-        getModelFilter('kullanici', selectedSirketId),
+        getPersonnelSelectFilter(),
         getSirketListFilter(),
         getCurrentUserRole()
     ]);
     const filterParts: Record<string, unknown>[] = [];
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        filterParts.push({
-            OR: [
-                { plaka: { contains: q, mode: "insensitive" } },
-                { marka: { contains: q, mode: "insensitive" } },
-                { model: { contains: q, mode: "insensitive" } },
-                { hgsNo: { contains: q, mode: "insensitive" } },
-                { saseNo: { contains: q, mode: "insensitive" } },
-                {
-                    kullanici: {
-                        OR: [
-                            { ad: { contains: q, mode: "insensitive" } },
-                            { soyad: { contains: q, mode: "insensitive" } },
-                        ],
-                    },
-                },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { plaka: { contains: token, mode: "insensitive" } },
+        { marka: { contains: token, mode: "insensitive" } },
+        { model: { contains: token, mode: "insensitive" } },
+        { hgsNo: { contains: token, mode: "insensitive" } },
+        {
+            kullanici: {
+                OR: [
+                    { ad: { contains: token, mode: "insensitive" } },
+                    { soyad: { contains: token, mode: "insensitive" } },
+                ],
+            },
+        },
+    ]);
+    if (qFilter) {
+        filterParts.push(qFilter);
     }
     if (commonFilters.status) {
         filterParts.push({ durum: commonFilters.status });
@@ -233,13 +369,26 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     if (commonFilters.type) {
         filterParts.push({ kategori: commonFilters.type });
     }
+    const safeFilterParts = filterParts.filter((part) => {
+        if (!part || typeof part !== "object") return false;
+        const keys = Object.keys(part);
+        return !keys.includes("OR");
+    });
+    const safeScopeFilter = safeFilterParts.length
+        ? { AND: [(rawFilter || {}) as Record<string, unknown>, ...safeFilterParts] }
+        : ((rawFilter || {}) as Record<string, unknown>);
     const filter = filterParts.length
         ? { AND: [(rawFilter || {}) as Record<string, unknown>, ...filterParts] }
         : ((rawFilter || {}) as Record<string, unknown>);
 
     const isSfr = rol === 'SOFOR';
 
-    const araclarPromise = getAraclarWithTakipBilgileri(filter as Record<string, unknown>, rangeStart, rangeEnd);
+    const araclarPromise = getAraclarWithTakipBilgileri(
+        filter as Record<string, unknown>,
+        rangeStart,
+        rangeEnd,
+        safeScopeFilter
+    );
 
     const [araclar, sirketler, kullanicilar] = await Promise.all([
         araclarPromise,
@@ -252,8 +401,22 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
             return [];
         }),
         isSfr ? [] : (prisma as any).kullanici.findMany({ 
-            where: kullaniciFilter as any,
-            select: { id: true, ad: true, soyad: true }, 
+            where: {
+                ...(kullaniciFilter as any),
+                arac: { is: null },
+                zimmetler: {
+                    none: {
+                        bitis: null,
+                    },
+                },
+            } as any,
+            select: {
+                id: true,
+                ad: true,
+                soyad: true,
+                sirketId: true,
+                sirket: { select: { ad: true } },
+            },
             orderBy: { ad: 'asc' } 
         }).catch((error: any) => {
             console.warn("Kullanici listesi getirilemedi, bos liste ile devam ediliyor.", error);
@@ -265,7 +428,12 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         <AraclarClient 
             initialAraclar={araclar as any} 
             sirketler={sirketler}
-            kullanicilar={kullanicilar.map((u: any) => ({ id: u.id, adSoyad: `${u.ad} ${u.soyad}` }))}
+            kullanicilar={kullanicilar.map((u: any) => ({
+                id: u.id,
+                adSoyad: `${u.ad} ${u.soyad}`.trim(),
+                sirketId: u.sirketId || null,
+                sirketAd: u.sirket?.ad || null,
+            }))}
             role={rol}
         />
     );

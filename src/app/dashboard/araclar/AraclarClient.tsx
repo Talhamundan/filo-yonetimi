@@ -6,7 +6,8 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
-import { useRouter } from "next/navigation";
+import { SearchableSelect } from "@/components/ui/searchable-select";
+import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, AracRow } from "./columns";
 import { createArac, updateArac, deleteArac } from "./actions";
@@ -22,6 +23,13 @@ const ILLER = [
     { value: 'DIGER', label: 'DİĞER' }
 ];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
+const toDateTimeLocalInput = (value?: Date | string | null) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    const pad = (n: number) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+};
 
 const EMPTY = {
     plaka: '',
@@ -29,8 +37,11 @@ const EMPTY = {
     model: '',
     yil: new Date().getFullYear(),
     muayeneGecerlilikTarihi: '',
-    bulunduguIl: 'İSTANBUL',
+    bulunduguIl: 'ISTANBUL',
     guncelKm: 0,
+    bedel: '',
+    aciklama: '',
+    calistigiKurum: '',
     sirketId: '',
     kullaniciId: '',
     hgsNo: '',
@@ -45,18 +56,30 @@ const FormFields = ({
     sirketler,
     kullanicilar,
     ILLER,
+    kullaniciFirmaOptions,
     showInitialMuayeneField = false,
     allowIndependentOption = true,
 }: {
     formData: any,
     setFormData: any,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
-    kullanicilar: any[],
+    kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     ILLER: { value: string; label: string }[],
+    kullaniciFirmaOptions: string[],
     showInitialMuayeneField?: boolean,
     allowIndependentOption?: boolean,
-}) => (
-    <div className="grid grid-cols-2 gap-4 py-2">
+}) => {
+    const firmaOptions = React.useMemo(() => {
+        const options = [...kullaniciFirmaOptions];
+        const currentFirma = typeof formData.calistigiKurum === "string" ? formData.calistigiKurum.trim() : "";
+        if (currentFirma && !options.some((item) => item.localeCompare(currentFirma, "tr-TR", { sensitivity: "base" }) === 0)) {
+            options.push(currentFirma);
+        }
+        return sortByTextValue(options, (item) => item);
+    }, [formData.calistigiKurum, kullaniciFirmaOptions]);
+
+    return (
+    <div className="grid grid-cols-2 gap-3 py-2">
         <div className="col-span-2">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
         </div>
@@ -85,11 +108,15 @@ const FormFields = ({
             </label>
             <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
         </div>
+        <div className="space-y-1.5 col-span-2">
+            <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
+            <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" />
+        </div>
         {showInitialMuayeneField ? (
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Muayene Geçerlilik Tarihi (Opsiyonel)</label>
                 <Input
-                    type="date"
+                    type="datetime-local"
                     value={formData.muayeneGecerlilikTarihi}
                     onChange={e => setFormData({ ...formData, muayeneGecerlilikTarihi: e.target.value })}
                     className="h-9"
@@ -103,7 +130,17 @@ const FormFields = ({
             <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Bulunduğu İl</label>
+            <label className="text-sm font-medium">BEDEL</label>
+            <Input
+                type="number"
+                value={formData.bedel}
+                onChange={e => setFormData({ ...formData, bedel: e.target.value })}
+                className="h-9"
+                placeholder="₺"
+            />
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Bulunduğu Şantiye</label>
             <select 
                 value={formData.bulunduguIl} 
                 onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
@@ -120,8 +157,7 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="BINEK">Binek Araç</option>
-                <option value="KAMYON_TIR">Kamyon / Tır</option>
-                <option value="IS_MAKINESI">İş Makinesi</option>
+                <option value="SANTIYE">Şantiye Aracı</option>
             </select>
         </div>
         <div className="col-span-2 pt-1">
@@ -130,7 +166,7 @@ const FormFields = ({
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <Building2 size={14} className="text-slate-400" />
-                Bağlı Şirket
+                Ruhsat Sahibi Firma
             </label>
             <select 
                 value={formData.sirketId} 
@@ -158,16 +194,47 @@ const FormFields = ({
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <User size={14} className="text-slate-400" />
-                Mevcut Şoför (Zimmet)
+                Kullanıcı Firma
             </label>
-            <select 
-                value={formData.kullaniciId} 
-                onChange={e => setFormData({...formData, kullaniciId: e.target.value})}
+            <select
+                value={formData.calistigiKurum}
+                onChange={e => setFormData({ ...formData, calistigiKurum: e.target.value })}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
-                <option value="">Şoför Seçiniz (Atanmamış)</option>
-                {kullanicilar.map(u => <option key={u.id} value={u.id}>{u.adSoyad}</option>)}
+                <option value="">Kullanıcı Firma Seçiniz</option>
+                {firmaOptions.map((firma) => (
+                    <option key={firma} value={firma}>
+                        {firma}
+                    </option>
+                ))}
             </select>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+                <User size={14} className="text-slate-400" />
+                Kullanıcı
+            </label>
+            <SearchableSelect
+                value={formData.kullaniciId} 
+                onValueChange={(value) => {
+                    const selectedKullanici = kullanicilar.find((u) => u.id === value);
+                    setFormData({
+                        ...formData,
+                        kullaniciId: value,
+                        calistigiKurum: selectedKullanici?.sirketAd || formData.calistigiKurum,
+                    });
+                }}
+                placeholder="Kullanıcı Seçiniz (Atanmamış)"
+                searchPlaceholder="Personel ara..."
+                options={[
+                    { value: "", label: "Kullanıcı Seçiniz (Atanmamış)" },
+                    ...kullanicilar.map((u) => ({
+                        value: u.id,
+                        label: `${u.adSoyad}${u.sirketAd ? ` - ${u.sirketAd}` : ""}`,
+                        searchText: `${u.adSoyad} ${u.sirketAd || ""}`,
+                    })),
+                ]}
+            />
         </div>
         <div className="col-span-2 pt-1">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
@@ -181,11 +248,17 @@ const FormFields = ({
             <Input value={formData.ruhsatSeriNo} onChange={e => setFormData({...formData, ruhsatSeriNo: e.target.value})} className="h-9" />
         </div>
         <div className="space-y-1.5 col-span-2">
-            <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
-            <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" />
+            <label className="text-sm font-medium">Açıklama (Opsiyonel)</label>
+            <textarea
+                value={formData.aciklama}
+                onChange={e => setFormData({ ...formData, aciklama: e.target.value })}
+                rows={2}
+                className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm"
+            />
         </div>
     </div>
-);
+    );
+};
 
 export default function AraclarClient({ 
     initialAraclar, 
@@ -195,19 +268,64 @@ export default function AraclarClient({
 }: { 
     initialAraclar: AracRow[], 
     sirketler: { id: string, ad: string, bulunduguIl: string }[],
-    kullanicilar: { id: string, adSoyad: string }[],
+    kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     role?: string | null
 }) {
     const isTeknik = role === "TEKNIK";
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies, canAssignIndependentRecords } = useDashboardScope();
-    const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
+    const searchParams = useSearchParams();
+    const scopedSirketId = searchParams.get("sirket")?.trim() || "";
+    const defaultCreateSirketId = React.useMemo(() => {
+        if (scopedSirketId && sirketler.some((s) => s.id === scopedSirketId)) {
+            return scopedSirketId;
+        }
+        if (sirketler.length === 1) {
+            return sirketler[0]?.id || "";
+        }
+        if (!canAssignIndependentRecords && sirketler.length > 1) {
+            return sirketler[0]?.id || "";
+        }
+        return "";
+    }, [canAssignIndependentRecords, scopedSirketId, sirketler]);
     const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<AracRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY, sirketId: defaultCreateSirketId });
     const [loading, setLoading] = useState(false);
     const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (u) => u.adSoyad), [kullanicilar]);
+    const kullaniciFirmaOptions = useMemo(() => {
+        const options = Array.from(
+            new Set(
+                sirketler
+                    .map((sirket) => (sirket.ad || "").trim())
+                    .filter((ad) => ad.length > 0)
+            )
+        );
+        if (!options.some((option) => option.toLocaleLowerCase("tr-TR") === "özel")) {
+            options.push("Özel");
+        }
+        return options.sort((a, b) => a.localeCompare(b, "tr-TR"));
+    }, [sirketler]);
+    const editFormKullanicilar = useMemo(() => {
+        if (!editRow?.kullanici?.id) {
+            return sortedKullanicilar;
+        }
+
+        const alreadyExists = sortedKullanicilar.some((k) => k.id === editRow.kullanici?.id);
+        if (alreadyExists) {
+            return sortedKullanicilar;
+        }
+
+        const mevcutKullanici = {
+            id: editRow.kullanici.id,
+            adSoyad: `${editRow.kullanici.ad || ""} ${editRow.kullanici.soyad || ""}`.trim(),
+            sirketId: editRow.kullanici.sirket?.id || null,
+            sirketAd: editRow.kullanici.sirket?.ad || null,
+        };
+
+        return sortByTextValue([...sortedKullanicilar, mevcutKullanici], (u) => u.adSoyad);
+    }, [editRow, sortedKullanicilar]);
 
     const handleCreate = async () => {
         if (!formData.plaka || !formData.marka) {
@@ -233,6 +351,9 @@ export default function AraclarClient({
         if (res.success) {
             setEditRow(null);
             toast.success("Güncelleme Başarılı", { description: "Araç bilgileri başarıyla güncellendi." });
+            if (res.info) {
+                toast.info(res.info);
+            }
             router.refresh();
         } else {
             toast.error("Güncelleme Hatası", { description: res.error });
@@ -279,15 +400,18 @@ export default function AraclarClient({
 
     const openEdit = (row: AracRow) => {
         setFormData({
-            plaka: forceUppercase(row.plaka),
+            plaka: forceUppercase(row.plaka || ''),
             marka: forceUppercase(row.marka),
             model: forceUppercase(row.model),
             yil: row.yil,
-            muayeneGecerlilikTarihi: '',
+            muayeneGecerlilikTarihi: toDateTimeLocalInput(row.muayene?.[0]?.gecerlilikTarihi as any),
             bulunduguIl: row.bulunduguIl,
             guncelKm: row.guncelKm,
-            sirketId: (row as any).sirketId || '',
-            kullaniciId: (row as any).kullaniciId || '',
+            bedel: row.bedel === null || row.bedel === undefined ? '' : String(row.bedel),
+            aciklama: (row as any).aciklama || '',
+            calistigiKurum: (row as any).calistigiKurum || row.kullanici?.sirket?.ad || '',
+            sirketId: row.sirket?.id || (row as any).sirketId || '',
+            kullaniciId: (row as any).kullaniciId || row.kullanici?.id || '',
             hgsNo: row.hgsNo || '',
             ruhsatSeriNo: (row as any).ruhsatSeriNo || '',
             saseNo: (row as any).saseNo || '',
@@ -341,7 +465,7 @@ export default function AraclarClient({
                                 Yeni Araç Ekle
                             </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[550px]">
+                        <DialogContent className="sm:max-w-[540px] max-h-[88vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Araç Kaydı Oluştur</DialogTitle>
                                 <DialogDescription>
@@ -354,6 +478,7 @@ export default function AraclarClient({
                                 sirketler={sirketler}
                                 kullanicilar={sortedKullanicilar}
                                 ILLER={ILLER}
+                                kullaniciFirmaOptions={kullaniciFirmaOptions}
                                 showInitialMuayeneField={true}
                                 allowIndependentOption={canAssignIndependentRecords}
                             />
@@ -372,7 +497,7 @@ export default function AraclarClient({
             </header>
 
             <Dialog open={!!editRow} onOpenChange={(o) => { if(!o) setEditRow(null); }}>
-                <DialogContent className="sm:max-w-[550px]">
+                <DialogContent className="sm:max-w-[540px] max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Araç Bilgilerini Güncelle</DialogTitle>
                         <DialogDescription>
@@ -383,8 +508,10 @@ export default function AraclarClient({
                         formData={formData}
                         setFormData={setFormData}
                         sirketler={sirketler}
-                        kullanicilar={sortedKullanicilar}
+                        kullanicilar={editFormKullanicilar}
                         ILLER={ILLER}
+                        kullaniciFirmaOptions={kullaniciFirmaOptions}
+                        showInitialMuayeneField={true}
                         allowIndependentOption={canAssignIndependentRecords}
                     />
                     <DialogFooter>
@@ -414,12 +541,11 @@ export default function AraclarClient({
                     ],
                     typeOptions: [
                         { value: "BINEK", label: "Binek" },
-                        { value: "KAMYON_TIR", label: "Kamyon / Tır" },
-                        { value: "IS_MAKINESI", label: "İş Makinesi" },
+                        { value: "SANTIYE", label: "Şantiye" },
                     ],
                 }}
                 toolbarArrangement="report-right-scroll"
-                tableClassName="min-w-[1680px]"
+                tableClassName="min-w-[1960px]"
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
                 excelEntity="arac"
             />

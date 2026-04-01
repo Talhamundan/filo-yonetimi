@@ -48,3 +48,27 @@ export function PersonelLink({
         </Link>
     );
 }
+
+export function SirketLink({
+    sirketId,
+    children,
+    className,
+}: {
+    sirketId?: string | null;
+    children: ReactNode;
+    className?: string;
+}) {
+    if (!sirketId) {
+        return <>{children}</>;
+    }
+
+    return (
+        <Link
+            href={`/dashboard/sirketler?sirket=${encodeURIComponent(sirketId)}`}
+            className={className}
+            onClick={(event) => event.stopPropagation()}
+        >
+            {children}
+        </Link>
+    );
+}

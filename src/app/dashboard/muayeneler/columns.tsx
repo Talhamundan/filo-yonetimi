@@ -18,7 +18,7 @@ export type MuayeneRow = {
     arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
 }
 
-const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 
 export const getColumns = (showCompanyInfo = false): ColumnDef<MuayeneRow>[] => [
     {

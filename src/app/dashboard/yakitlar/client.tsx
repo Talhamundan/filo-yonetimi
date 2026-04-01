@@ -13,9 +13,12 @@ import { createYakit, updateYakit, deleteYakit } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const EMPTY = {
     aracId: '',
+    soforId: '',
     tarih: new Date().toISOString().slice(0, 16),
     litre: '',
     litreFiyati: '',
@@ -38,15 +41,38 @@ function parseKm(value: string) {
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string;
     model?: string;
+    durum?: string | null;
     bulunduguIl?: string | null;
+    kullaniciId?: string | null;
+    kullanici?: { id: string; ad: string; soyad: string } | null;
     aktifSoforId?: string | null;
+    aktifSofor?: { id: string; ad: string; soyad: string } | null;
     aktifSoforAdSoyad?: string | null;
 };
 
-const FormFields = ({ formData, setFormData, araclar }: { formData: any, setFormData: any, araclar: AracOption[] }) => {
+type PersonelOption = {
+    id: string;
+    ad: string;
+    soyad: string;
+    rol?: string | null;
+};
+
+const FormFields = ({
+    formData,
+    setFormData,
+    araclar,
+    personeller,
+    onAracChange,
+}: {
+    formData: any,
+    setFormData: any,
+    araclar: AracOption[],
+    personeller: PersonelOption[],
+    onAracChange: (aracId: string) => void,
+}) => {
     const litre = parseDecimal(formData.litre);
     const litreFiyati = parseDecimal(formData.litreFiyati);
     const toplamTutar = litre * litreFiyati;
@@ -56,28 +82,41 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
         <div className="grid gap-4 py-4">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
-                <select 
+                <SearchableSelect
                     value={formData.aracId} 
-                    onChange={e => setFormData({...formData, aracId: e.target.value})}
-                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                    <option value="">Seçiniz...</option>
-                    {araclar.map((a) => (
-                        <option key={a.id} value={a.id}>
-                            {a.plaka}
-                            {a.aktifSoforAdSoyad ? ` - ${a.aktifSoforAdSoyad}` : " - Atanmamış"}
-                        </option>
-                    ))}
-                </select>
+                    onValueChange={onAracChange}
+                    placeholder="Seçiniz..."
+                    searchPlaceholder="Plaka / araç ara..."
+                    options={[
+                        { value: "", label: "Seçiniz..." },
+                        ...araclar.map((a) => ({
+                            value: a.id,
+                            label: formatAracOptionLabel(a),
+                            searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                        })),
+                    ]}
+                />
                 <SelectedAracInfo arac={seciliArac} />
-                {seciliArac && (
-                    <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
-                        <p className="text-[11px] text-slate-500">Aktif Şoför</p>
-                        <p className={`text-xs font-semibold ${seciliArac.aktifSoforAdSoyad ? "text-emerald-700" : "text-amber-700"}`}>
-                            {seciliArac.aktifSoforAdSoyad || "Atanmamış"}
-                        </p>
-                    </div>
-                )}
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Yakıtı Alan Personel</label>
+                <SearchableSelect
+                    value={formData.soforId}
+                    onValueChange={(value) => setFormData({ ...formData, soforId: value })}
+                    placeholder="Seçilmedi"
+                    searchPlaceholder="Personel ara..."
+                    options={[
+                        { value: "", label: "Seçilmedi" },
+                        ...personeller.map((personel) => ({
+                            value: personel.id,
+                            label: `${personel.ad} ${personel.soyad}`,
+                            searchText: `${personel.ad} ${personel.soyad}`,
+                        })),
+                    ]}
+                />
+                <p className="text-[11px] text-slate-500">
+                    Şoför harici personel de seçilebilir. Admin seçimi yapılamaz.
+                </p>
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Alım Tarihi & Saati</label>
@@ -101,7 +140,7 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Alım KM</label>
+                    <label className="text-sm font-medium">Alım km/saat</label>
                     <Input type="number" value={formData.km} onChange={e => setFormData({...formData, km: e.target.value})} placeholder="123456" className="h-9" />
                 </div>
                 <div className="space-y-1.5">
@@ -124,7 +163,15 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
     );
 };
 
-export default function YakitlarClient({ initialYakitlar, araclar }: { initialYakitlar: YakitRow[], araclar: AracOption[] }) {
+export default function YakitlarClient({
+    initialYakitlar,
+    araclar,
+    personeller,
+}: {
+    initialYakitlar: YakitRow[],
+    araclar: AracOption[],
+    personeller: PersonelOption[],
+}) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
@@ -134,6 +181,8 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
     const [loading, setLoading] = useState(false);
     const searchParams = useSearchParams();
     const shouldOpenCreate = searchParams.get("add") === "true";
+    const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
+    const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
 
     useEffect(() => {
         if (shouldOpenCreate) {
@@ -145,6 +194,16 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
             router.replace(`/dashboard/yakitlar${query ? `?${query}` : ""}`, { scroll: false });
         }
     }, [shouldOpenCreate, router, searchParams]);
+
+    const handleAracSelection = (aracId: string) => {
+        const seciliArac = araclar.find((arac) => arac.id === aracId);
+        setFormData((prev) => ({
+            ...prev,
+            aracId,
+            soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
+        }));
+    };
+
     const handleCreate = async () => {
         if (!formData.aracId) {
             return toast.warning("Araç Seçilmedi", { description: "Lütfen yakıt alımı için bir araç seçin." });
@@ -163,6 +222,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
             litre,
             tutar,
             km,
+            soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -195,6 +255,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
             litre,
             tutar,
             km,
+            soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -226,6 +287,7 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
         const litreFiyati = litre > 0 ? (tutar / litre) : 0;
         setFormData({
             aracId: row.arac.id,
+            soforId: normalizeSoforId(row.soforId || row.kullanici?.id || row.arac.kullanici?.id),
             tarih: new Date(row.tarih).toISOString().slice(0, 16),
             litre: String(litre),
             litreFiyati: litreFiyati > 0 ? litreFiyati.toFixed(4) : '',
@@ -275,7 +337,13 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                                 Araç, tarih, litre ve litre fiyatını girin. Toplam tutar otomatik hesaplanır.
                             </DialogDescription>
                         </DialogHeader>
-                        <FormFields formData={formData} setFormData={setFormData} araclar={araclar} />
+                        <FormFields
+                            formData={formData}
+                            setFormData={setFormData}
+                            araclar={araclar}
+                            personeller={personeller}
+                            onAracChange={handleAracSelection}
+                        />
                         <DialogFooter>
                             <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                                 {loading ? 'Kaydediliyor...' : 'Kaydet'}
@@ -307,7 +375,13 @@ export default function YakitlarClient({ initialYakitlar, araclar }: { initialYa
                         <DialogTitle>Yakıt Kaydını Düzenle</DialogTitle>
                         <DialogDescription>&quot;{editRow?.arac.plaka}&quot; plakalı aracın yakıt alım bilgisini güncelleyin.</DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} araclar={araclar} />
+                    <FormFields
+                        formData={formData}
+                        setFormData={setFormData}
+                        araclar={araclar}
+                        personeller={personeller}
+                        onAracChange={handleAracSelection}
+                    />
                     <DialogFooter>
                         <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                             {loading ? 'Güncelleniyor...' : 'Güncelle'}

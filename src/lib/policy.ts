@@ -126,6 +126,22 @@ function getBlockedFilter(modelName: PolicyModelName) {
     return { id: "blocked" };
 }
 
+function getVehicleUsageCompanyFilter(sirketId: string) {
+    return {
+        OR: [
+            { kullanici: { sirketId, deletedAt: null } },
+            {
+                kullaniciGecmisi: {
+                    some: {
+                        bitis: null,
+                        kullanici: { sirketId, deletedAt: null },
+                    },
+                },
+            },
+        ],
+    };
+}
+
 function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | null) {
     if (modelName === "sirket") {
         return sirketId ? { id: sirketId } : {};
@@ -137,8 +153,10 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
 
     switch (modelName) {
         case "arac":
+            return getVehicleUsageCompanyFilter(sirketId);
         case "kullanici":
         case "personel":
+            return { sirketId };
         case "yakit":
         case "ceza":
         case "masraf":
@@ -150,12 +168,12 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "dokuman":
         case "hgs":
         case "hgsYukleme":
-            return { sirketId };
+            return { arac: getVehicleUsageCompanyFilter(sirketId) };
         case "activityLog":
             return { companyId: sirketId };
         case "kullaniciZimmet":
         case "zimmet":
-            return { arac: { sirketId, deletedAt: null } };
+            return { arac: getVehicleUsageCompanyFilter(sirketId) };
         default:
             return { sirketId };
     }

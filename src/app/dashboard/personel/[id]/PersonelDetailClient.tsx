@@ -8,20 +8,23 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../../components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-    User, Mail, Phone, MapPin, Briefcase, Car, ArrowLeft, Shield, Calendar, Calculator, Truck, AlertOctagon, Fuel, Receipt, Plus, Wrench
+    Mail, Phone, Building2, Briefcase, Car, ArrowLeft, Calendar, Plus, Pencil, Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { FormFields, type PersonelFormData } from "../PersonelForm";
-import { updatePersonel, deletePersonel, araciBirak } from "../actions";
+import { updatePersonel, deletePersonel } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
-import { createZimmet } from "../../zimmetler/actions";
+import { createZimmet, finalizeZimmet } from "../../zimmetler/actions";
 import { AracLink } from "@/components/links/RecordLinks";
-import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal } from "@/lib/datetime-local";
+import { getRoleLabel } from "@/lib/role-label";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 export default function PersonelDetailClient({
     initialPersonel: p,
@@ -30,7 +33,7 @@ export default function PersonelDetailClient({
 }: {
     initialPersonel: any,
     sirketler: any[],
-    atamayaUygunAraclar: { id: string; plaka: string; marka: string; model: string; guncelKm: number; sirket?: { ad: string } | null }[]
+    atamayaUygunAraclar: { id: string; plaka: string | null; marka: string; model: string; durum?: string | null; guncelKm: number; sirket?: { ad: string } | null }[]
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -42,17 +45,28 @@ export default function PersonelDetailClient({
         telefon: p.telefon || '',
         rol: p.rol,
         sirketId: p.sirketId || '',
-        sehir: p.sehir || '',
+        calistigiKurum: p.calistigiKurum || p.sehir || '',
         tcNo: p.tcNo || ''
     });
     const [loading, setLoading] = useState(false);
     const [atamaOpen, setAtamaOpen] = useState(false);
     const [atamaData, setAtamaData] = useState({
         aracId: '',
-        baslangic: new Date().toISOString().split('T')[0],
+        baslangic: nowDateTimeLocal(),
         baslangicKm: '',
         notlar: ''
     });
+    const [iadeOpen, setIadeOpen] = useState(false);
+    const [iadeData, setIadeData] = useState({
+        bitis: nowDateTimeLocal(),
+        bitisKm: p.arac?.guncelKm ? String(p.arac.guncelKm) : "",
+        notlar: "",
+    });
+
+    const activeZimmet = React.useMemo(() => {
+        const zimmetler = Array.isArray(p.zimmetler) ? p.zimmetler : [];
+        return zimmetler.find((z: any) => !z.bitis && z.aracId === p.arac?.id) || zimmetler.find((z: any) => !z.bitis) || null;
+    }, [p.arac?.id, p.zimmetler]);
 
     const handleUpdate = async () => {
         setLoading(true);
@@ -81,19 +95,38 @@ export default function PersonelDetailClient({
         setLoading(false);
     };
 
-    const handleAraciBirak = async () => {
-        const confirmed = await openConfirm({ 
-            title: "Aracı Bırak", 
-            message: `${p.arac?.plaka} plakalı aracı bu personelden ayırmak istediğinizden emin misiniz? Araç durumu 'BOSTA' olarak güncellenecektir.`, 
-            confirmText: "Evet, Ayır",
-            variant: "warning"
+    const resetIadeData = () => {
+        setIadeData({
+            bitis: nowDateTimeLocal(),
+            bitisKm: p.arac?.guncelKm ? String(p.arac.guncelKm) : "",
+            notlar: activeZimmet?.notlar || "",
         });
-        if (!confirmed) return;
-        
+    };
+
+    const handleAraciBirak = async () => {
+        if (!p.arac?.id) {
+            toast.warning("Aktif araç bulunamadı.");
+            return;
+        }
+        if (!activeZimmet?.id) {
+            toast.warning("Aktif zimmet kaydı bulunamadı.");
+            return;
+        }
+        if (!iadeData.bitis || !iadeData.bitisKm) {
+            toast.warning("Eksik Bilgi", { description: "Teslim alma tarihi ve teslim alma KM zorunludur." });
+            return;
+        }
+
         setLoading(true);
-        const res = await araciBirak(p.id);
+        const res = await finalizeZimmet(activeZimmet.id, {
+            bitis: iadeData.bitis,
+            bitisKm: Number(iadeData.bitisKm),
+            notlar: iadeData.notlar || null,
+        });
         if (res.success) {
             toast.success("Araç başarıyla bırakıldı");
+            setIadeOpen(false);
+            resetIadeData();
             router.refresh();
         } else {
             toast.error(res.error || "İşlem başarısız");
@@ -130,7 +163,7 @@ export default function PersonelDetailClient({
             setAtamaOpen(false);
             setAtamaData({
                 aracId: '',
-                baslangic: new Date().toISOString().split('T')[0],
+                baslangic: nowDateTimeLocal(),
                 baslangicKm: '',
                 notlar: ''
             });
@@ -142,15 +175,15 @@ export default function PersonelDetailClient({
     };
 
     const formatDate = (date: string | Date | null | undefined) => 
-        date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+        date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 
     const getRoleBadge = (rol: string) => {
         switch (rol) {
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
             case 'YETKILI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yetkili</Badge>;
             case 'TEKNIK': return <Badge className="bg-emerald-100 text-emerald-800 border-0">Teknik</Badge>;
-            case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">Şoför</Badge>;
-            default: return <Badge variant="outline">{rol}</Badge>;
+            case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">{getRoleLabel(rol)}</Badge>;
+            default: return <Badge variant="outline">{getRoleLabel(rol)}</Badge>;
         }
     };
 
@@ -166,6 +199,24 @@ export default function PersonelDetailClient({
                     Personel Listesine Dön
                 </button>
 
+                <div className="mb-4 flex justify-end gap-2">
+                    <button
+                        onClick={() => setEditOpen(true)}
+                        className="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 shadow-sm transition-colors hover:bg-slate-50"
+                    >
+                        <Pencil size={15} />
+                        Personeli Düzenle
+                    </button>
+                    <button
+                        onClick={handleDelete}
+                        disabled={loading}
+                        className="inline-flex items-center gap-2 rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 shadow-sm transition-colors hover:bg-rose-100 disabled:opacity-50"
+                    >
+                        <Trash2 size={15} />
+                        Personeli Sil
+                    </button>
+                </div>
+
                 {/* Personel Header Card */}
                 <div className="bg-white rounded-2xl shadow-sm border border-[#E2E8F0] p-6 lg:p-8 mb-8 flex flex-col md:flex-row md:items-start justify-between gap-6">
                     <div className="flex items-start gap-6">
@@ -180,15 +231,11 @@ export default function PersonelDetailClient({
                             <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-500 mt-2 mb-4">
                                 <div className="flex items-center gap-1.5"><Briefcase size={16} /> {p.sirket?.ad || 'Bağımsız'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
-                                <div className="flex items-center gap-1.5"><MapPin size={16} /> {p.sehir || 'Şehir Belirtilmemiş'}</div>
+                                <div className="flex items-center gap-1.5"><Building2 size={16} /> {p.calistigiKurum || p.sehir || 'Kurum Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5 text-xs font-mono bg-slate-100 px-2 py-0.5 rounded">TC: {p.tcNo || 'Belirtilmemiş'}</div>
                             </div>
 
-                            <div className="flex items-center gap-2 mt-2">
-                                <RowActionButton variant="edit" onClick={() => setEditOpen(true)} />
-                                <RowActionButton variant="delete" onClick={handleDelete} />
-                            </div>
                         </div>
                     </div>
 
@@ -198,13 +245,53 @@ export default function PersonelDetailClient({
                         <div className="flex items-center justify-between mb-3">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Zimmetli Araç</p>
                             {p.arac && (
-                                <button 
-                                    onClick={handleAraciBirak}
-                                    disabled={loading}
-                                    className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                <Dialog
+                                    open={iadeOpen}
+                                    onOpenChange={(open) => {
+                                        setIadeOpen(open);
+                                        if (open) {
+                                            resetIadeData();
+                                        }
+                                    }}
                                 >
-                                    ARACI BIRAK
-                                </button>
+                                    <DialogTrigger asChild>
+                                        <button
+                                            disabled={loading}
+                                            className="text-[10px] font-bold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100 px-2 py-1 rounded transition-colors disabled:opacity-50"
+                                        >
+                                            ARACI BIRAK
+                                        </button>
+                                    </DialogTrigger>
+                                    <DialogContent className="sm:max-w-[420px]">
+                                        <DialogHeader>
+                                            <DialogTitle>Zimmeti Sonlandır</DialogTitle>
+                                            <DialogDescription>
+                                                {p.arac?.plaka} aracını {p.ad} {p.soyad} üzerinden teslim alın.
+                                            </DialogDescription>
+                                        </DialogHeader>
+                                        <div className="grid gap-4 py-4">
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim Alma Tarihi</label>
+                                                    <Input type="datetime-local" value={iadeData.bitis} onChange={e => setIadeData({ ...iadeData, bitis: e.target.value })} className="h-9" />
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-sm font-medium">Teslim Alma KM</label>
+                                                    <Input type="number" value={iadeData.bitisKm} onChange={e => setIadeData({ ...iadeData, bitisKm: e.target.value })} className="h-9" />
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <label className="text-sm font-medium">Not</label>
+                                                <Input value={iadeData.notlar} onChange={e => setIadeData({ ...iadeData, notlar: e.target.value })} className="h-9" placeholder="Opsiyonel not" />
+                                            </div>
+                                        </div>
+                                        <DialogFooter>
+                                            <button onClick={handleAraciBirak} disabled={loading} className="bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                                {loading ? "Sonlandırılıyor..." : "Zimmeti Sonlandır"}
+                                            </button>
+                                        </DialogFooter>
+                                    </DialogContent>
+                                </Dialog>
                             )}
                             {!p.arac && (
                                 <Dialog open={atamaOpen} onOpenChange={setAtamaOpen}>
@@ -226,23 +313,25 @@ export default function PersonelDetailClient({
                                         <div className="grid gap-4 py-4">
                                             <div className="space-y-1.5">
                                                 <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                                                <select
+                                                <SearchableSelect
                                                     value={atamaData.aracId}
-                                                    onChange={(e) => handleAtamaAracChange(e.target.value)}
-                                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                                >
-                                                    <option value="">Araç seçiniz...</option>
-                                                    {atamayaUygunAraclar.map((arac) => (
-                                                        <option key={arac.id} value={arac.id}>
-                                                            {arac.plaka} - {arac.marka} {arac.model}
-                                                        </option>
-                                                    ))}
-                                                </select>
+                                                    onValueChange={handleAtamaAracChange}
+                                                    placeholder="Araç seçiniz..."
+                                                    searchPlaceholder="Plaka / araç ara..."
+                                                    options={[
+                                                        { value: "", label: "Araç seçiniz..." },
+                                                        ...atamayaUygunAraclar.map((arac) => ({
+                                                            value: arac.id,
+                                                            label: formatAracOptionLabel(arac),
+                                                            searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
+                                                        })),
+                                                    ]}
+                                                />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-sm font-medium">Teslim Tarihi</label>
-                                                    <Input type="date" value={atamaData.baslangic} onChange={e => setAtamaData({ ...atamaData, baslangic: e.target.value })} className="h-9" />
+                                                    <Input type="datetime-local" value={atamaData.baslangic} onChange={e => setAtamaData({ ...atamaData, baslangic: e.target.value })} className="h-9" />
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <label className="text-sm font-medium">Teslim KM</label>

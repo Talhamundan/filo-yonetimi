@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, AlertOctagon, Car, User, Wallet } from "lucide-react";
 import { Input } from "../../../components/ui/input";
+import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, CezaRow } from "./columns";
@@ -14,11 +15,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../../components/ui
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 const EMPTY = {
     aracId: "",
     soforId: "",
-    tarih: new Date().toISOString().split("T")[0],
+    tarih: nowDateTimeLocal(),
     tutar: "",
     cezaMaddesi: "",
     aciklama: "",
@@ -41,31 +44,43 @@ const FormFields = ({
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç Seçimi <span className="text-red-500">*</span></label>
-            <select
+            <SearchableSelect
                 value={formData.aracId}
-                onChange={e => setFormData({ ...formData, aracId: e.target.value })}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Seçiniz...</option>
-                {araclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
-            </select>
+                onValueChange={(value) => setFormData({ ...formData, aracId: value })}
+                placeholder="Seçiniz..."
+                searchPlaceholder="Plaka / araç ara..."
+                options={[
+                    { value: "", label: "Seçiniz..." },
+                    ...araclar.map((a) => ({
+                        value: a.id,
+                        label: formatAracOptionLabel(a),
+                        searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                    })),
+                ]}
+            />
             <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Şoför Seçimi <span className="text-red-500">*</span></label>
-            <select
+            <SearchableSelect
                 value={formData.soforId}
-                onChange={e => setFormData({ ...formData, soforId: e.target.value })}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Seçiniz...</option>
-                {soforler.map(s => <option key={s.id} value={s.id}>{s.adSoyad}</option>)}
-            </select>
+                onValueChange={(value) => setFormData({ ...formData, soforId: value })}
+                placeholder="Seçiniz..."
+                searchPlaceholder="Personel ara..."
+                options={[
+                    { value: "", label: "Seçiniz..." },
+                    ...soforler.map((s) => ({
+                        value: s.id,
+                        label: s.adSoyad,
+                        searchText: s.adSoyad,
+                    })),
+                ]}
+            />
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                <Input type="date" value={formData.tarih} onChange={e => setFormData({ ...formData, tarih: e.target.value })} className="h-9" />
+                <Input type="datetime-local" value={formData.tarih} onChange={e => setFormData({ ...formData, tarih: e.target.value })} className="h-9" />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
@@ -183,7 +198,7 @@ export default function CezalarClient({
         setFormData({
             aracId: row.aracId || "",
             soforId: row.soforId || "",
-            tarih: new Date(row.tarih).toISOString().split("T")[0],
+            tarih: toDateTimeLocalInput(row.tarih),
             tutar: String(row.tutar),
             cezaMaddesi: row.cezaMaddesi,
             aciklama: row.aciklama || "",
@@ -275,14 +290,21 @@ export default function CezalarClient({
             <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
                 <div className="flex flex-col md:flex-row md:items-center gap-3">
                     <label className="text-sm font-medium text-slate-600">Şoföre Göre Filtrele</label>
-                    <select
+                    <SearchableSelect
                         value={seciliSoforId}
-                        onChange={(e) => setSeciliSoforId(e.target.value)}
-                        className="h-9 w-full md:w-[320px] rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm"
-                    >
-                        <option value="TUMU">Tümü</option>
-                        {sortedSoforler.map((s) => <option key={s.id} value={s.id}>{s.adSoyad}</option>)}
-                    </select>
+                        onValueChange={setSeciliSoforId}
+                        className="w-full md:w-[320px]"
+                        placeholder="Tümü"
+                        searchPlaceholder="Şoför ara..."
+                        options={[
+                            { value: "TUMU", label: "Tümü" },
+                            ...sortedSoforler.map((s) => ({
+                                value: s.id,
+                                label: s.adSoyad,
+                                searchText: s.adSoyad,
+                            })),
+                        ]}
+                    />
                 </div>
             </div>
 

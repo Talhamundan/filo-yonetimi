@@ -3,15 +3,18 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { CheckCircle2, Plus, TriangleAlert, Wrench, XCircle } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { ArizaRow, getColumns } from "./columns";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import {
     createArizaKaydi,
     deleteArizaKaydi,
@@ -23,13 +26,19 @@ import {
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string | null;
     model?: string | null;
     bulunduguIl?: string | null;
     guncelKm?: number | null;
-    durum?: string;
+    durum?: string | null;
     kullaniciId?: string | null;
+    aktifSoforId?: string | null;
+    aktifSofor?: {
+        id: string;
+        ad: string;
+        soyad: string;
+    } | null;
     kullanici?: {
         id: string;
         ad: string;
@@ -86,6 +95,8 @@ export default function ArizalarClient({
 
     const selectedArac = araclar.find((arac) => arac.id === formData.aracId);
     const selectedCompleteArac = completeRow ? araclar.find((arac) => arac.id === completeRow.arac.id) : null;
+    const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
+    const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
 
     const resetForm = () => setFormData({ ...EMPTY_FORM });
 
@@ -94,7 +105,7 @@ export default function ArizalarClient({
         setFormData((prev) => ({
             ...prev,
             aracId,
-            soforId: seciliArac?.kullaniciId || "",
+            soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
         }));
     };
 
@@ -128,7 +139,7 @@ export default function ArizalarClient({
     const openEdit = (row: ArizaRow) => {
         setFormData({
             aracId: row.arac.id,
-            soforId: row.soforId || "",
+            soforId: normalizeSoforId(row.soforId),
             aciklama: row.aciklama || "",
             oncelik: row.oncelik === "KRITIK" ? "YUKSEK" : row.oncelik || "ORTA",
             km: row.km != null ? String(row.km) : "",
@@ -249,13 +260,13 @@ export default function ArizalarClient({
         }
     };
 
-    const columnsWithActions = [
+    const columnsWithActions: ColumnDef<ArizaRow>[] = [
         ...getColumns(canAccessAllCompanies),
         {
             id: "actions",
             header: "İşlemler",
-            cell: ({ row }: any) => {
-                const item = row.original as ArizaRow;
+            cell: ({ row }: CellContext<ArizaRow, unknown>) => {
+                const item = row.original;
                 const canTransition = item.durum === "ACIK" || item.durum === "SERVISTE";
                 return (
                     <div className="flex items-center gap-1.5">
@@ -321,18 +332,20 @@ export default function ArizalarClient({
                         <div className="grid gap-4 py-2">
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                                <select
-                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                <SearchableSelect
                                     value={formData.aracId}
-                                    onChange={(event) => handleAracSelection(event.target.value)}
-                                >
-                                    <option value="">Araç Seçiniz</option>
-                                    {araclar.map((arac) => (
-                                        <option key={arac.id} value={arac.id}>
-                                            {arac.plaka} {arac.durum ? `(${arac.durum})` : ""}
-                                        </option>
-                                    ))}
-                                </select>
+                                    onValueChange={handleAracSelection}
+                                    placeholder="Araç Seçiniz"
+                                    searchPlaceholder="Plaka / araç ara..."
+                                    options={[
+                                        { value: "", label: "Araç Seçiniz" },
+                                        ...araclar.map((arac) => ({
+                                            value: arac.id,
+                                            label: formatAracOptionLabel(arac),
+                                            searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
+                                        })),
+                                    ]}
+                                />
                                 <SelectedAracInfo arac={selectedArac} />
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -370,20 +383,22 @@ export default function ArizalarClient({
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Personel / Şoför</label>
-                                    <select
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    <SearchableSelect
                                         value={formData.soforId}
-                                        onChange={(event) =>
-                                            setFormData((prev) => ({ ...prev, soforId: event.target.value }))
+                                        onValueChange={(value) =>
+                                            setFormData((prev) => ({ ...prev, soforId: value }))
                                         }
-                                    >
-                                        <option value="">Seçilmedi</option>
-                                        {personeller.map((personel) => (
-                                            <option key={personel.id} value={personel.id}>
-                                                {personel.ad} {personel.soyad}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="Seçilmedi"
+                                        searchPlaceholder="Personel ara..."
+                                        options={[
+                                            { value: "", label: "Seçilmedi" },
+                                            ...personeller.map((personel) => ({
+                                                value: personel.id,
+                                                label: `${personel.ad} ${personel.soyad}`,
+                                                searchText: `${personel.ad} ${personel.soyad}`,
+                                            })),
+                                        ]}
+                                    />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
@@ -448,19 +463,21 @@ export default function ArizalarClient({
                     <div className="grid gap-4 py-2">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Araç</label>
-                            <select
+                            <SearchableSelect
                                 disabled
-                                className="h-9 flex w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-1 text-sm shadow-sm"
                                 value={formData.aracId}
-                                onChange={(event) => setFormData((prev) => ({ ...prev, aracId: event.target.value }))}
-                            >
-                                <option value="">Araç Seçiniz</option>
-                                {araclar.map((arac) => (
-                                    <option key={arac.id} value={arac.id}>
-                                        {arac.plaka}
-                                    </option>
-                                ))}
-                            </select>
+                                onValueChange={(value) => setFormData((prev) => ({ ...prev, aracId: value }))}
+                                placeholder="Araç Seçiniz"
+                                searchPlaceholder="Plaka / araç ara..."
+                                options={[
+                                    { value: "", label: "Araç Seçiniz" },
+                                    ...araclar.map((arac) => ({
+                                        value: arac.id,
+                                        label: formatAracOptionLabel(arac),
+                                        searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
+                                    })),
+                                ]}
+                            />
                             <SelectedAracInfo arac={selectedArac} />
                         </div>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -498,20 +515,22 @@ export default function ArizalarClient({
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Personel / Şoför</label>
-                                <select
-                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                <SearchableSelect
                                     value={formData.soforId}
-                                    onChange={(event) =>
-                                        setFormData((prev) => ({ ...prev, soforId: event.target.value }))
+                                    onValueChange={(value) =>
+                                        setFormData((prev) => ({ ...prev, soforId: value }))
                                     }
-                                >
-                                    <option value="">Seçilmedi</option>
-                                    {personeller.map((personel) => (
-                                        <option key={personel.id} value={personel.id}>
-                                            {personel.ad} {personel.soyad}
-                                        </option>
-                                    ))}
-                                </select>
+                                    placeholder="Seçilmedi"
+                                    searchPlaceholder="Personel ara..."
+                                    options={[
+                                        { value: "", label: "Seçilmedi" },
+                                        ...personeller.map((personel) => ({
+                                            value: personel.id,
+                                            label: `${personel.ad} ${personel.soyad}`,
+                                            searchText: `${personel.ad} ${personel.soyad}`,
+                                        })),
+                                    ]}
+                                />
                             </div>
                         </div>
                         <div className="space-y-1.5">
@@ -632,25 +651,10 @@ export default function ArizalarClient({
             </Dialog>
 
             <DataTable
-                columns={columnsWithActions as any}
+                columns={columnsWithActions}
                 data={initialData}
-                searchKey="arac_plaka"
-                searchPlaceholder="Plaka / arıza açıklaması ara..."
+                excelEntity="ariza"
                 toolbarArrangement="report-right-scroll"
-                serverFiltering={{
-                    statusOptions: [
-                        { value: "ACIK", label: "Açık" },
-                        { value: "SERVISTE", label: "Serviste" },
-                        { value: "TAMAMLANDI", label: "Tamamlandı" },
-                        { value: "IPTAL", label: "İptal" },
-                    ],
-                    typeOptions: [
-                        { value: "YUKSEK", label: "Yüksek" },
-                        { value: "ORTA", label: "Orta" },
-                        { value: "DUSUK", label: "Düşük" },
-                    ],
-                    showDateRange: true,
-                }}
             />
         </div>
     );

@@ -20,6 +20,9 @@ type ArizaOncelikInput = "DUSUK" | "ORTA" | "YUKSEK" | "KRITIK";
 const ARIZA_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "soforId")
 );
+const BAKIM_HAS_SOFOR_ID = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.Bakim?.fields?.some((field: any) => field?.name === "soforId")
+);
 
 function normalizeArizaOncelik(oncelik?: ArizaOncelikInput) {
     if (oncelik === "KRITIK") return "YUKSEK";
@@ -69,6 +72,18 @@ function revalidateArizaPages(aracId?: string, soforId?: string | null) {
     if (soforId) revalidatePath(`${PERSONEL_PATH}/${soforId}`);
 }
 
+async function getAracActiveSoforId(aracId: string, fallbackSoforId?: string | null) {
+    const aktifZimmet = await (prisma as any).kullaniciZimmet
+        .findFirst({
+            where: { aracId, bitis: null },
+            orderBy: { baslangic: "desc" },
+            select: { kullaniciId: true },
+        })
+        .catch(() => null);
+
+    return aktifZimmet?.kullaniciId || fallbackSoforId || null;
+}
+
 export async function createArizaKaydi(data: {
     aracId: string;
     soforId?: string | null;
@@ -112,7 +127,8 @@ export async function createArizaKaydi(data: {
                       enforceMaxKnownKm: false,
                   })
                 : null;
-        const resolvedSoforId = await resolveArizaSoforId(data.soforId, arac.kullaniciId || null);
+        const fallbackSoforId = await getAracActiveSoforId(arac.id, arac.kullaniciId || null);
+        const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
 
         const created = await (prisma as any).arizaKaydi.create({
             data: {
@@ -199,7 +215,11 @@ export async function updateArizaKaydi(
                       enforceMaxKnownKm: false,
                   })
                 : null;
-        const resolvedSoforId = await resolveArizaSoforId(data.soforId, mevcut.soforId || null);
+        const fallbackSoforId = await getAracActiveSoforId(
+            arac.id,
+            mevcut.soforId || arac.kullaniciId || null
+        );
+        const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
 
         const updated = await (prisma as any).arizaKaydi.update({
             where: { id },
@@ -355,6 +375,7 @@ export async function tamamlaArizaKaydi(
                 data: {
                     aracId: kayit.aracId,
                     sirketId: kayit.sirketId || kayit.arac.sirketId,
+                    ...(BAKIM_HAS_SOFOR_ID ? { soforId: kayit.soforId || null } : {}),
                     bakimTarihi: new Date(),
                     yapilanKm: km,
                     kategori: "ARIZA",

@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, CheckCircle2 } from "lucide-react";
 import { Input } from "../../../components/ui/input";
+import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, MuayeneRow } from "./columns";
 import { useRouter } from "next/navigation";
@@ -13,11 +14,20 @@ import { createMuayene, updateMuayene, deleteMuayene } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
+
+const twoYearsAfter = (dateStr: string) => {
+    const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return nowDateTimeLocal();
+    date.setFullYear(date.getFullYear() + 2);
+    return toDateTimeLocalInput(date);
+};
 
 const EMPTY = {
     aracId: '',
-    muayeneTarihi: new Date().toISOString().split('T')[0],
-    gecerlilikTarihi: new Date(new Date().setFullYear(new Date().getFullYear() + 2)).toISOString().split('T')[0],
+    muayeneTarihi: nowDateTimeLocal(),
+    gecerlilikTarihi: twoYearsAfter(nowDateTimeLocal()),
     tutar: '',
     gectiMi: true,
     km: '',
@@ -26,9 +36,10 @@ const EMPTY = {
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string | null;
     model?: string | null;
+    durum?: string | null;
     bulunduguIl?: string | null;
 };
 
@@ -39,24 +50,30 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
-            <select 
+            <SearchableSelect
                 value={formData.aracId} 
-                onChange={e => setFormData({...formData, aracId: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Seçiniz...</option>
-                {araclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
-            </select>
+                onValueChange={(value) => setFormData({ ...formData, aracId: value })}
+                placeholder="Seçiniz..."
+                searchPlaceholder="Plaka / araç ara..."
+                options={[
+                    { value: "", label: "Seçiniz..." },
+                    ...araclar.map((a) => ({
+                        value: a.id,
+                        label: formatAracOptionLabel(a),
+                        searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                    })),
+                ]}
+            />
             <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Muayene Tarihi</label>
-                <Input type="date" value={formData.muayeneTarihi} onChange={e => setFormData({...formData, muayeneTarihi: e.target.value})} className="h-9" />
+                <Input type="datetime-local" value={formData.muayeneTarihi} onChange={e => setFormData({...formData, muayeneTarihi: e.target.value})} className="h-9" />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Geçerlilik Bitiş</label>
-                <Input type="date" value={formData.gecerlilikTarihi} onChange={e => setFormData({...formData, gecerlilikTarihi: e.target.value})} className="h-9" />
+                <Input type="datetime-local" value={formData.gecerlilikTarihi} onChange={e => setFormData({...formData, gecerlilikTarihi: e.target.value})} className="h-9" />
             </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -151,8 +168,8 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
     const openEdit = (row: MuayeneRow) => {
         setFormData({
             aracId: row.arac.id,
-            muayeneTarihi: new Date(row.muayeneTarihi).toISOString().split('T')[0],
-            gecerlilikTarihi: new Date(row.gecerlilikTarihi).toISOString().split('T')[0],
+            muayeneTarihi: toDateTimeLocalInput(row.muayeneTarihi),
+            gecerlilikTarihi: toDateTimeLocalInput(row.gecerlilikTarihi),
             tutar: String(row.tutar || ''),
             gectiMi: row.gectiMi ?? true,
             km: row.km ? String(row.km) : '',

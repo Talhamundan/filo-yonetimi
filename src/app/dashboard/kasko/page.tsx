@@ -4,6 +4,7 @@ import { KaskoRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 export default async function KaskoPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
@@ -27,16 +28,14 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
         { bitisTarihi: { gte: yilBasi } },
     ];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        whereParts.push({
-            OR: [
-                { sirket: { contains: q, mode: "insensitive" } },
-                { acente: { contains: q, mode: "insensitive" } },
-                { policeNo: { contains: q, mode: "insensitive" } },
-                { arac: { plaka: { contains: q, mode: "insensitive" } } },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { sirket: { contains: token, mode: "insensitive" } },
+        { acente: { contains: token, mode: "insensitive" } },
+        { policeNo: { contains: token, mode: "insensitive" } },
+        { arac: { plaka: { contains: token, mode: "insensitive" } } },
+    ]);
+    if (qFilter) {
+        whereParts.push(qFilter);
     }
     if (commonFilters.status) {
         switch (commonFilters.status) {
@@ -79,7 +78,7 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
         }),
         (prisma as any).arac.findMany({
             where: aracFilter as any,
-            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true },
+            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true, durum: true },
             orderBy: { plaka: 'asc' }
         })
     ]);

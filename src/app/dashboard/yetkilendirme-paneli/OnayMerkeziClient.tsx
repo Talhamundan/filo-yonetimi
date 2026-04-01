@@ -13,6 +13,7 @@ import { DataTable } from "@/components/ui/data-table";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import type { ColumnDef } from "@tanstack/react-table";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { getRoleLabel } from "@/lib/role-label";
 
 type AssignablePersonel = {
     id: string;
@@ -187,7 +188,7 @@ export default function OnayMerkeziClient({
             header: "Rol",
             cell: ({ row }) => (
                 <span className="inline-flex rounded-md bg-indigo-50 px-2 py-1 text-xs font-semibold text-indigo-700">
-                    {row.original.rol}
+                    {getRoleLabel(row.original.rol)}
                 </span>
             ),
         },
@@ -240,7 +241,7 @@ export default function OnayMerkeziClient({
                             <option value="">Personel seçin</option>
                             {assignablePersoneller.map((personel) => (
                                 <option key={personel.id} value={personel.id}>
-                                    {personel.adSoyad} ({personel.rol}){personel.sirketAdi ? ` - ${personel.sirketAdi}` : ""}
+                                    {personel.adSoyad} ({getRoleLabel(personel.rol)}){personel.sirketAdi ? ` - ${personel.sirketAdi}` : ""}
                                 </option>
                             ))}
                         </select>
@@ -349,7 +350,7 @@ export default function OnayMerkeziClient({
                                 onChange={(event) => setEditForm((prev) => ({ ...prev, rol: event.target.value as Rol }))}
                                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500"
                             >
-                                <option value="SOFOR">Şoför</option>
+                                <option value="SOFOR">Personel</option>
                                 <option value="TEKNIK">Teknik</option>
                                 <option value="YETKILI">Yetkili</option>
                                 <option value="ADMIN">Admin</option>

@@ -18,17 +18,20 @@ model Sirket {
 
 model Arac {
   id               String            @id @default(cuid())
-  plaka            String            @unique
+  plaka            String?           @unique
   marka            String
   model            String
   yil              Int
   bulunduguIl      iller             @default(BURSA)
   guncelKm         Int               @default(0)
+  bedel            Float?
+  aciklama         String?
   hgsNo            String?
   ruhsatSeriNo     String?
   durum            AracDurumu        @default(AKTIF)
   kullaniciId      String?           @unique
   sirketId         String?
+  calistigiKurum   String?
   olusturmaTarihi  DateTime          @default(now())
   guncellemeTarihi DateTime          @default(now()) @updatedAt
   kategori         AracKategori      @default(BINEK)
@@ -61,7 +64,7 @@ model Kullanici {
   soyad          String
   telefon        String?
   tcNo           String?           @unique
-  sehir          iller?
+  calistigiKurum String?
   eposta         String?           @unique
   sifre          String?
   rol            Rol               @default(SOFOR)
@@ -70,6 +73,7 @@ model Kullanici {
   deletedAt      DateTime?
   deletedBy      String?
   arac           Arac?
+  bakimKayitlari Bakim[]           @relation("BakimSoforRelation")
   arizaKayitlari ArizaKaydi[]      @relation("ArizaSoforRelation")
   cezalar        Ceza[]            @relation("CezaSoforRelation")
   hesap          Hesap?
@@ -177,15 +181,18 @@ model Bakim {
   tutar           Float          @default(0)
   tur             BakimTuru      @default(PERIYODIK)
   aracId          String
+  soforId         String?
   sirketId        String?
   kategori        ServisKategori @default(PERIYODIK_BAKIM)
   saseNo          String?
   deletedAt       DateTime?
   deletedBy       String?
   arac            Arac           @relation(fields: [aracId], references: [id])
+  sofor           Kullanici?     @relation("BakimSoforRelation", fields: [soforId], references: [id])
   arizaKaydi      ArizaKaydi?
 
   @@index([aracId])
+  @@index([soforId])
   @@index([sirketId])
   @@index([deletedAt])
 }
@@ -353,9 +360,8 @@ enum AracDurumu {
 }
 
 enum AracKategori {
-  IS_MAKINESI
-  KAMYON_TIR
   BINEK
+  SANTIYE
 }
 
 enum MasrafKategorisi {

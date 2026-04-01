@@ -6,6 +6,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Plus, ShieldAlert, RefreshCw } from "lucide-react";
 import { Input } from "../../../components/ui/input";
+import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, SigortaRow } from "./columns";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -14,37 +15,36 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
-
-const EMPTY = {
-    aracId: '',
-    sirket: '',
-    acente: '',
-    policeNo: '',
-    baslangicTarihi: new Date().toISOString().split('T')[0],
-    bitisTarihi: new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0],
-    tutar: '',
-    aktifMi: true
-};
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 const oneYearAfter = (dateStr: string) => {
     const date = new Date(dateStr);
+    if (Number.isNaN(date.getTime())) return nowDateTimeLocal();
     date.setFullYear(date.getFullYear() + 1);
-    return date.toISOString().split('T')[0];
+    return toDateTimeLocalInput(date);
 };
 
-const getTodayDate = () => {
-    const now = new Date();
-    const yyyy = now.getFullYear();
-    const mm = String(now.getMonth() + 1).padStart(2, '0');
-    const dd = String(now.getDate()).padStart(2, '0');
-    return `${yyyy}-${mm}-${dd}`;
-};
+const EMPTY = (() => {
+    const baslangicTarihi = nowDateTimeLocal();
+    return {
+        aracId: '',
+        sirket: '',
+        acente: '',
+        policeNo: '',
+        baslangicTarihi,
+        bitisTarihi: oneYearAfter(baslangicTarihi),
+        tutar: '',
+        aktifMi: true
+    };
+})();
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string | null;
     model?: string | null;
+    durum?: string | null;
     bulunduguIl?: string | null;
 };
 
@@ -56,14 +56,20 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç (Plaka) <span className="text-red-500">*</span></label>
-            <select 
+            <SearchableSelect
                 value={formData.aracId} 
-                onChange={e => setFormData({...formData, aracId: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Seçiniz...</option>
-                {sortedAraclar.map((a) => <option key={a.id} value={a.id}>{a.plaka}</option>)}
-            </select>
+                onValueChange={(value) => setFormData({ ...formData, aracId: value })}
+                placeholder="Seçiniz..."
+                searchPlaceholder="Plaka / araç ara..."
+                options={[
+                    { value: "", label: "Seçiniz..." },
+                    ...sortedAraclar.map((a) => ({
+                        value: a.id,
+                        label: formatAracOptionLabel(a),
+                        searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                    })),
+                ]}
+            />
             <SelectedAracInfo arac={selectedArac} />
         </div>
         <div className="grid grid-cols-2 gap-3">
@@ -83,11 +89,11 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Başlangıç Tarihi</label>
-                <Input type="date" value={formData.baslangicTarihi} onChange={e => setFormData({...formData, baslangicTarihi: e.target.value})} className="h-9" />
+                <Input type="datetime-local" value={formData.baslangicTarihi} onChange={e => setFormData({...formData, baslangicTarihi: e.target.value})} className="h-9" />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Bitiş Tarihi</label>
-                <Input type="date" value={formData.bitisTarihi} onChange={e => setFormData({...formData, bitisTarihi: e.target.value})} className="h-9" />
+                <Input type="datetime-local" value={formData.bitisTarihi} onChange={e => setFormData({...formData, bitisTarihi: e.target.value})} className="h-9" />
             </div>
         </div>
         <div className="space-y-1.5">
@@ -137,7 +143,7 @@ const RenewFields = ({ renewData, setRenewData }: { renewData: any, setRenewData
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Yenileme Tarihi</label>
                 <Input
-                    type="date"
+                    type="datetime-local"
                     value={renewData.yenilemeTarihi}
                     onChange={e => setRenewData({
                         ...renewData,
@@ -150,7 +156,7 @@ const RenewFields = ({ renewData, setRenewData }: { renewData: any, setRenewData
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Yeni Bitiş Tarihi</label>
                 <Input
-                    type="date"
+                    type="datetime-local"
                     value={renewData.bitisTarihi}
                     onChange={e => setRenewData({ ...renewData, bitisTarihi: e.target.value })}
                     className="h-9"
@@ -180,12 +186,13 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
     const [editRow, setEditRow] = useState<SigortaRow | null>(null);
     const [renewRow, setRenewRow] = useState<SigortaRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
+    const renewDefaultStart = nowDateTimeLocal();
     const [renewData, setRenewData] = useState({
         sirket: '',
         acente: '',
         policeNo: '',
-        yenilemeTarihi: getTodayDate(),
-        bitisTarihi: oneYearAfter(getTodayDate()),
+        yenilemeTarihi: renewDefaultStart,
+        bitisTarihi: oneYearAfter(renewDefaultStart),
         tutar: ''
     });
     const [loading, setLoading] = useState(false);
@@ -239,8 +246,8 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
             sirket: row.sirket || '',
             acente: row.acente || '',
             policeNo: row.policeNo || '',
-            baslangicTarihi: new Date(row.baslangicTarihi).toISOString().split('T')[0],
-            bitisTarihi: new Date(row.bitisTarihi).toISOString().split('T')[0],
+            baslangicTarihi: toDateTimeLocalInput(row.baslangicTarihi),
+            bitisTarihi: toDateTimeLocalInput(row.bitisTarihi),
             tutar: String(row.tutar || ''),
             aktifMi: row.aktifMi
         });
@@ -248,7 +255,7 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
     };
 
     const openRenew = (row: SigortaRow) => {
-        const yenilemeTarihi = getTodayDate();
+        const yenilemeTarihi = nowDateTimeLocal();
         setRenewData({
             sirket: row.sirket || '',
             acente: row.acente || '',

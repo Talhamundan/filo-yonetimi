@@ -17,7 +17,7 @@ const EMPTY: PersonelFormData = {
     telefon: '',
     rol: 'SOFOR',
     sirketId: '',
-    sehir: '',
+    calistigiKurum: '',
     tcNo: ''
 };
 
@@ -91,7 +91,7 @@ export default function YeniPersonelShortcut({ className, asDropdownItem }: { cl
             <DialogContent className="sm:max-w-[550px]">
                 <DialogHeader>
                     <DialogTitle>Yeni Personel Oluştur</DialogTitle>
-                    <DialogDescription>Hızlı sistem personeli veya şoför kaydı.</DialogDescription>
+                    <DialogDescription>Hızlı sistem personeli kaydı.</DialogDescription>
                 </DialogHeader>
                 {dataLoading ? (
                     <div className="py-8 text-center text-sm text-slate-500">Yükleniyor...</div>

@@ -1,5 +1,5 @@
 type SelectedAracInfoData = {
-    plaka: string;
+    plaka?: string | null;
     marka?: string | null;
     model?: string | null;
     bulunduguIl?: string | null;
@@ -24,7 +24,7 @@ export default function SelectedAracInfo({ arac }: { arac?: SelectedAracInfoData
             <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <div>
                     <span className="text-slate-500">Plaka:</span>{" "}
-                    <span className="font-semibold text-slate-800 font-mono">{arac.plaka}</span>
+                    <span className="font-semibold text-slate-800 font-mono">{(arac.plaka || "-").trim() || "-"}</span>
                 </div>
                 <div>
                     <span className="text-slate-500">Şehir:</span>{" "}

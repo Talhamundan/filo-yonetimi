@@ -147,7 +147,7 @@ export default function ActivityLogClient({
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <table className="w-full text-sm">
+                <table className="w-full text-[13px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th className="text-left p-3 font-semibold text-slate-600">Tarih</th>

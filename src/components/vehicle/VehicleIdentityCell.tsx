@@ -12,15 +12,16 @@ export default function VehicleIdentityCell({
     extra,
 }: {
     aracId?: string | null;
-    plaka: string;
+    plaka?: string | null;
     subtitle?: string | null;
     companyName?: string | null;
     showCompanyInfo?: boolean;
     extra?: React.ReactNode;
 }) {
+    const plateText = (plaka || "-").trim() || "-";
     const plateBadge = (
         <span className="font-mono font-bold text-slate-900 border border-slate-200 bg-slate-50 px-2.5 py-1 rounded-md inline-block shadow-sm tracking-wide text-xs w-max">
-            {plaka}
+            {plateText}
         </span>
     );
 

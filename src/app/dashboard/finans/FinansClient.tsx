@@ -219,7 +219,7 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                                 </TableHead>
                             </TableRow>
                         </TableHeader>
-                        <TableBody className="text-sm">
+                        <TableBody className="text-[13px]">
                             {filteredRecords.length > 0 ? (
                                 filteredRecords.map((rec, idx) => (
                                     <TableRow
@@ -227,7 +227,14 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                                         className={`transition-colors border-b border-slate-100 hover:bg-[#F8FAFC] ${idx % 2 === 0 ? 'bg-white' : 'bg-[#FAFAFA]'}`}
                                     >
                                         <TableCell className="px-4 py-3.5 align-middle text-slate-500 font-medium">
-                                            {new Date(rec.tarih).toLocaleDateString('tr-TR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                                            {new Date(rec.tarih).toLocaleString("tr-TR", {
+                                                day: "2-digit",
+                                                month: "2-digit",
+                                                year: "numeric",
+                                                hour: "2-digit",
+                                                minute: "2-digit",
+                                                hour12: false,
+                                            })}
                                         </TableCell>
                                         <TableCell className="px-4 py-3.5 align-middle">
                                             <div className="flex flex-col">

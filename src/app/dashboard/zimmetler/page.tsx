@@ -1,9 +1,10 @@
 import { prisma } from "../../../lib/prisma";
 import ZimmetlerClient from "./client";
 import { SoforZimmetRow } from "./columns";
-import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
+import { getCurrentUserRole, getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -49,24 +50,22 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
     ]);
     const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
-    const personelFilter = await getModelFilter('kullanici', selectedSirketId);
+    const personelFilter = await getPersonnelSelectFilter();
     const zimmetWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "baslangic", selectedYil);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [zimmetWhere as Record<string, unknown>];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        whereParts.push({
-            OR: [
-                { notlar: { contains: q, mode: "insensitive" } },
-                { kullanici: { ad: { contains: q, mode: "insensitive" } } },
-                { kullanici: { soyad: { contains: q, mode: "insensitive" } } },
-                { kullanici: { tcNo: { contains: q, mode: "insensitive" } } },
-                { arac: { plaka: { contains: q, mode: "insensitive" } } },
-                { arac: { marka: { contains: q, mode: "insensitive" } } },
-                { arac: { model: { contains: q, mode: "insensitive" } } },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { notlar: { contains: token, mode: "insensitive" } },
+        { kullanici: { ad: { contains: token, mode: "insensitive" } } },
+        { kullanici: { soyad: { contains: token, mode: "insensitive" } } },
+        { kullanici: { tcNo: { contains: token, mode: "insensitive" } } },
+        { arac: { plaka: { contains: token, mode: "insensitive" } } },
+        { arac: { marka: { contains: token, mode: "insensitive" } } },
+        { arac: { model: { contains: token, mode: "insensitive" } } },
+    ]);
+    if (qFilter) {
+        whereParts.push(qFilter);
     }
     if (commonFilters.status) {
         if (commonFilters.status === "AKTIF") {
@@ -90,12 +89,28 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
             }
         }),
         (prisma as any).arac.findMany({ 
-            where: aracFilter as any,
-            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true },
+            where: {
+                ...(aracFilter as any),
+                kullaniciId: null,
+                kullaniciGecmisi: {
+                    none: {
+                        bitis: null,
+                    },
+                },
+            } as any,
+            select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true, guncelKm: true, durum: true },
             orderBy: { plaka: 'asc' }
         }),
         (prisma as any).kullanici.findMany({
-            where: personelFilter as any,
+            where: {
+                ...(personelFilter as any),
+                arac: { is: null },
+                zimmetler: {
+                    none: {
+                        bitis: null,
+                    },
+                },
+            } as any,
             select: { id: true, ad: true, soyad: true },
             orderBy: { ad: 'asc' }
         })

@@ -1,6 +1,7 @@
 import prisma from "@/lib/prisma";
 import { getModelFilterWithOptions, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
+import { matchesTokenizedSearch } from "@/lib/search-query";
 import TrashClient, { type TrashRow } from "./trash-client";
 
 type DeletedDataStats = {
@@ -43,7 +44,7 @@ export default async function CopKutusuPage(props: { searchParams?: Promise<Dash
     ]);
 
     const entityFilter = parseString(resolvedSearchParams.entity);
-    const q = parseString(resolvedSearchParams.q)?.toLocaleLowerCase("tr-TR") || "";
+    const q = parseString(resolvedSearchParams.q) || "";
     const from = toDateOrNull(parseString(resolvedSearchParams.from));
     const to = toDateOrNull(parseString(resolvedSearchParams.to));
 
@@ -238,7 +239,7 @@ export default async function CopKutusuPage(props: { searchParams?: Promise<Dash
     ]
         .filter((row): row is TrashRow => Boolean(row.deletedAt))
         .filter((row) => inDateRange(row.deletedAt, from, to))
-        .filter((row) => (q ? row.summary.toLocaleLowerCase("tr-TR").includes(q) : true))
+        .filter((row) => matchesTokenizedSearch(row.summary, q))
         .sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
 
     return <TrashClient rows={rows} sirketler={sirketler} deletedStats={deletedStats} />;

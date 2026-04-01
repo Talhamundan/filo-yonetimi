@@ -162,7 +162,7 @@ export default function ExcelTransferToolbar({ options, className, hideEntitySel
                 onClick={handleExport}
                 disabled={isExporting || isImporting}
             >
-                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
                 Dışa Aktar
             </Button>
             <Button
@@ -173,7 +173,7 @@ export default function ExcelTransferToolbar({ options, className, hideEntitySel
                 onClick={() => fileInputRef.current?.click()}
                 disabled={isImporting || isExporting}
             >
-                {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isImporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 İçe Aktar
             </Button>
         </div>

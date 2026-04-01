@@ -9,7 +9,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { cleanupExpiredTrashNow, permanentlyDeleteTrashRecord, restoreTrashRecord } from "./actions";
+import { matchesTokenizedSearch } from "@/lib/search-query";
+import { cleanupExpiredTrashNow, emptyTrashNow, permanentlyDeleteTrashRecord, restoreTrashRecord } from "./actions";
 
 export type TrashEntity = "arac" | "masraf" | "bakim" | "dokuman" | "ceza" | "kullanici";
 
@@ -53,6 +54,13 @@ function getPermanentDeleteConfirmMessage(row: TrashRow) {
     return `Bu ${ENTITY_LABELS[row.entity].toLocaleLowerCase("tr-TR")} kaydı kalıcı olarak silinecek. Devam etmek istiyor musunuz?`;
 }
 
+function getEmptyTrashConfirmMessage(companyName: string | null) {
+    if (companyName) {
+        return `"${companyName}" kapsamındaki tüm çöp kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?`;
+    }
+    return "Tüm şirketler kapsamındaki çöp kayıtları kalıcı olarak silinecek. Bu işlem geri alınamaz. Devam edilsin mi?";
+}
+
 export default function TrashClient({
     rows,
     sirketler,
@@ -69,6 +77,11 @@ export default function TrashClient({
     const [busyKey, setBusyKey] = useState<string | null>(null);
     const [isPending, startTransition] = useTransition();
 
+    const selectedSirketId = searchParams.get("sirket");
+    const selectedSirketName = selectedSirketId
+        ? sirketler.find((item) => item.id === selectedSirketId)?.ad || null
+        : null;
+
     const q = searchParams.get("q") || "";
     const entity = searchParams.get("entity") || "";
     const from = searchParams.get("from") || "";
@@ -78,10 +91,9 @@ export default function TrashClient({
         : "-";
 
     const filteredRows = useMemo(() => {
-        const qNormalized = q.toLocaleLowerCase("tr-TR").trim();
         return rows.filter((row) => {
             if (entity && row.entity !== entity) return false;
-            if (qNormalized && !row.summary.toLocaleLowerCase("tr-TR").includes(qNormalized)) return false;
+            if (!matchesTokenizedSearch(row.summary, q)) return false;
             return true;
         });
     }, [rows, q, entity]);
@@ -127,7 +139,7 @@ export default function TrashClient({
         if (!confirmed) return;
         setBusyKey(`${row.entity}:${row.id}:delete`);
         startTransition(async () => {
-            const result = await permanentlyDeleteTrashRecord(row.entity, row.id);
+            const result = await permanentlyDeleteTrashRecord(row.entity, row.id, selectedSirketId || null);
             setBusyKey(null);
             if (!result.success) {
                 toast.error(result.error || "Kalıcı silme başarısız.");
@@ -158,6 +170,35 @@ export default function TrashClient({
         });
     };
 
+    const handleEmptyTrash = async () => {
+        const confirmed = await openConfirm({
+            title: "Çöp Kutusunu Boşalt",
+            message: getEmptyTrashConfirmMessage(selectedSirketName),
+            confirmText: "Evet, Boşalt",
+            cancelText: "Vazgeç",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+
+        startTransition(async () => {
+            const result = await emptyTrashNow(selectedSirketId || null);
+            if (!result.success || !result.result) {
+                toast.error(result.error || "Çöp kutusu boşaltılamadı.");
+                return;
+            }
+
+            if (result.result.failedTotal > 0) {
+                const detail = result.result.firstFailureMessage ? ` (${result.result.firstFailureMessage})` : "";
+                toast.warning(
+                    `Çöp kutusu boşaltıldı: ${result.result.deletedTotal} kayıt silindi, ${result.result.failedTotal} kayıt silinemedi.${detail}`
+                );
+            } else {
+                toast.success(`Çöp kutusu boşaltıldı. ${result.result.deletedTotal} kayıt kalıcı silindi.`);
+            }
+            router.refresh();
+        });
+    };
+
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto space-y-4">
             {confirmModal}
@@ -167,9 +208,14 @@ export default function TrashClient({
                     <p className="text-sm text-slate-500">Soft-delete edilen kayıtları geri yükleyin veya kalıcı silin.</p>
                 </div>
                 {isAdmin ? (
-                    <Button variant="outline" onClick={handleCleanup} disabled={isPending}>
-                        <RefreshCcw className="h-4 w-4" /> 30+ Gün Temizle
-                    </Button>
+                    <div className="flex items-center gap-2">
+                        <Button variant="destructive" onClick={handleEmptyTrash} disabled={isPending}>
+                            <Trash2 className="h-4 w-4" /> Çöp Kutusunu Boşalt
+                        </Button>
+                        <Button variant="outline" onClick={handleCleanup} disabled={isPending}>
+                            <RefreshCcw className="h-4 w-4" /> 30+ Gün Temizle
+                        </Button>
+                    </div>
                 ) : null}
             </div>
 
@@ -258,14 +304,15 @@ export default function TrashClient({
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-                <table className="w-full text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-[13px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th className="text-left p-3 font-semibold text-slate-600">Tür</th>
                             <th className="text-left p-3 font-semibold text-slate-600">Kayıt</th>
                             <th className="text-left p-3 font-semibold text-slate-600">Şirket</th>
                             <th className="text-left p-3 font-semibold text-slate-600">Silinme Tarihi</th>
-                            <th className="text-right p-3 font-semibold text-slate-600">İşlemler</th>
+                            <th className="sticky right-0 bg-slate-50 border-l border-slate-200 shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.2)] text-right p-3 font-semibold text-slate-600">İşlemler</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -281,7 +328,7 @@ export default function TrashClient({
                                         <td className="p-3 text-slate-700">{row.summary}</td>
                                         <td className="p-3 text-slate-500">{row.companyName || "-"}</td>
                                         <td className="p-3 text-slate-500">{new Date(row.deletedAt).toLocaleString("tr-TR")}</td>
-                                        <td className="p-3">
+                                        <td className="sticky right-0 bg-white border-l border-slate-100 shadow-[-6px_0_8px_-6px_rgba(15,23,42,0.15)] p-3">
                                             <div className="flex justify-end gap-2">
                                                 <Button
                                                     size="sm"
@@ -315,6 +362,7 @@ export default function TrashClient({
                         )}
                     </tbody>
                 </table>
+                </div>
             </div>
 
             {sirketler.length === 0 ? null : <div className="hidden" aria-hidden="true">{sirketler.length}</div>}

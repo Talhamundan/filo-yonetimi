@@ -80,14 +80,19 @@ async function groupMasraf(where: Prisma.MasrafWhereInput) {
 }
 
 export async function getFleetStatusData(scope: GenericWhere) {
+    const vehicleScope = {
+        ...(scope as Prisma.AracWhereInput),
+        deletedAt: null,
+    } as Prisma.AracWhereInput;
+
     const [toplamArac, aktifArac, servisteArac, arizaliArac, durumDagitimi] = await Promise.all([
-        prisma.arac.count({ where: scope as Prisma.AracWhereInput }),
-        prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "AKTIF" } }),
-        prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "SERVISTE" } }),
-        prisma.arac.count({ where: { ...(scope as Prisma.AracWhereInput), durum: "ARIZALI" } }),
+        prisma.arac.count({ where: vehicleScope }),
+        prisma.arac.count({ where: { ...vehicleScope, durum: "AKTIF" } }),
+        prisma.arac.count({ where: { ...vehicleScope, durum: "SERVISTE" } }),
+        prisma.arac.count({ where: { ...vehicleScope, durum: "ARIZALI" } }),
         prisma.arac.groupBy({
             by: ["durum"],
-            where: scope as Prisma.AracWhereInput,
+            where: vehicleScope,
             _count: { durum: true },
         }),
     ]);
@@ -109,6 +114,10 @@ export async function getDashboardVehicleData(params: {
 }) {
     const { scope, cezaScope, dateContext } = params;
     const { seciliAyBasi, seciliAySonu, oncekiDonemBasi, oncekiDonemSonu } = dateContext;
+    const vehicleScope = {
+        ...(scope as Prisma.AracWhereInput),
+        deletedAt: null,
+    } as Prisma.AracWhereInput;
 
     const [
         araclar,
@@ -130,7 +139,7 @@ export async function getDashboardVehicleData(params: {
         prevMasraf,
     ] = await Promise.all([
         prisma.arac.findMany({
-            where: scope as Prisma.AracWhereInput,
+            where: vehicleScope,
             select: { id: true, plaka: true, marka: true, model: true },
         }),
         groupYakit({ ...(scope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),

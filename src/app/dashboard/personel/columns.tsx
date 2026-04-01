@@ -3,6 +3,7 @@
 import { ColumnDef } from "@tanstack/react-table"
 import { Shield, User, Briefcase, Truck, Wrench } from "lucide-react"
 import { AracLink, PersonelLink } from "@/components/links/RecordLinks"
+import { getRoleLabel } from "@/lib/role-label"
 
 export type PersonelRow = {
     id: string;
@@ -13,7 +14,7 @@ export type PersonelRow = {
     rol: string;
     sirketAdi: string;
     sirketId?: string;
-    sehir: string;
+    calistigiKurum: string;
     zimmetliArac: string | null;
     zimmetliAracId?: string | null;
     maliyetKalemleri?: {
@@ -61,20 +62,21 @@ const baseColumns: ColumnDef<PersonelRow>[] = [
         )
     },
     {
-        accessorKey: "rol",
+        accessorFn: (row) => getRoleLabel(row.rol),
+        id: "rol",
         header: "Rol",
         cell: ({ row }) => {
-            const role = row.getValue("rol") as string;
+            const role = row.original.rol;
             return (
                 <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 flex items-center gap-1.5 w-max">
                     <RoleIcon rol={role} />
-                    {role}
+                    {getRoleLabel(role)}
                 </span>
             )
         }
     },
     { accessorKey: "sirketAdi", header: "Bağlı Şirket", cell: ({ row }) => <span className="font-medium text-slate-700">{row.getValue("sirketAdi")}</span> },
-    { accessorKey: "sehir", header: "Şehir", cell: ({ row }) => <span className="text-slate-500">{row.getValue("sehir")}</span> },
+    { accessorKey: "calistigiKurum", header: "Çalıştığı Kurum", cell: ({ row }) => <span className="text-slate-500">{row.getValue("calistigiKurum")}</span> },
     { 
         accessorKey: "zimmetliArac", 
         header: "Zimmetli Araç", 

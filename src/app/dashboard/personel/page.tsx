@@ -1,15 +1,18 @@
 import React from "react";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import PersonelClient from "./Client";
 import { getCurrentUserRole, getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR" | "TEKNIK"> = {
     ADMIN: "ADMIN",
     YETKILI: "YETKILI",
     SOFOR: "SOFOR",
+    PERSONEL: "SOFOR",
     TEKNIK: "TEKNIK",
     YONETICI: "YETKILI",
     MUDUR: "YETKILI",
@@ -39,6 +42,29 @@ function findDriverAtDate(
     return null;
 }
 
+function supportsKullaniciCalistigiKurumField() {
+    const model = Prisma.dmmf.datamodel.models.find((item) => item.name === "Kullanici");
+    if (!model) return false;
+    return model.fields.some((field) => field.name === "calistigiKurum");
+}
+
+async function hasDatabaseColumn(tableName: string, columnName: string) {
+    try {
+        const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = ${tableName}
+                  AND column_name = ${columnName}
+            ) AS "exists"
+        `;
+        return Boolean(rows?.[0]?.exists);
+    } catch {
+        return false;
+    }
+}
+
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, selectedAy, commonFilters, role] = await Promise.all([
         getSelectedSirketId(props.searchParams),
@@ -59,17 +85,26 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     ]);
     const personelWhereParts: Record<string, unknown>[] = [((filter || {}) as Record<string, unknown>)];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        personelWhereParts.push({
-            OR: [
-                { ad: { contains: q, mode: "insensitive" } },
-                { soyad: { contains: q, mode: "insensitive" } },
-                { hesap: { is: { kullaniciAdi: { contains: q, mode: "insensitive" } } } },
-                { telefon: { contains: q, mode: "insensitive" } },
-                { tcNo: { contains: q, mode: "insensitive" } },
-            ],
-        });
+    const hasCalistigiKurumModelField = supportsKullaniciCalistigiKurumField();
+    const hasCalistigiKurumColumn = hasCalistigiKurumModelField
+        ? await hasDatabaseColumn("Personel", "calistigiKurum")
+        : false;
+    const canQueryCalistigiKurum = hasCalistigiKurumModelField && hasCalistigiKurumColumn;
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => {
+        const clauses: Record<string, unknown>[] = [
+            { ad: { contains: token, mode: "insensitive" } },
+            { soyad: { contains: token, mode: "insensitive" } },
+            { hesap: { is: { kullaniciAdi: { contains: token, mode: "insensitive" } } } },
+            { telefon: { contains: token, mode: "insensitive" } },
+            { tcNo: { contains: token, mode: "insensitive" } },
+        ];
+        if (canQueryCalistigiKurum) {
+            clauses.push({ calistigiKurum: { contains: token, mode: "insensitive" } });
+        }
+        return clauses;
+    });
+    if (qFilter) {
+        personelWhereParts.push(qFilter);
     }
     if (commonFilters.status) {
         const normalizedRoleStatus = PERSONEL_ROLE_FILTER_MAP[commonFilters.status];
@@ -79,16 +114,48 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     }
     const personelWhere = personelWhereParts.length > 1 ? { AND: personelWhereParts } : personelWhereParts[0];
 
-    const [personeller, sirketler, cezaBySofor, yakitKayitlari, arizaKayitlari, tumZimmetler] = await Promise.all([
-        (prisma as any).kullanici.findMany({
+    const personelSelect: Record<string, unknown> = {
+        id: true,
+        ad: true,
+        soyad: true,
+        telefon: true,
+        tcNo: true,
+        rol: true,
+        sirketId: true,
+        sirket: { select: { id: true, ad: true } },
+        hesap: { select: { kullaniciAdi: true } },
+        arac: { select: { id: true, plaka: true, marka: true, model: true } },
+    };
+    if (canQueryCalistigiKurum) {
+        personelSelect.calistigiKurum = true;
+    }
+
+    const personellerPromise = (prisma as any).kullanici
+        .findMany({
             where: personelWhere as any,
-            orderBy: { ad: 'asc' },
-            include: { 
-                sirket: true,
-                hesap: { select: { kullaniciAdi: true } },
-                arac: { select: { id: true, plaka: true, marka: true, model: true } }
-            }
-        }),
+            orderBy: { ad: "asc" },
+            select: personelSelect,
+        })
+        .catch(async (error: unknown) => {
+            const message = error instanceof Error ? error.message : "";
+            const shouldRetryWithoutKurumField =
+                canQueryCalistigiKurum &&
+                (message.includes("Unknown argument `calistigiKurum`") ||
+                    message.includes("column \"calistigiKurum\" does not exist") ||
+                    message.includes("The column `Personel.calistigiKurum` does not exist"));
+            if (!shouldRetryWithoutKurumField) throw error;
+
+            const fallbackSelect = { ...personelSelect };
+            delete fallbackSelect.calistigiKurum;
+            return (prisma as any).kullanici.findMany({
+                where: personelWhere as any,
+                orderBy: { ad: "asc" },
+                select: fallbackSelect,
+            });
+        });
+
+    const [personeller, sirketler, cezaBySofor, yakitKayitlari, arizaKayitlari, tumZimmetler] = await Promise.all([
+        personellerPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
             select: { id: true, ad: true, bulunduguIl: true },
@@ -126,6 +193,30 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             select: { aracId: true, kullaniciId: true, baslangic: true, bitis: true },
         }).catch(() => []),
     ]);
+
+    const personelIds = (personeller as Array<{ id?: string | null }>)
+        .map((item) => item?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+
+    const aktifZimmetler = personelIds.length
+        ? await (prisma as any).kullaniciZimmet.findMany({
+            where: {
+                kullaniciId: { in: personelIds },
+                bitis: null,
+            },
+            select: {
+                kullaniciId: true,
+                baslangic: true,
+                arac: { select: { id: true, plaka: true, marka: true, model: true } },
+            },
+            orderBy: [{ kullaniciId: "asc" }, { baslangic: "desc" }],
+        }).catch(() => [])
+        : [];
+    const aktifAracByKullaniciId = new Map<string, { id: string; plaka: string; marka: string; model: string }>();
+    for (const row of aktifZimmetler as any[]) {
+        if (!row?.kullaniciId || !row?.arac || aktifAracByKullaniciId.has(row.kullaniciId)) continue;
+        aktifAracByKullaniciId.set(row.kullaniciId, row.arac);
+    }
 
     const zimmetByAracId: Record<
         string,
@@ -196,6 +287,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     ).byDriverId;
 
     const formattedData = personeller.map((p: any) => {
+        const zimmetliArac = p.arac || aktifAracByKullaniciId.get(p.id) || null;
         const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
         const yakitOrtalama = fuelMetricsByDriverId.get(p.id);
         return {
@@ -207,9 +299,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             rol: p.rol,
             sirketAdi: p.sirket?.ad || "Bağımsız",
             sirketId: p.sirketId || "",
-            sehir: p.sehir || "-",
-            zimmetliArac: p.arac ? `${p.arac.plaka} (${p.arac.marka} ${p.arac.model})` : null,
-            zimmetliAracId: p.arac?.id || null,
+            calistigiKurum: p.calistigiKurum || p.sehir || p.sirket?.ad || "-",
+            zimmetliArac: zimmetliArac ? `${zimmetliArac.plaka} (${zimmetliArac.marka} ${zimmetliArac.model})` : null,
+            zimmetliAracId: zimmetliArac?.id || null,
             maliyetKalemleri: {
                 ceza: maliyet.ceza,
                 yakit: maliyet.yakit,

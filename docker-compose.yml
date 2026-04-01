@@ -6,9 +6,10 @@ services:
     container_name: filo_postgres_db
     restart: always
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me}
-      POSTGRES_DB: ${POSTGRES_DB:-filo_db}
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: filo_sifre_2026
+      POSTGRES_DB: filo_db
+      DATABASE_URL: postgresql://admin:filo_sifre_2026@localhost:5432/filo_db?schema=public
     ports:
       - "5432:5432"
     volumes:

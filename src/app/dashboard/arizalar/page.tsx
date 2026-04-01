@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import ArizalarClient from "./client";
 import { ArizaRow } from "./columns";
-import { getModelFilter } from "@/lib/auth-utils";
+import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
+import { getActivePersonelId } from "@/lib/personel-display";
 
 export default async function ArizalarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
@@ -15,25 +17,23 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
     const [filter, aracFilter, personelFilter] = await Promise.all([
         getModelFilter("arizaKaydi", selectedSirketId),
         getModelFilter("arac", selectedSirketId),
-        getModelFilter("kullanici", selectedSirketId),
+        getPersonnelSelectFilter(),
     ]);
 
     const yearWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "bildirimTarihi", selectedYil);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [yearWhere as Record<string, unknown>];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        whereParts.push({
-            OR: [
-                { aciklama: { contains: q, mode: "insensitive" } },
-                { servisAdi: { contains: q, mode: "insensitive" } },
-                { yapilanIslemler: { contains: q, mode: "insensitive" } },
-                { arac: { plaka: { contains: q, mode: "insensitive" } } },
-                { arac: { marka: { contains: q, mode: "insensitive" } } },
-                { arac: { model: { contains: q, mode: "insensitive" } } },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { aciklama: { contains: token, mode: "insensitive" } },
+        { servisAdi: { contains: token, mode: "insensitive" } },
+        { yapilanIslemler: { contains: token, mode: "insensitive" } },
+        { arac: { plaka: { contains: token, mode: "insensitive" } } },
+        { arac: { marka: { contains: token, mode: "insensitive" } } },
+        { arac: { model: { contains: token, mode: "insensitive" } } },
+    ]);
+    if (qFilter) {
+        whereParts.push(qFilter);
     }
     if (commonFilters.status) {
         whereParts.push({ durum: commonFilters.status });
@@ -116,6 +116,20 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
                         soyad: true,
                     },
                 },
+                kullaniciGecmisi: {
+                    where: { bitis: null },
+                    orderBy: { baslangic: "desc" },
+                    take: 1,
+                    select: {
+                        kullanici: {
+                            select: {
+                                id: true,
+                                ad: true,
+                                soyad: true,
+                            },
+                        },
+                    },
+                },
             },
             orderBy: { plaka: "asc" },
         }).catch((error: any) => {
@@ -141,11 +155,19 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
                 return [];
             }),
     ]);
+    const aracOptions = (araclar as any[]).map((arac) => {
+        const aktifSofor = arac.kullaniciGecmisi?.[0]?.kullanici || arac.kullanici || null;
+        return {
+            ...arac,
+            aktifSoforId: getActivePersonelId(aktifSofor),
+            aktifSofor: aktifSofor || null,
+        };
+    });
 
     return (
         <ArizalarClient
             initialData={rows as unknown as ArizaRow[]}
-            araclar={araclar as any[]}
+            araclar={aracOptions as any[]}
             personeller={personeller as any[]}
         />
     );

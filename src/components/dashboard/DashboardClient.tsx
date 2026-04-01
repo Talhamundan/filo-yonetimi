@@ -702,23 +702,23 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 <Card
                     role="button"
                     tabIndex={0}
-                    onClick={() => navigateWithScope("/dashboard/personel")}
+                    onClick={() => navigateWithScope("/dashboard/personel?status=SOFOR")}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            navigateWithScope("/dashboard/personel");
+                            navigateWithScope("/dashboard/personel?status=SOFOR");
                         }
                     }}
                     className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 hover:shadow-md"
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
-                            <p className="text-sm font-medium text-slate-500">Aylık Ortalama Şoför Maliyeti</p>
+                            <p className="text-sm font-medium text-slate-500">Aylık Ortalama Personel Maliyeti</p>
                             <div className="p-1.5 bg-emerald-50 rounded-md text-emerald-600"><Users size={16} /></div>
                         </div>
                         <h3 className="text-2xl font-bold text-slate-900">₺{metrics.ortalamaSoforMaliyeti.toLocaleString("tr-TR")}</h3>
                         <p className="text-xs text-slate-500 font-medium mt-2">
-                            {metrics.soforMaliyetOrtalamaAdet} şoför ortalaması
+                            {metrics.soforMaliyetOrtalamaAdet} personel ortalaması
                         </p>
                         <p className={`text-xs font-medium mt-1 ${getChangeClassName(metrics.soforMaliyetDegisimYuzdesi)}`}>
                             {formatChangeText(metrics.soforMaliyetDegisimYuzdesi)} {metrics.comparisonLabel}

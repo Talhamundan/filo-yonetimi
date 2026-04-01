@@ -2,7 +2,8 @@
 
 import React from "react";
 import { Input } from "../../../components/ui/input";
-import type { Rol, iller } from "@prisma/client";
+import type { Rol } from "@prisma/client";
+import { getRoleLabel } from "@/lib/role-label";
 
 export type PersonelFormData = {
     ad: string;
@@ -10,18 +11,11 @@ export type PersonelFormData = {
     telefon: string;
     rol: Rol;
     sirketId: string;
-    sehir: iller | "";
+    calistigiKurum: string;
     tcNo: string;
 };
 
 export const ROLLER: Rol[] = ['ADMIN', 'YETKILI', 'TEKNIK', 'SOFOR'];
-export const ILLER = [
-    { value: 'ISTANBUL', label: 'İSTANBUL' },
-    { value: 'BURSA', label: 'BURSA' },
-    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
-    { value: 'ANKARA', label: 'ANKARA' },
-    { value: 'DIGER', label: 'DİĞER' }
-];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 export const FormFields = ({
@@ -75,7 +69,7 @@ export const FormFields = ({
                 <label className="text-sm font-medium">Rol</label>
                 <select value={formData.rol} onChange={e => setFormData({...formData, rol: e.target.value as Rol})}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                    {roleOptions.map(r => <option key={r} value={r}>{r}</option>)}
+                    {roleOptions.map((r) => <option key={r} value={r}>{getRoleLabel(r)}</option>)}
                 </select>
             </div>
         </div>
@@ -88,7 +82,10 @@ export const FormFields = ({
                     setFormData({
                         ...formData,
                         sirketId: nextSirketId,
-                        sehir: (selectedSirket?.bulunduguIl as iller | undefined) || formData.sehir
+                        calistigiKurum:
+                            formData.calistigiKurum.trim().length > 0
+                                ? formData.calistigiKurum
+                                : (selectedSirket?.ad || "")
                     });
                 }}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
@@ -103,12 +100,13 @@ export const FormFields = ({
                 </select>
             </div>
             <div className="space-y-1.5">
-                <label className="text-sm font-medium">Şehir</label>
-                <select value={formData.sehir} onChange={e => setFormData({...formData, sehir: e.target.value as iller | ""})}
-                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                    <option value="">Seçiniz</option>
-                    {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-                </select>
+                <label className="text-sm font-medium">Çalıştığı Kurum</label>
+                <Input
+                    value={formData.calistigiKurum}
+                    onChange={(e) => setFormData({ ...formData, calistigiKurum: forceUppercase(e.target.value) })}
+                    placeholder="Örn: ARAT / ÖZEL"
+                    className="h-9 uppercase"
+                />
             </div>
         </div>
     </div>

@@ -6,6 +6,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
 import { Upload, FolderOpen, Download } from "lucide-react";
 import { Input } from "../../../components/ui/input";
+import { SearchableSelect } from "../../../components/ui/searchable-select";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, DokumanRow } from "./columns";
 import { createDokuman, deleteDokuman } from "./actions";
@@ -13,6 +14,7 @@ import { useRouter } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 const EMPTY = {
     ad: "",
@@ -26,7 +28,7 @@ export default function DokumanlarClient({
     araclar 
 }: { 
     initialDokumanlar: DokumanRow[], 
-    araclar: { id: string, plaka: string, marka?: string | null, model?: string | null, bulunduguIl?: string | null }[] 
+    araclar: { id: string, plaka: string | null, marka?: string | null, model?: string | null, durum?: string | null, bulunduguIl?: string | null }[] 
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -127,14 +129,20 @@ export default function DokumanlarClient({
                             <div className="grid gap-4 py-4">
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                                    <select 
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    <SearchableSelect
                                         value={formData.aracId}
-                                        onChange={(e) => setFormData({...formData, aracId: e.target.value})}
-                                    >
-                                        <option value="">Araç Seçiniz...</option>
-                                        {araclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
-                                    </select>
+                                        onValueChange={(value) => setFormData({ ...formData, aracId: value })}
+                                        placeholder="Araç Seçiniz..."
+                                        searchPlaceholder="Plaka / araç ara..."
+                                        options={[
+                                            { value: "", label: "Araç Seçiniz..." },
+                                            ...araclar.map((a) => ({
+                                                value: a.id,
+                                                label: formatAracOptionLabel(a),
+                                                searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                                            })),
+                                        ]}
+                                    />
                                     <SelectedAracInfo arac={selectedArac} />
                                 </div>
                                 <div className="space-y-1.5">

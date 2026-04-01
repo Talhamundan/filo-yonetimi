@@ -25,7 +25,7 @@ export type SoforZimmetRow = {
     toplamMaliyet?: number;
 }
 
-const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd MMM yyyy", { locale: tr }) : '-';
+const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
 const formatCurrency = (value: number) => `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
 
 export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef<SoforZimmetRow>[] => {

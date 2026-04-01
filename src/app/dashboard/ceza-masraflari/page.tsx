@@ -1,10 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import CezaMasraflariClient from "./client";
 import { CezaMasrafRow } from "./columns";
-import { getModelFilter } from "@/lib/auth-utils";
+import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName, isDeletedPersonel } from "@/lib/personel-display";
+import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
     try {
@@ -66,7 +67,7 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
     const [cezaFilter, aracFilter, kullaniciFilter] = await Promise.all([
         getModelFilter("ceza", selectedSirketId),
         getModelFilter("arac", selectedSirketId),
-        getModelFilter("kullanici", selectedSirketId),
+        getPersonnelSelectFilter(),
     ]);
     const cezaWhere = withYilDateFilter((cezaFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
@@ -76,24 +77,22 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
     soonDate.setDate(soonDate.getDate() + 30);
     const whereParts: Record<string, unknown>[] = [cezaWhere as Record<string, unknown>];
 
-    if (commonFilters.q) {
-        const q = commonFilters.q;
-        whereParts.push({
-            OR: [
-                { plaka: { contains: q, mode: "insensitive" } },
-                { cezaMaddesi: { contains: q, mode: "insensitive" } },
-                { aciklama: { contains: q, mode: "insensitive" } },
-                { arac: { plaka: { contains: q, mode: "insensitive" } } },
-                {
-                    kullanici: {
-                        OR: [
-                            { ad: { contains: q, mode: "insensitive" } },
-                            { soyad: { contains: q, mode: "insensitive" } },
-                        ],
-                    },
-                },
-            ],
-        });
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { plaka: { contains: token, mode: "insensitive" } },
+        { cezaMaddesi: { contains: token, mode: "insensitive" } },
+        { aciklama: { contains: token, mode: "insensitive" } },
+        { arac: { plaka: { contains: token, mode: "insensitive" } } },
+        {
+            kullanici: {
+                OR: [
+                    { ad: { contains: token, mode: "insensitive" } },
+                    { soyad: { contains: token, mode: "insensitive" } },
+                ],
+            },
+        },
+    ]);
+    if (qFilter) {
+        whereParts.push(qFilter);
     }
     if (commonFilters.status) {
         switch (commonFilters.status) {
@@ -128,10 +127,19 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
                     plaka: true,
                     marka: true,
                     model: true,
+                    durum: true,
                     bulunduguIl: true,
                     guncelKm: true,
                     kullanici: {
                         select: { id: true, ad: true, soyad: true, deletedAt: true },
+                    },
+                    kullaniciGecmisi: {
+                        where: { bitis: null },
+                        orderBy: { baslangic: "desc" },
+                        take: 1,
+                        select: {
+                            kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                        },
                     },
                     sirket: { select: { ad: true } },
                 },
@@ -143,7 +151,7 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
             }),
         (prisma as any).kullanici
             .findMany({
-                where: { ...(kullaniciFilter as any), rol: "SOFOR" },
+                where: { ...(kullaniciFilter as any), rol: { not: "ADMIN" } },
                 select: { id: true, ad: true, soyad: true },
                 orderBy: [{ ad: "asc" }, { soyad: "asc" }],
             })
@@ -191,16 +199,20 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
     return (
         <CezaMasraflariClient
             initialData={rows}
-            araclar={(araclarRaw as any[]).map((a: any) => ({
+            araclar={(araclarRaw as any[]).map((a: any) => {
+                const aktifSofor = a.kullaniciGecmisi?.[0]?.kullanici || a.kullanici || null;
+                return {
                 id: a.id,
                 plaka: a.plaka,
                 marka: a.marka,
                 model: a.model,
+                durum: a.durum,
                 bulunduguIl: a.bulunduguIl,
                 guncelKm: a.guncelKm,
-                aktifSoforId: getActivePersonelId(a.kullanici),
-                aktifSoforAdSoyad: a.kullanici ? getPersonelDisplayName(a.kullanici) : null,
-            }))}
+                aktifSoforId: getActivePersonelId(aktifSofor),
+                aktifSoforAdSoyad: aktifSofor ? getPersonelDisplayName(aktifSofor) : null,
+            };
+            })}
             soforler={(soforlerRaw as any[]).map((s: any) => ({ id: s.id, adSoyad: `${s.ad} ${s.soyad}` }))}
         />
     );

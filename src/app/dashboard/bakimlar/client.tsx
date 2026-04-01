@@ -12,11 +12,15 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 
 const EMPTY = {
     aracId: "",
+    soforId: "",
     kategori: "PERIYODIK_BAKIM" as "PERIYODIK_BAKIM" | "ARIZA",
-    bakimTarihi: new Date().toISOString().split('T')[0],
+    bakimTarihi: nowDateTimeLocal(),
     yapilanKm: "",
     servisAdi: "",
     yapilanIslemler: "",
@@ -25,13 +29,34 @@ const EMPTY = {
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string | null;
     model?: string | null;
+    durum?: string | null;
     bulunduguIl?: string | null;
+    kullaniciId?: string | null;
+    kullanici?: { id: string; ad: string; soyad: string } | null;
+    aktifSoforId?: string | null;
+    aktifSofor?: { id: string; ad: string; soyad: string } | null;
+    aktifSoforAdSoyad?: string | null;
 };
 
-export default function BakimlarClient({ initialBakimlar, activeAraclar }: { initialBakimlar: BakimRow[], activeAraclar: AracOption[] }) {
+type PersonelOption = {
+    id: string;
+    ad: string;
+    soyad: string;
+    rol?: string | null;
+};
+
+export default function BakimlarClient({
+    initialBakimlar,
+    activeAraclar,
+    personeller,
+}: {
+    initialBakimlar: BakimRow[],
+    activeAraclar: AracOption[],
+    personeller: PersonelOption[],
+}) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const [createOpen, setCreateOpen] = useState(false);
@@ -52,6 +77,17 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
         }
     }, [shouldOpenCreate, router, searchParams]);
     const selectedArac = activeAraclar.find((arac) => arac.id === formData.aracId);
+    const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
+    const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
+
+    const handleAracSelection = (aracId: string) => {
+        const seciliArac = activeAraclar.find((arac) => arac.id === aracId);
+        setFormData((prev) => ({
+            ...prev,
+            aracId,
+            soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
+        }));
+    };
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.bakimTarihi || !formData.yapilanKm || !formData.tutar) {
@@ -62,6 +98,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
         setLoading(true);
         const res = await addBakim({
             aracId: formData.aracId,
+            soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
             yapilanKm: parseInt(formData.yapilanKm),
             kategori: formData.kategori,
@@ -86,6 +123,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
         setLoading(true);
         const res = await updateBakim(editRow.id, {
             aracId: formData.aracId,
+            soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
             yapilanKm: parseInt(formData.yapilanKm),
             kategori: formData.kategori,
@@ -119,8 +157,9 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
     const openEdit = (row: BakimRow) => {
         setFormData({
             aracId: row.arac.id,
+            soforId: normalizeSoforId(row.soforId || row.sofor?.id || row.arac.kullanici?.id),
             kategori: (row.kategori as any) || (row.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM"),
-            bakimTarihi: new Date(row.bakimTarihi).toISOString().split('T')[0],
+            bakimTarihi: toDateTimeLocalInput(row.bakimTarihi),
             yapilanKm: String(row.yapilanKm),
             servisAdi: row.servisAdi || "",
             yapilanIslemler: row.yapilanIslemler || "",
@@ -172,17 +211,39 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                         <div className="grid gap-4 py-4">
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                                <select
-                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                <SearchableSelect
                                     value={formData.aracId}
-                                    onChange={(e) => setFormData({...formData, aracId: e.target.value})}
-                                >
-                                    <option value="">Araç Seçiniz</option>
-                                    {activeAraclar.map(arac => (
-                                        <option key={arac.id} value={arac.id}>{arac.plaka}</option>
-                                    ))}
-                                </select>
+                                    onValueChange={handleAracSelection}
+                                    placeholder="Araç Seçiniz"
+                                    searchPlaceholder="Plaka / araç ara..."
+                                    options={[
+                                        { value: "", label: "Araç Seçiniz" },
+                                        ...activeAraclar.map((arac) => ({
+                                            value: arac.id,
+                                            label: formatAracOptionLabel(arac),
+                                            searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
+                                        })),
+                                    ]}
+                                />
                                 <SelectedAracInfo arac={selectedArac} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Servise Götüren Personel</label>
+                                <SearchableSelect
+                                    value={formData.soforId}
+                                    onValueChange={(value) => setFormData({ ...formData, soforId: value })}
+                                    placeholder="Seçilmedi"
+                                    searchPlaceholder="Personel ara..."
+                                    options={[
+                                        { value: "", label: "Seçilmedi" },
+                                        ...personeller.map((personel) => ({
+                                            value: personel.id,
+                                            label: `${personel.ad} ${personel.soyad}`,
+                                            searchText: `${personel.ad} ${personel.soyad}`,
+                                        })),
+                                    ]}
+                                />
+                                <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
@@ -198,7 +259,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                                    <Input type="date" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
+                                    <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
@@ -242,17 +303,39 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                     <div className="grid gap-4 py-4">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                            <select
-                                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                            <SearchableSelect
                                 value={formData.aracId}
-                                onChange={(e) => setFormData({...formData, aracId: e.target.value})}
-                            >
-                                <option value="">Araç Seçiniz</option>
-                                {activeAraclar.map(arac => (
-                                    <option key={arac.id} value={arac.id}>{arac.plaka}</option>
-                                ))}
-                            </select>
+                                onValueChange={handleAracSelection}
+                                placeholder="Araç Seçiniz"
+                                searchPlaceholder="Plaka / araç ara..."
+                                options={[
+                                    { value: "", label: "Araç Seçiniz" },
+                                    ...activeAraclar.map((arac) => ({
+                                        value: arac.id,
+                                        label: formatAracOptionLabel(arac),
+                                        searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
+                                    })),
+                                ]}
+                            />
                             <SelectedAracInfo arac={selectedArac} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Servise Götüren Personel</label>
+                            <SearchableSelect
+                                value={formData.soforId}
+                                onValueChange={(value) => setFormData({ ...formData, soforId: value })}
+                                placeholder="Seçilmedi"
+                                searchPlaceholder="Personel ara..."
+                                options={[
+                                    { value: "", label: "Seçilmedi" },
+                                    ...personeller.map((personel) => ({
+                                        value: personel.id,
+                                        label: `${personel.ad} ${personel.soyad}`,
+                                        searchText: `${personel.ad} ${personel.soyad}`,
+                                    })),
+                                ]}
+                            />
+                            <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
@@ -268,7 +351,7 @@ export default function BakimlarClient({ initialBakimlar, activeAraclar }: { ini
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                                <Input type="date" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
+                                <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>

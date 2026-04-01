@@ -44,7 +44,14 @@ export const getColumns = (): ColumnDef<CezaRow>[] => {
     {
         accessorKey: "tarih",
         header: "Ceza Tarihi",
-        cell: ({ row }) => new Date(row.original.tarih).toLocaleDateString("tr-TR")
+        cell: ({ row }) => new Date(row.original.tarih).toLocaleString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: false,
+        })
     },
     {
         accessorKey: "cezaMaddesi",

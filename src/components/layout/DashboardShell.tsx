@@ -35,7 +35,7 @@ const ROLE_LABELS: Record<string, string> = {
     ADMIN: "Admin",
     YETKILI: "Yetkili",
     TEKNIK: "Teknik",
-    SOFOR: "Şoför",
+    SOFOR: "Personel",
 };
 
 export default function DashboardShell({ children, scopeOptions }: DashboardShellProps) {

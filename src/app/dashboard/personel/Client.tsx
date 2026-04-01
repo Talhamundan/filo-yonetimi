@@ -14,8 +14,9 @@ import type { ColumnDef } from "@tanstack/react-table";
 import type { Rol } from "@prisma/client";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { getRoleLabel } from "@/lib/role-label";
 
-const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'SOFOR', sirketId: '', sehir: '', tcNo: '' };
+const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'SOFOR', sirketId: '', calistigiKurum: '', tcNo: '' };
 
 export default function PersonelClient({
     initialData,
@@ -88,7 +89,7 @@ export default function PersonelClient({
             telefon: row.telefon === "-" ? "" : row.telefon,
             rol: row.rol as Rol,
             sirketId: row.sirketId || '',
-            sehir: (row.sehir === "-" ? "" : row.sehir) as PersonelFormData["sehir"],
+            calistigiKurum: row.calistigiKurum === "-" ? "" : row.calistigiKurum,
             tcNo: row.tcNo === "-" ? "" : (row.tcNo || ''),
         });
         setEditRow(row);
@@ -188,7 +189,7 @@ export default function PersonelClient({
                 searchKey="adSoyad" 
                 searchPlaceholder="İsim ile ara..." 
                 serverFiltering={{
-                    statusOptions: ROLLER.map((rol) => ({ value: rol, label: rol })),
+                    statusOptions: ROLLER.map((rol) => ({ value: rol, label: getRoleLabel(rol) })),
                 }}
                 tableClassName="min-w-[1280px]"
                 onRowClick={(row) => router.push(`/dashboard/personel/${row.id}`)}

@@ -7,10 +7,11 @@ import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-s
 export default async function PersonelDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
     const selectedSirketId = await getSelectedSirketId(props.searchParams);
-    const [personelFilter, sirketListFilter, aracFilter] = await Promise.all([
+    const [personelFilter, sirketListFilter, aracFilter, arizaFilter] = await Promise.all([
         getModelFilter("kullanici", selectedSirketId),
         getSirketListFilter(),
         getModelFilter("arac", selectedSirketId),
+        getModelFilter("arizaKaydi", selectedSirketId),
     ]);
 
     const whereClause = {
@@ -80,8 +81,10 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
     const arizalar = await (prisma as any).arizaKaydi
         .findMany({
             where: {
-                soforId: personel.id,
-                ...(selectedSirketId ? { sirketId: selectedSirketId } : {}),
+                AND: [
+                    { soforId: personel.id },
+                    arizaFilter as any,
+                ],
             },
             include: {
                 arac: {
@@ -99,11 +102,12 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
         });
 
     // Eski/yeni şema farklarını tek formata çek.
+    const activeZimmet = (personel.zimmetler || []).find((z: any) => !z.bitis) || null;
     const normalizedPersonel = {
         ...personel,
         sirket: personel.sirket || null,
         hesap: personel.hesap || null,
-        arac: personel.arac || null,
+        arac: personel.arac || activeZimmet?.arac || null,
         zimmetler: personel.zimmetler || [],
         arizalar: arizalar || [],
         cezalar: (personel.cezalar || [])
@@ -129,12 +133,18 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             where: {
                 ...(aracFilter as any),
                 kullaniciId: null,
+                kullaniciGecmisi: {
+                    none: {
+                        bitis: null,
+                    },
+                },
             },
             select: {
                 id: true,
                 plaka: true,
                 marka: true,
                 model: true,
+                durum: true,
                 guncelKm: true,
                 sirket: { select: { ad: true } }
             },

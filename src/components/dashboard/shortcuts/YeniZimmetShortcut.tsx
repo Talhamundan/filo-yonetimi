@@ -5,18 +5,21 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { ClipboardCheck, Plus } from "lucide-react";
 import { getAraclarSelect, getKullanicilarSelect } from "./actions";
 import { createZimmet } from "@/app/dashboard/zimmetler/actions";
 import { useRouter } from "next/navigation";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
+import { nowDateTimeLocal } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 
 const EMPTY = {
     aracId: '',
     kullaniciId: '',
-    baslangic: new Date().toISOString().split('T')[0],
+    baslangic: nowDateTimeLocal(),
     baslangicKm: 0,
     notlar: ''
 };
@@ -105,31 +108,43 @@ export default function YeniZimmetShortcut({ className, asDropdownItem }: { clas
                     <div className="grid gap-4 py-4">
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
-                            <select 
+                            <SearchableSelect
                                 value={formData.aracId} 
-                                onChange={e => handleAracChange(e.target.value)}
-                                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                            >
-                                <option value="">Seçiniz...</option>
-                                {araclar.map(a => <option key={a.id} value={a.id}>{a.plaka}</option>)}
-                            </select>
+                                onValueChange={handleAracChange}
+                                placeholder="Seçiniz..."
+                                searchPlaceholder="Plaka / araç ara..."
+                                options={[
+                                    { value: "", label: "Seçiniz..." },
+                                    ...araclar.map((a) => ({
+                                        value: a.id,
+                                        label: formatAracOptionLabel(a),
+                                        searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                                    })),
+                                ]}
+                            />
                             <SelectedAracInfo arac={selectedArac} />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Personel / Şoför <span className="text-red-500">*</span></label>
-                            <select 
+                            <SearchableSelect
                                 value={formData.kullaniciId} 
-                                onChange={e => setFormData({...formData, kullaniciId: e.target.value})}
-                                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                            >
-                                <option value="">Seçiniz...</option>
-                                {kullanicilar.map(k => <option key={k.id} value={k.id}>{k.adSoyad}</option>)}
-                            </select>
+                                onValueChange={(value) => setFormData({ ...formData, kullaniciId: value })}
+                                placeholder="Seçiniz..."
+                                searchPlaceholder="Personel ara..."
+                                options={[
+                                    { value: "", label: "Seçiniz..." },
+                                    ...kullanicilar.map((k) => ({
+                                        value: k.id,
+                                        label: k.adSoyad,
+                                        searchText: k.adSoyad,
+                                    })),
+                                ]}
+                            />
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Teslim Tarihi</label>
-                                <Input type="date" value={formData.baslangic} onChange={e => setFormData({...formData, baslangic: e.target.value})} className="h-9" />
+                                <Input type="datetime-local" value={formData.baslangic} onChange={e => setFormData({...formData, baslangic: e.target.value})} className="h-9" />
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Teslim KM</label>

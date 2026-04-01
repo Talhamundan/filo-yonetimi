@@ -6,7 +6,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { AlertTriangle, CheckCircle2, Clock, ShieldAlert } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/ui/data-table";
-import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
+import ReportExportToolbar from "@/components/ui/report-export-toolbar";
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { DEADLINE_STATUS_CLASS, getDeadlineLabel, type DeadlineStatus } from "@/lib/deadline-status";
@@ -71,7 +71,14 @@ function getColumns(showCompanyInfo: boolean): ColumnDef<EvrakRow>[] {
             header: "Geçerlilik Tarihi",
             cell: ({ row }) => (
                 <span className="font-medium text-slate-700">
-                    {new Date(row.original.gecerlilikTarihi).toLocaleDateString("tr-TR")}
+                    {new Date(row.original.gecerlilikTarihi).toLocaleString("tr-TR", {
+                        day: "2-digit",
+                        month: "2-digit",
+                        year: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        hour12: false,
+                    })}
                 </span>
             ),
         },
@@ -118,32 +125,8 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
             <DataTable
                 columns={columns}
                 data={initialEvraklar}
-                searchKey="plaka"
-                searchPlaceholder="Plakaya göre evrak kaydı ara..."
-                toolbarArrangement="report-right-scroll"
-                serverFiltering={{
-                    statusOptions: [
-                        { value: "GECIKTI", label: "Gecikti" },
-                        { value: "YUKSEK", label: "Yüksek" },
-                        { value: "YAKLASTI", label: "Yaklaşıyor" },
-                        { value: "GECERLI", label: "Geçerli" },
-                    ],
-                    typeOptions: [
-                        { value: "Muayene", label: "Muayene" },
-                        { value: "Kasko", label: "Kasko" },
-                        { value: "Trafik Sigortası", label: "Trafik Sigortası" },
-                    ],
-                    showDateRange: true,
-                }}
                 toolbarRight={(
-                    <ExcelTransferToolbar
-                        className="w-auto pb-0"
-                        options={[
-                            { entity: "muayene", label: "Muayene" },
-                            { entity: "kasko", label: "Kasko" },
-                            { entity: "trafikSigortasi", label: "Trafik Sigortası" },
-                        ]}
-                    />
+                    <ReportExportToolbar report="document-expirations" className="w-full sm:w-auto" />
                 )}
                 onRowClick={(row) => router.push(`/dashboard/araclar/${row.aracId}`)}
             />

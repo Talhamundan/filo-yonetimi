@@ -100,6 +100,36 @@ export async function getAracMaxKnownKm(aracId: string, tx: TxClient = prisma) {
     );
 }
 
+export async function getAracMaxRelatedKm(aracId: string, tx: TxClient = prisma) {
+    const [
+        yakitKm,
+        bakimKm,
+        muayeneKm,
+        hgsKm,
+        cezaKm,
+        zimmetBaslangicKm,
+        zimmetBitisKm,
+    ] = await Promise.all([
+        safeAggregateMax(tx, "yakit", "km", aracId),
+        safeAggregateMax(tx, "bakim", "yapilanKm", aracId),
+        safeAggregateMax(tx, "muayene", "km", aracId),
+        safeAggregateMax(tx, "hgsYukleme", "km", aracId),
+        safeAggregateMax(tx, "ceza", "km", aracId),
+        safeAggregateMax(tx, "kullaniciZimmet", "baslangicKm", aracId),
+        safeAggregateMax(tx, "kullaniciZimmet", "bitisKm", aracId),
+    ]);
+
+    return Math.max(
+        yakitKm,
+        bakimKm,
+        muayeneKm,
+        hgsKm,
+        cezaKm,
+        zimmetBaslangicKm,
+        zimmetBitisKm
+    );
+}
+
 export async function assertKmWriteConsistency(params: {
     aracId: string;
     km: unknown;
@@ -165,11 +195,16 @@ export async function resolveAracGuncelKmForUpdate(
     tx: TxClient = prisma
 ) {
     const normalizedRequestedKm = normalizeKmInput(requestedKm);
-    const maxKnownKm = await getAracMaxKnownKm(aracId, tx);
+    const aracRow = await tx.arac.findUnique({
+        where: { id: aracId },
+        select: { guncelKm: true },
+    });
+    const currentAracKm = Number(aracRow?.guncelKm || 0);
+    const maxRelatedKm = await getAracMaxRelatedKm(aracId, tx);
 
     if (normalizedRequestedKm === null) {
-        return maxKnownKm;
+        return Math.max(currentAracKm, maxRelatedKm);
     }
 
-    return Math.max(normalizedRequestedKm, maxKnownKm);
+    return Math.max(normalizedRequestedKm, maxRelatedKm);
 }

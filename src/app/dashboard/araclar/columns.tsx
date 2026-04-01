@@ -4,23 +4,26 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Badge } from "../../../components/ui/badge"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status"
-import { PersonelLink } from "@/components/links/RecordLinks"
+import { PersonelLink, SirketLink } from "@/components/links/RecordLinks"
 
 export type AracRow = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka: string;
     model: string;
     yil: number;
     bulunduguIl: string;
     guncelKm: number;
+    bedel?: number | null;
+    aciklama?: string | null;
     durum: string;
     kategori: string;
     hgsNo?: string | null;
     saseNo?: string | null;
-    kullanici?: { id: string; ad: string, soyad: string } | null;
+    calistigiKurum?: string | null;
+    kullanici?: { id: string; ad: string, soyad: string; sirket?: { id: string; ad: string } | null } | null;
     kullaniciId?: string | null;
-    sirket?: { ad: string } | null;
+    sirket?: { id: string; ad: string } | null;
     muayene?: { gecerlilikTarihi: Date }[];
     kasko?: { bitisTarihi: Date }[];
     trafikSigortasi?: { bitisTarihi: Date }[];
@@ -53,6 +56,11 @@ function renderGecerlilikDurumu(tarih: Date) {
 }
 
 export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef<AracRow>[] => {
+    const formatBulunduguIl = (value?: string | null) => {
+        if (!value) return "-";
+        return value.toString().replaceAll("_", " ");
+    };
+
     const columns: ColumnDef<AracRow>[] = [
         {
             accessorKey: "durum",
@@ -83,14 +91,59 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
                 return (
                     <VehicleIdentityCell
                         aracId={row.original.id}
-                        plaka={row.original.plaka}
-                        subtitle={`${row.original.marka} ${row.original.model}`}
-                        companyName={row.original.sirket?.ad}
-                        showCompanyInfo={showCompanyInfo}
+                        plaka={row.original.plaka || "-"}
                     />
                 )
             },
         },
+        ...(showCompanyInfo
+            ? ([
+                  {
+                      accessorKey: "operasyonFirma",
+                      header: "Ruhsat Sahibi",
+                      accessorFn: (row: AracRow) => row.sirket?.ad || "Bağımsız",
+                      cell: ({ row }) => {
+                          const sirketId = row.original.sirket?.id;
+                          const sirketAd = row.original.sirket?.ad || "Bağımsız";
+                          if (!sirketId) {
+                              return <span className="text-sm font-medium text-slate-500">{sirketAd}</span>;
+                          }
+                          return (
+                              <SirketLink
+                                  sirketId={sirketId}
+                                  className="text-sm font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
+                              >
+                                  {sirketAd}
+                              </SirketLink>
+                          );
+                      },
+                  },
+                  {
+                      accessorKey: "kullaniciFirma",
+                      header: "Kullanıcı Firma",
+                      accessorFn: (row: AracRow) => row.calistigiKurum?.trim() || row.kullanici?.sirket?.ad || "-",
+                      cell: ({ row }) => {
+                          const manualFirma = row.original.calistigiKurum?.trim();
+                          const sirketId = row.original.kullanici?.sirket?.id;
+                          const sirketAd = manualFirma || row.original.kullanici?.sirket?.ad || "-";
+                          if (manualFirma) {
+                              return <span className="text-sm font-medium text-slate-700">{manualFirma}</span>;
+                          }
+                          if (!sirketId) {
+                              return <span className="text-sm text-slate-500">{sirketAd}</span>;
+                          }
+                          return (
+                              <SirketLink
+                                  sirketId={sirketId}
+                                  className="text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
+                              >
+                                  {sirketAd}
+                              </SirketLink>
+                          );
+                      },
+                  },
+              ] as ColumnDef<AracRow>[])
+            : []),
         {
             accessorKey: "saseNo",
             header: "Şase No",
@@ -104,9 +157,16 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
             header: "Kategori",
             cell: ({ row }) => {
                 const cat = row.original.kategori;
-                const labels: any = { 'IS_MAKINESI': 'İş Makinesi', 'KAMYON_TIR': 'Kamyon/Tır', 'BINEK': 'Binek' };
+                const labels: Record<string, string> = { SANTIYE: "Şantiye", BINEK: "Binek" };
                 return <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{labels[cat] || cat}</span>;
             }
+        },
+        {
+            accessorKey: "bulunduguIl",
+            header: "Bulunduğu Şantiye",
+            cell: ({ row }) => (
+                <span className="text-sm font-medium text-slate-700">{formatBulunduguIl(row.original.bulunduguIl)}</span>
+            ),
         },
         {
             accessorKey: "marka",
@@ -116,10 +176,39 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
                     <div className="flex flex-col">
                         <span className="font-medium text-slate-900">{row.original.marka} {row.original.model}</span>
                         <span className="text-[11px] text-slate-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                            {row.original.yil} • {row.original.bulunduguIl}
+                            {row.original.yil}
                         </span>
                     </div>
                 )
+            },
+        },
+        {
+            accessorKey: "aciklama",
+            header: "Açıklama",
+            cell: ({ row }) => {
+                const aciklama = row.original.aciklama?.trim();
+                if (!aciklama) {
+                    return <span className="text-slate-400 text-xs italic">-</span>;
+                }
+                return (
+                    <span
+                        className="block max-w-[220px] truncate text-sm text-slate-700"
+                        title={aciklama}
+                    >
+                        {aciklama}
+                    </span>
+                );
+            },
+        },
+        {
+            accessorKey: "bedel",
+            header: "BEDEL",
+            cell: ({ row }) => {
+                const bedel = Number(row.original.bedel ?? 0);
+                if (!row.original.bedel && row.original.bedel !== 0) {
+                    return <span className="text-slate-400 text-xs italic">-</span>;
+                }
+                return <div className="font-semibold text-slate-700">{formatCurrency(bedel)}</div>;
             },
         },
         {
@@ -132,14 +221,14 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
         },
         {
             accessorKey: "sofor_ad",
-            header: "Şoför",
+            header: "Kullanıcı",
             accessorFn: (row) => row.kullanici ? `${row.kullanici.ad} ${row.kullanici.soyad}` : "Atanmamış",
             cell: ({ row }) => {
                 const kullanici = row.original.kullanici
                 return kullanici ? (
                     <PersonelLink
                         personelId={row.original.kullaniciId || kullanici.id}
-                        className="font-medium text-slate-700 hover:text-indigo-600 hover:underline"
+                        className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline"
                     >
                         {kullanici.ad} {kullanici.soyad}
                     </PersonelLink>
@@ -159,10 +248,6 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
             accessorKey: "muayene",
             header: "Muayene",
             cell: ({ row }) => {
-                if (row.original.kategori === "IS_MAKINESI") {
-                    return <Badge className="bg-slate-100 text-slate-600 hover:bg-slate-200 border-0 shadow-none px-2.5 py-0.5 text-[10px]">Muaf</Badge>;
-                }
-
                 const muayeneList = row.original.muayene;
                 if (!muayeneList || muayeneList.length === 0) {
                     return <span className="text-slate-400 text-xs italic">Yok</span>;

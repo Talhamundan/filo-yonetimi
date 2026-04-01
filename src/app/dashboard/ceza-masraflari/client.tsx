@@ -8,6 +8,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { CezaMasrafRow, getColumns } from "./columns";
@@ -15,12 +16,14 @@ import { createCezaMasraf, deleteCezaMasraf, updateCezaMasraf } from "./actions"
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
+import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
-const todayDate = () => new Date().toISOString().slice(0, 10);
+const todayDate = () => nowDateTimeLocal();
 const oneMonthAfter = () => {
     const date = new Date();
     date.setMonth(date.getMonth() + 1);
-    return date.toISOString().slice(0, 10);
+    return toDateTimeLocalInput(date);
 };
 
 const EMPTY = {
@@ -37,9 +40,10 @@ const EMPTY = {
 
 type AracOption = {
     id: string;
-    plaka: string;
+    plaka: string | null;
     marka?: string | null;
     model?: string | null;
+    durum?: string | null;
     bulunduguIl?: string | null;
 };
 type SoforOption = { id: string; adSoyad: string };
@@ -58,62 +62,61 @@ function FormFields({
     autoAssignFromArac?: boolean;
 }) {
     const selectedArac = araclar.find((a) => a.id === formData.aracId);
-    const hasActiveSofor = Boolean(autoAssignFromArac && selectedArac?.aktifSoforId);
+    const soforIdSet = React.useMemo(() => new Set(soforler.map((sofor) => sofor.id)), [soforler]);
 
     return (
         <div className="grid gap-4 py-4">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Arac (Plaka) <span className="text-red-500">*</span></label>
-                <select
+                <SearchableSelect
                     value={formData.aracId}
-                    onChange={(e) => {
-                        const selected = araclar.find((a) => a.id === e.target.value);
+                    onValueChange={(value) => {
+                        const selected = araclar.find((a) => a.id === value);
                         setFormData((prev) => ({
                             ...prev,
-                            aracId: e.target.value,
-                            soforId: autoAssignFromArac ? selected?.aktifSoforId || "" : prev.soforId,
+                            aracId: value,
+                            soforId: autoAssignFromArac
+                                ? (selected?.aktifSoforId && soforIdSet.has(selected.aktifSoforId) ? selected.aktifSoforId : "")
+                                : prev.soforId,
                         }));
                     }}
-                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                    <option value="">Seciniz...</option>
-                    {araclar.map((a) => (
-                        <option key={a.id} value={a.id}>
-                            {a.plaka}
-                        </option>
-                    ))}
-                </select>
+                    placeholder="Seciniz..."
+                    searchPlaceholder="Plaka / araç ara..."
+                    options={[
+                        { value: "", label: "Seciniz..." },
+                        ...araclar.map((a) => ({
+                            value: a.id,
+                            label: formatAracOptionLabel(a),
+                            searchText: [a.plaka, a.marka, a.model].filter(Boolean).join(" "),
+                        })),
+                    ]}
+                />
                 <SelectedAracInfo arac={selectedArac} />
             </div>
 
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Sofor (Opsiyonel)</label>
-                {hasActiveSofor ? (
-                    <div className="space-y-1">
-                        <Input value={selectedArac?.aktifSoforAdSoyad || "-"} disabled className="h-9" />
-                        <p className="text-[11px] text-emerald-700 font-medium">Aktif sofor otomatik secildi.</p>
-                    </div>
-                ) : (
-                    <select
-                        value={formData.soforId}
-                        onChange={(e) => setFormData((prev) => ({ ...prev, soforId: e.target.value }))}
-                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                    >
-                        <option value="">Atanmamis</option>
-                        {soforler.map((s) => (
-                            <option key={s.id} value={s.id}>
-                                {s.adSoyad}
-                            </option>
-                        ))}
-                    </select>
-                )}
+                <SearchableSelect
+                    value={formData.soforId}
+                    onValueChange={(value) => setFormData((prev) => ({ ...prev, soforId: value }))}
+                    placeholder="Atanmamis"
+                    searchPlaceholder="Personel ara..."
+                    options={[
+                        { value: "", label: "Atanmamis" },
+                        ...soforler.map((s) => ({
+                            value: s.id,
+                            label: s.adSoyad,
+                            searchText: s.adSoyad,
+                        })),
+                    ]}
+                />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium">Ceza Tarihi <span className="text-red-500">*</span></label>
                     <Input
-                        type="date"
+                        type="datetime-local"
                         value={formData.tarih}
                         onChange={(e) => setFormData((prev) => ({ ...prev, tarih: e.target.value }))}
                         className="h-9"
@@ -122,7 +125,7 @@ function FormFields({
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium">Son Odeme Tarihi</label>
                     <Input
-                        type="date"
+                        type="datetime-local"
                         value={formData.sonOdemeTarihi}
                         onChange={(e) => setFormData((prev) => ({ ...prev, sonOdemeTarihi: e.target.value }))}
                         className="h-9"
@@ -205,6 +208,7 @@ export default function CezaMasraflariClient({
     const [loading, setLoading] = useState(false);
     const sortedAraclar = useMemo(() => sortByTextValue(araclar, (a) => a.plaka), [araclar]);
     const sortedSoforler = useMemo(() => sortByTextValue(soforler, (s) => s.adSoyad), [soforler]);
+    const soforIdSet = useMemo(() => new Set(sortedSoforler.map((sofor) => sofor.id)), [sortedSoforler]);
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.tarih || !formData.cezaMaddesi || !formData.tutar) {
@@ -288,9 +292,9 @@ export default function CezaMasraflariClient({
     const openEdit = (row: CezaMasrafRow) => {
         setFormData({
             aracId: row.aracId || "",
-            soforId: row.soforId || "",
-            tarih: row.tarih ? new Date(row.tarih).toISOString().slice(0, 10) : todayDate(),
-            sonOdemeTarihi: row.sonOdemeTarihi ? new Date(row.sonOdemeTarihi).toISOString().slice(0, 10) : "",
+            soforId: row.soforId && soforIdSet.has(row.soforId) ? row.soforId : "",
+            tarih: row.tarih ? toDateTimeLocalInput(row.tarih) : todayDate(),
+            sonOdemeTarihi: row.sonOdemeTarihi ? toDateTimeLocalInput(row.sonOdemeTarihi) : "",
             cezaMaddesi: row.cezaMaddesi || "",
             tutar: String(row.tutar || ""),
             km: row.km != null ? String(row.km) : "",
