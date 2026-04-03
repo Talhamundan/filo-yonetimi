@@ -13,7 +13,7 @@ import { createZimmet, deleteZimmet, finalizeZimmet, updateZimmet } from "./acti
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
-import { getPersonelDisplayName } from "@/lib/personel-display";
+import { getPersonelDisplayName, getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
@@ -49,7 +49,7 @@ export default function ZimmetlerClient({
 }: { 
     initialZimmetler: SoforZimmetRow[], 
     araclar: { id: string, plaka: string | null, marka?: string | null, model?: string | null, durum?: string | null, bulunduguIl?: string | null, guncelKm: number }[],
-    kullanicilar: { id: string, adSoyad: string }[],
+    kullanicilar: { id: string, adSoyad: string; sirketAd?: string | null; calistigiKurum?: string | null }[],
     isTeknik?: boolean;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
@@ -305,8 +305,8 @@ export default function ZimmetlerClient({
                                         { value: "", label: "Seçiniz..." },
                                         ...sortedKullanicilar.map((k) => ({
                                             value: k.id,
-                                            label: k.adSoyad,
-                                            searchText: k.adSoyad,
+                                            label: getPersonelOptionLabel(k),
+                                            searchText: getPersonelOptionSearchText(k),
                                         })),
                                     ]}
                                 />

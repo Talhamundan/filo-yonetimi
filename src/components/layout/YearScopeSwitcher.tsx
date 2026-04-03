@@ -19,7 +19,10 @@ export default function YearScopeSwitcher() {
     const currentYear = new Date().getFullYear();
     const selectedSirketId = searchParams.get("sirket");
     const rawSelectedYear = Number(searchParams.get("yil"));
-    const selectedYear = Number.isInteger(rawSelectedYear) ? rawSelectedYear : currentYear;
+    const selectedYear =
+        Number.isInteger(rawSelectedYear) && rawSelectedYear >= 2000 && rawSelectedYear <= currentYear
+            ? rawSelectedYear
+            : currentYear;
     const yearsApiParams = new URLSearchParams();
     if (selectedSirketId) yearsApiParams.set("sirket", selectedSirketId);
     const yearsApiKey = yearsApiParams.toString()
@@ -37,21 +40,15 @@ export default function YearScopeSwitcher() {
                 .sort((a, b) => b - a),
         [data?.years]
     );
-    const years = useMemo(
-        () => (dataYears.length > 0 ? dataYears : [currentYear]),
-        [currentYear, dataYears]
-    );
-    const effectiveSelectedYear = years.includes(selectedYear) ? selectedYear : years[0];
-
-    React.useEffect(() => {
-        if (dataYears.length === 0) return;
-        if (dataYears.includes(selectedYear)) return;
-
-        const nextParams = new URLSearchParams(searchParams.toString());
-        nextParams.set("yil", String(dataYears[0]));
-        const query = nextParams.toString();
-        router.replace(query ? `${pathname}?${query}` : pathname);
-    }, [dataYears, pathname, router, searchParams, selectedYear]);
+    const years = useMemo(() => {
+        const mergedYears = new Set<number>(dataYears);
+        mergedYears.add(currentYear);
+        if (Number.isInteger(rawSelectedYear) && rawSelectedYear >= 2000 && rawSelectedYear <= currentYear) {
+            mergedYears.add(rawSelectedYear);
+        }
+        return Array.from(mergedYears).sort((a, b) => b - a);
+    }, [currentYear, dataYears, rawSelectedYear]);
+    const effectiveSelectedYear = years.includes(selectedYear) ? selectedYear : currentYear;
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const value = Number(event.target.value);

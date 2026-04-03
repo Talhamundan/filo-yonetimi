@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { cache } from "react";
+import { prisma } from "@/lib/prisma";
 import {
     canRoleAccessAllCompanies,
     getModelFilterByPolicy,
@@ -45,6 +46,54 @@ export async function getSirketFilter(selectedSirketId?: string | null) {
  */
 export async function getModelFilter(modelName: string, selectedSirketId?: string | null) {
     return getModelFilterWithOptions(modelName, selectedSirketId, { includeDeleted: false });
+}
+
+function normalizeCompanyName(value: string | null | undefined) {
+    const normalized = typeof value === "string" ? value.trim() : "";
+    return normalized || null;
+}
+
+/**
+ * Araç kullanım kapsamı filtresi:
+ * - Standart politika filtresini korur
+ * - Seçili kapsam şirketi varsa, manuel girilmiş `calistigiKurum` metnini de aynı şirkete eşler
+ */
+export async function getAracUsageFilter(selectedSirketId?: string | null) {
+    const baseFilter = (await getModelFilter("arac", selectedSirketId)) as Record<string, unknown>;
+    const session = await getSession();
+    const role = session?.user?.rol;
+
+    if (isDriverRole(role)) {
+        return baseFilter;
+    }
+
+    const scopedSirketId = await getScopedSirketId(selectedSirketId);
+    if (!scopedSirketId) {
+        return baseFilter;
+    }
+
+    const sirket = await prisma.sirket
+        .findUnique({
+            where: { id: scopedSirketId },
+            select: { ad: true },
+        })
+        .catch(() => null);
+    const sirketAd = normalizeCompanyName(sirket?.ad);
+    if (!sirketAd) {
+        return baseFilter;
+    }
+
+    return {
+        OR: [
+            baseFilter,
+            {
+                calistigiKurum: {
+                    equals: sirketAd,
+                    mode: "insensitive",
+                },
+            },
+        ],
+    } as Record<string, unknown>;
 }
 
 export async function getModelFilterWithOptions(

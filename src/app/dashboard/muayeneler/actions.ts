@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { normalizeKmInput, syncAracGuncelKm } from "@/lib/km-consistency";
 import { ensureMuayeneColumns, isMuayeneOptionalFieldCompatibilityError } from "@/lib/muayene-schema-compat";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/muayeneler';
 const EVRAK_PATH = "/dashboard/evrak-takip";
@@ -117,7 +118,7 @@ async function tryUpdateMuayeneWithFallback(
 
 export async function createMuayene(data: {
     aracId: string;
-    muayeneTarihi: string;
+    muayeneTarihi?: string;
     gecerlilikTarihi: string;
     tutar?: number;
     gectiMi?: boolean;
@@ -131,16 +132,24 @@ export async function createMuayene(data: {
             id: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
         const normalizedKm =
             data.km !== undefined
                 ? normalizeKmInput(data.km)
                 : null;
+        const parsedGecerlilikTarihi = parseDateInput(data.gecerlilikTarihi);
+        const parsedMuayeneTarihi = data.muayeneTarihi
+            ? parseDateInput(data.muayeneTarihi)
+            : parsedGecerlilikTarihi;
 
         const baseData = {
             aracId: arac.id,
-            sirketId: arac.sirketId,
-            muayeneTarihi: parseDateInput(data.muayeneTarihi),
-            gecerlilikTarihi: parseDateInput(data.gecerlilikTarihi),
+            sirketId: usageSirketId,
+            muayeneTarihi: parsedMuayeneTarihi,
+            gecerlilikTarihi: parsedGecerlilikTarihi,
             km: normalizedKm,
             aktifMi: data.aktifMi ?? true,
         };
@@ -199,6 +208,10 @@ export async function updateMuayene(id: string, data: any) {
         const arac = data.aracId
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId || mevcutKayit.sirketId,
+        });
 
         const kmInput =
             data.km !== undefined
@@ -213,7 +226,7 @@ export async function updateMuayene(id: string, data: any) {
 
         const baseUpdateData = {
             aracId: arac.id,
-            sirketId: arac.sirketId || mevcutKayit.sirketId,
+            sirketId: usageSirketId || mevcutKayit.sirketId,
             muayeneTarihi: data.muayeneTarihi ? parseDateInput(data.muayeneTarihi) : undefined,
             gecerlilikTarihi: data.gecerlilikTarihi ? parseDateInput(data.gecerlilikTarihi) : undefined,
             km: data.km !== undefined ? normalizedKm : undefined,

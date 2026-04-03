@@ -24,7 +24,6 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         kaskoFilter,
         trafikFilter,
         cezaFilter,
-        hgsFilter,
         dokumanFilter,
         zimmetFilter,
     ] = await Promise.all([
@@ -36,7 +35,6 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         getModelFilter("kasko", selectedSirketId),
         getModelFilter("trafikSigortasi", selectedSirketId),
         getModelFilter("ceza", selectedSirketId),
-        getModelFilter("hgs", selectedSirketId),
         getModelFilter("dokuman", selectedSirketId),
         getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
@@ -55,7 +53,6 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         kaskoRows,
         trafikRows,
         cezaRows,
-        hgsRows,
         dokumanRows,
         zimmetRows,
     ] = await Promise.all([
@@ -77,7 +74,6 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         (prisma as any).ceza
             .findMany({ where: cezaFilter as any, select: { tarih: true, sonOdemeTarihi: true } })
             .catch(() => []),
-        (prisma as any).hgsYukleme.findMany({ where: hgsFilter as any, select: { tarih: true } }).catch(() => []),
         (prisma as any).dokuman.findMany({ where: dokumanFilter as any, select: { yuklemeTarihi: true } }).catch(() => []),
         (prisma as any).kullaniciZimmet
             .findMany({ where: zimmetFilter as any, select: { baslangic: true, bitis: true } })
@@ -104,7 +100,6 @@ export async function getAvailableYears(selectedSirketId?: string | null) {
         addYear(years, row.tarih);
         addYear(years, row.sonOdemeTarihi);
     });
-    (hgsRows as Array<{ tarih?: Date | null }>).forEach((row) => addYear(years, row.tarih));
     (dokumanRows as Array<{ yuklemeTarihi?: Date | null }>).forEach((row) => addYear(years, row.yuklemeTarihi));
     (zimmetRows as Array<{ baslangic?: Date | null; bitis?: Date | null }>).forEach((row) => {
         addYear(years, row.baslangic);

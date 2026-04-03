@@ -68,6 +68,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         { arac: { plaka: { contains: token, mode: "insensitive" } } },
         { arac: { marka: { contains: token, mode: "insensitive" } } },
         { arac: { model: { contains: token, mode: "insensitive" } } },
+        { arac: { calistigiKurum: { contains: token, mode: "insensitive" } } },
         { sofor: { ad: { contains: token, mode: "insensitive" } } },
         { sofor: { soyad: { contains: token, mode: "insensitive" } } },
     ]);
@@ -87,17 +88,42 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             where: scopedYakitWhere as any,
             orderBy: { tarih: 'desc' }, 
             include: { 
-                sofor: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                sofor: {
+                    select: {
+                        id: true,
+                        ad: true,
+                        soyad: true,
+                        deletedAt: true,
+                        calistigiKurum: true,
+                        sirket: { select: { ad: true } },
+                    },
+                },
                 arac: {
                     include: {
                         sirket: { select: { ad: true } },
-                        kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                        kullanici: {
+                            select: {
+                                id: true,
+                                ad: true,
+                                soyad: true,
+                                deletedAt: true,
+                                sirket: { select: { ad: true } },
+                            },
+                        },
                         kullaniciGecmisi: {
                             where: { bitis: null },
                             orderBy: { baslangic: "desc" },
                             take: 1,
                             select: {
-                                kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                                kullanici: {
+                                    select: {
+                                        id: true,
+                                        ad: true,
+                                        soyad: true,
+                                        deletedAt: true,
+                                        sirket: { select: { ad: true } },
+                                    },
+                                },
                             },
                         },
                     }
@@ -112,15 +138,33 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 marka: true,
                 model: true,
                 bulunduguIl: true,
+                calistigiKurum: true,
                 guncelKm: true,
                 durum: true,
-                kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                sirket: { select: { ad: true } },
+                kullanici: {
+                    select: {
+                        id: true,
+                        ad: true,
+                        soyad: true,
+                        deletedAt: true,
+                        sirket: { select: { ad: true } },
+                    },
+                },
                 kullaniciGecmisi: {
                     where: { bitis: null },
                     orderBy: { baslangic: "desc" },
                     take: 1,
                     select: {
-                        kullanici: { select: { id: true, ad: true, soyad: true, deletedAt: true } },
+                        kullanici: {
+                            select: {
+                                id: true,
+                                ad: true,
+                                soyad: true,
+                                deletedAt: true,
+                                sirket: { select: { ad: true } },
+                            },
+                        },
                     },
                 },
             },
@@ -136,6 +180,8 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 ad: true,
                 soyad: true,
                 rol: true,
+                calistigiKurum: true,
+                sirket: { select: { ad: true } },
             },
             orderBy: [{ ad: "asc" }, { soyad: "asc" }],
         }).catch(() => [])
@@ -156,12 +202,14 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
     const yakitlarWithMetrics: YakitRow[] = rawYakitlar.map((row) => {
         const metric = byCurrentRecordId.get(row.id);
         const aracAktifSofor = row.arac?.kullaniciGecmisi?.[0]?.kullanici || row.arac?.kullanici || null;
+        const kullanimSirket = aracAktifSofor?.sirket || row.arac?.sirket || null;
         return {
             ...row,
             arac: row.arac
                 ? {
                     ...row.arac,
                     kullanici: aracAktifSofor,
+                    sirket: kullanimSirket,
                 }
                 : row.arac,
             ortalamaYakit100Km: metric?.averageLitresPer100Km ?? null,
@@ -175,6 +223,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             initialYakitlar={yakitlarWithMetrics}
             araclar={(araclar as any[]).map((a) => {
                 const aktifSofor = a.kullaniciGecmisi?.[0]?.kullanici || a.kullanici || null;
+                const kullanimSirketAd = aktifSofor?.sirket?.ad || a.sirket?.ad || null;
                 return {
                 id: a.id,
                 plaka: a.plaka,
@@ -182,6 +231,8 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 model: a.model,
                 durum: a.durum,
                 bulunduguIl: a.bulunduguIl,
+                calistigiKurum: a.calistigiKurum || null,
+                sirketAd: kullanimSirketAd,
                 guncelKm: a.guncelKm,
                 aktifSoforId: getActivePersonelId(aktifSofor),
                 aktifSofor: aktifSofor || null,
@@ -190,7 +241,11 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 kullanici: a.kullanici || null,
             };
             })}
-            personeller={personeller as any[]}
+            personeller={(personeller as any[]).map((p) => ({
+                ...p,
+                sirketAd: p.sirket?.ad || null,
+                calistigiKurum: p.calistigiKurum || null,
+            }))}
         />
     );
 }

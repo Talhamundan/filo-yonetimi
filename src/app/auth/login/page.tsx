@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { Mail, Lock } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 
 const REMEMBERED_USERNAME_KEY = "auth.rememberedUsername";
@@ -17,6 +17,7 @@ export default function LoginPage() {
     const [loading, setLoading] = useState(false);
     const [rememberMe, setRememberMe] = useState(Boolean(rememberedUsername));
     const [formData, setFormData] = useState({ kullaniciAdi: rememberedUsername, sifre: "" });
+    const [showPasswordWhilePressed, setShowPasswordWhilePressed] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -85,12 +86,32 @@ export default function LoginPage() {
                                 <Lock size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                                 <input
                                     required
-                                    type="password"
+                                    type={showPasswordWhilePressed ? "text" : "password"}
                                     value={formData.sifre}
                                     onChange={(e) => setFormData({ ...formData, sifre: e.target.value })}
-                                    className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition focus:border-slate-500"
+                                    className="h-11 w-full rounded-lg border border-slate-300 bg-white pl-10 pr-10 text-sm text-slate-900 outline-none transition focus:border-slate-500"
                                     placeholder="Parola Giriniz"
                                 />
+                                <button
+                                    type="button"
+                                    onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        setShowPasswordWhilePressed(true);
+                                    }}
+                                    onMouseUp={() => setShowPasswordWhilePressed(false)}
+                                    onMouseLeave={() => setShowPasswordWhilePressed(false)}
+                                    onTouchStart={(event) => {
+                                        event.preventDefault();
+                                        setShowPasswordWhilePressed(true);
+                                    }}
+                                    onTouchEnd={() => setShowPasswordWhilePressed(false)}
+                                    onTouchCancel={() => setShowPasswordWhilePressed(false)}
+                                    aria-label="Basılı tutarak parolayı göster"
+                                    title="Basılı tutarak parolayı göster"
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 transition hover:text-slate-600"
+                                >
+                                    {showPasswordWhilePressed ? <EyeOff size={16} /> : <Eye size={16} />}
+                                </button>
                             </div>
                         </div>
 

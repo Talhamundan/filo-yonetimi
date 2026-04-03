@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { getSirketFilter } from "@/lib/auth-utils"
+import { getAracUsageFilter, getSirketFilter } from "@/lib/auth-utils"
 import { getDashboardData } from "@/lib/dashboard-data"
 import { getSelectedAy, getSelectedYil } from "@/lib/company-scope"
 
@@ -15,9 +15,13 @@ export async function GET(request: Request) {
     ay: searchParams.get("ay") || undefined,
     yil: searchParams.get("yil") || undefined,
   })
-  const sirketFilter = await getSirketFilter(selectedSirketId)
+  const [sirketFilter, aracFilter] = await Promise.all([
+    getSirketFilter(selectedSirketId),
+    getAracUsageFilter(selectedSirketId),
+  ])
   const data = await getDashboardData(
     sirketFilter || null,
+    (aracFilter as Record<string, unknown>) || null,
     selectedYil,
     selectedAy ?? new Date().getMonth() + 1,
     comparisonGranularity

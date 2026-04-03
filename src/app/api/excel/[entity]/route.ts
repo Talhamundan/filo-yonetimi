@@ -6,6 +6,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
 import { withYilDateFilter } from "@/lib/company-scope";
 import { EXCEL_ENTITY_CONFIG, isExcelEntityKey } from "@/lib/excel-entities";
+import { syncAracGuncelKm } from "@/lib/km-consistency";
+import { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
 
 type PrismaField = (typeof Prisma.dmmf.datamodel.models)[number]["fields"][number];
 type RowData = Record<string, unknown>;
@@ -27,8 +29,8 @@ type ModelDelegate = {
         select?: Record<string, boolean>;
         take?: number;
     }) => Promise<RowData[]>;
-    create?: (args: { data: RowData }) => Promise<unknown>;
-    update?: (args: { where: WhereData; data: RowData }) => Promise<unknown>;
+    create?: (args: { data: RowData; select?: Record<string, boolean> }) => Promise<unknown>;
+    update?: (args: { where: WhereData; data: RowData; select?: Record<string, boolean> }) => Promise<unknown>;
     upsert?: (args: { where: WhereData; create: RowData; update: RowData }) => Promise<unknown>;
     findUnique?: (args: { where: WhereData; select: Record<string, boolean> }) => Promise<RowData | null>;
 };
@@ -39,6 +41,7 @@ type ExcelModelProfile = {
     hiddenColumns?: string[];
     labels?: Record<string, string>;
     aliases?: Record<string, string[]>;
+    strictVisibleColumns?: boolean;
 };
 
 const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
@@ -57,7 +60,6 @@ const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "bedel",
             "guncelKm",
             "kullanici",
-            "hgsNo",
             "ruhsatSeriNo",
             "aciklama",
         ],
@@ -76,7 +78,6 @@ const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             bedel: "BEDEL",
             guncelKm: "KM",
             kullanici: "Kullanıcı",
-            hgsNo: "HGS No",
             ruhsatSeriNo: "Ruhsat Seri No",
             aciklama: "Açıklama",
         },
@@ -154,26 +155,33 @@ const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         visibleColumns: [
             "tarih",
             "arac",
+            "bagliSirket",
+            "calistigiKurum",
             "sofor",
-            "litre",
-            "tutar",
             "km",
+            "litre",
             "istasyon",
-            "odemeYontemi",
         ],
+        strictVisibleColumns: true,
         labels: {
-            tarih: "Tarih",
-            arac: "Araç",
-            sofor: "Yakıtı Alan",
-            litre: "Litre",
-            tutar: "Tutar",
-            km: "KM",
-            istasyon: "İstasyon",
-            odemeYontemi: "Ödeme Yöntemi",
+            tarih: "Tarih Saat",
+            arac: "Araç Plakası",
+            bagliSirket: "Bağlı Şirket",
+            calistigiKurum: "Çalıştığı Kurum",
+            sofor: "Yakıt Alan Personel",
+            km: "KM/Saat",
+            litre: "Alınan Litre",
+            istasyon: "Yakıt Çıkışı",
         },
         aliases: {
-            sofor: ["Yakıtı Alan", "Yakit Alan", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici"],
-            odemeYontemi: ["Ödeme Şekli", "Odeme Sekli"],
+            tarih: ["Tarih", "Tarih Saati", "Alım Tarihi", "Alim Tarihi", "Alım Tarihi & Saati"],
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            bagliSirket: ["Bağlı Şirket", "Bagli Sirket", "Ruhsat Sahibi", "Şirket", "Sirket"],
+            calistigiKurum: ["Çalıştığı Kurum", "Calistigi Kurum", "Kullanıcı Firma", "Kullanici Firma"],
+            sofor: ["Yakıtı Alan", "Yakit Alan", "Yakıt Alan Personel", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici"],
+            km: ["KM", "Km", "km", "KM/Saat", "Alım KM", "Alim KM"],
+            litre: ["Litre", "Alınan Litre", "Alinan Litre"],
+            istasyon: ["Yakıt Çıkışı", "Yakit Cikisi", "Alındığı Yer", "Alindigi Yer", "İstasyon", "Istasyon", "Yakıt Alım Yeri", "Yakit Alim Yeri"],
         },
     },
     bakim: {
@@ -181,26 +189,44 @@ const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "bakimTarihi",
             "arac",
             "sofor",
-            "kategori",
-            "servisAdi",
+            "arizaSikayet",
             "yapilanIslemler",
-            "yapilanKm",
+            "degisenParca",
+            "islemYapanFirma",
             "tutar",
         ],
+        strictVisibleColumns: true,
         labels: {
             bakimTarihi: "Bakım Tarihi",
-            arac: "Araç",
-            sofor: "Servise Götüren",
-            kategori: "Kategori",
-            servisAdi: "Servis Adı",
-            yapilanIslemler: "Yapılan İşlemler",
-            yapilanKm: "Yapılan KM",
-            tutar: "Tutar",
+            arac: "Plaka",
+            sofor: "Şoför",
+            arizaSikayet: "Arıza Şikayet",
+            yapilanIslemler: "Yapılan İşlem",
+            degisenParca: "Değişen Parça",
+            islemYapanFirma: "İşlem Yapan Firma",
+            tutar: "Masraf Tutarı",
         },
         aliases: {
-            sofor: ["Servise Götüren", "Servise Goturen", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici"],
+            sofor: ["Şoför", "Sofor", "Servise Götüren", "Servise Goturen", "Personel", "Kullanıcı", "Kullanici"],
             bakimTarihi: ["Tarih"],
-            yapilanKm: ["İşlem KM", "Islem KM", "KM"],
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            arizaSikayet: ["Arıza Şikayet", "Ariza Sikayet", "Arıza Şikayeti", "Ariza Sikayeti", "Şikayet", "Sikayet", "Arıza Açıklama", "Ariza Aciklama"],
+            yapilanIslemler: ["Yapılan İşlem", "Yapılan İşlemler", "Yapilan Islem", "Yapilan Islemler", "İşlem", "Islem"],
+            degisenParca: ["Değişen Parça", "Degisen Parca", "Değişen Parçalar", "Degisen Parcalar"],
+            islemYapanFirma: ["İşlem Yapan Firma", "Islem Yapan Firma", "Servis Adı", "Servis Adi", "Servis Firması", "Servis Firmasi"],
+            tutar: ["Tutar", "Masraf", "Masraf Tutarı", "Masraf Tutari"],
+        },
+    },
+    muayene: {
+        visibleColumns: ["arac", "gecerlilikTarihi"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            gecerlilikTarihi: "Geçerlilik Tarihi",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            gecerlilikTarihi: ["Tarih", "Geçerlilik Bitiş", "Gecerlilik Bitis", "Bitiş Tarihi", "Bitis Tarihi"],
         },
     },
 };
@@ -332,8 +358,13 @@ function applyExportProfile(modelName: string, columnKeys: string[]) {
     if (profile.visibleColumns?.length) {
         const visibleSet = new Set(next);
         const ordered = profile.visibleColumns.filter((key) => visibleSet.has(key));
-        const remaining = next.filter((key) => !ordered.includes(key));
-        next = [...ordered, ...remaining];
+        if (profile.strictVisibleColumns) {
+            // Sablonda beklenen kolonlarin tamami her zaman gorunsun.
+            next = [...new Set(profile.visibleColumns)];
+        } else {
+            const remaining = next.filter((key) => !ordered.includes(key));
+            next = [...ordered, ...remaining];
+        }
     }
     return next;
 }
@@ -419,6 +450,7 @@ function buildRelationExportSelect(modelName: string) {
         return {
             ad: true,
             soyad: true,
+            calistigiKurum: true,
             sirket: { select: { ad: true } },
         };
     }
@@ -522,8 +554,7 @@ function buildExportColumns(
 }
 
 function getRelationImportHeaderAliases(modelName: string, foreignKeyFieldName: string) {
-    if (modelName !== "arac") return [];
-    if (foreignKeyFieldName === "sirketId") {
+    if (modelName === "arac" && foreignKeyFieldName === "sirketId") {
         return [
             "Ruhsat Sahibi",
             "Ruhsat Sahibi Firma",
@@ -534,6 +565,20 @@ function getRelationImportHeaderAliases(modelName: string, foreignKeyFieldName: 
             "ruhsatSahibi",
             "ruhsatSahibiFirma",
             "ruhsatSahibiFirmasi",
+        ];
+    }
+    if (modelName === "yakit" && foreignKeyFieldName === "sirketId") {
+        return [
+            "Bağlı Şirket",
+            "Bagli Sirket",
+            "Şirket",
+            "Sirket",
+            "Kullanıcı Firma",
+            "Kullanici Firma",
+            "Çalıştığı Kurum",
+            "Calistigi Kurum",
+            "bagliSirket",
+            "calistigiKurum",
         ];
     }
     return [];
@@ -933,6 +978,48 @@ function buildUpdateData(
     return data;
 }
 
+function applyYakitRelationWritesForCreate(data: Record<string, unknown>) {
+    const nextData = { ...data };
+    const aracId = typeof nextData.aracId === "string" ? nextData.aracId.trim() : "";
+    const soforId = typeof nextData.soforId === "string" ? nextData.soforId.trim() : "";
+
+    delete nextData.aracId;
+    delete nextData.soforId;
+
+    if (aracId) {
+        nextData.arac = { connect: { id: aracId } };
+    }
+    if (soforId) {
+        nextData.sofor = { connect: { id: soforId } };
+    }
+
+    return nextData;
+}
+
+function applyYakitRelationWritesForUpdate(
+    data: Record<string, unknown>,
+    parsedRow: Record<string, unknown>
+) {
+    const nextData = { ...data };
+    const hasAracValue = Object.prototype.hasOwnProperty.call(parsedRow, "aracId");
+    const hasSoforValue = Object.prototype.hasOwnProperty.call(parsedRow, "soforId");
+    const aracId = typeof parsedRow.aracId === "string" ? parsedRow.aracId.trim() : "";
+    const soforId = typeof parsedRow.soforId === "string" ? parsedRow.soforId.trim() : "";
+
+    delete nextData.aracId;
+    delete nextData.soforId;
+
+    if (hasAracValue && aracId) {
+        nextData.arac = { connect: { id: aracId } };
+    }
+
+    if (hasSoforValue) {
+        nextData.sofor = soforId ? { connect: { id: soforId } } : { disconnect: true };
+    }
+
+    return nextData;
+}
+
 const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "plaka",
     "marka",
@@ -942,7 +1029,6 @@ const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "guncelKm",
     "bedel",
     "aciklama",
-    "hgsNo",
     "ruhsatSeriNo",
     "durum",
     "kullaniciId",
@@ -988,7 +1074,47 @@ function parseSelectedYil(value: string | null) {
     return parsed;
 }
 
-function buildRequiredImportColumnGroups(fields: PrismaField[], exportColumns: ExportColumn[]) {
+async function getExistingTableColumns(db: unknown, tableName: string) {
+    const queryRunner = db as {
+        $queryRaw?: <T = unknown>(query: unknown) => Promise<T>;
+    };
+    if (typeof queryRunner?.$queryRaw !== "function") {
+        return null;
+    }
+
+    try {
+        const rows = (await queryRunner.$queryRaw<Array<{ column_name: string }>>(
+            Prisma.sql`
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND LOWER(table_name) = LOWER(${tableName})
+            `
+        )) as Array<{ column_name: string }>;
+
+        return new Set(
+            rows
+                .map((row) => (typeof row?.column_name === "string" ? row.column_name.trim() : ""))
+                .filter((name) => name.length > 0)
+        );
+    } catch (error) {
+        console.warn(`${tableName} tablo kolonlari okunamadi, import kolon uyumluluk fallback'i atlandi.`, error);
+        return null;
+    }
+}
+
+function pruneDataByExistingColumns(data: Record<string, unknown>, columns: Set<string> | null) {
+    if (!columns || columns.size === 0) return data;
+    const pruned = { ...data };
+    for (const key of Object.keys(pruned)) {
+        if (!columns.has(key)) {
+            delete pruned[key];
+        }
+    }
+    return pruned;
+}
+
+function buildRequiredImportColumnGroups(fields: PrismaField[], exportColumns: ExportColumn[], modelName?: string) {
     const relationColumnByForeignKey = new Map<string, string>();
     for (const column of exportColumns) {
         if (column.type === "relationLookup") {
@@ -1000,6 +1126,9 @@ function buildRequiredImportColumnGroups(fields: PrismaField[], exportColumns: E
     for (const field of fields) {
         if (field.isUpdatedAt) continue;
         if (!field.isRequired || field.hasDefaultValue) continue;
+        if (modelName === "Yakit" && field.name === "tutar") continue;
+        if (modelName === "Muayene" && field.name === "muayeneTarihi") continue;
+        if (modelName === "Bakim" && field.name === "yapilanKm") continue;
 
         if (shouldHideInternalField(field.name)) {
             if (field.name.endsWith("Id")) {
@@ -1034,7 +1163,9 @@ function normalizeAracPlaka(value: unknown) {
     const normalized = normalizeCell(value);
     if (normalized === null) return null;
     if (isNullishCellValue(normalized)) return null;
-    const text = String(normalized).replace(/\s+/g, "").toLocaleUpperCase("tr-TR");
+    const text = String(normalized)
+        .replace(/[^0-9a-zA-ZğüşiöçıİĞÜŞÖÇ]/g, "")
+        .toLocaleUpperCase("tr-TR");
     return text || null;
 }
 
@@ -1054,7 +1185,7 @@ async function findExistingNoPlateAracId(tx: unknown, createData: Record<string,
 
     const normalizedSaseNo = normalizeAracSaseNo(createData.saseNo);
     if (normalizedSaseNo) {
-        const rows = await txQuery.$queryRaw<Array<{ id: string }>>(
+        const rows = (await txQuery.$queryRaw(
             Prisma.sql`
                 SELECT "id"
                 FROM "Arac"
@@ -1063,7 +1194,7 @@ async function findExistingNoPlateAracId(tx: unknown, createData: Record<string,
                 ORDER BY "id" ASC
                 LIMIT 1
             `
-        );
+        )) as Array<{ id: string }>;
         const id = rows?.[0]?.id;
         return typeof id === "string" && id.trim().length > 0 ? id : null;
     }
@@ -1079,7 +1210,7 @@ async function findExistingNoPlateAracId(tx: unknown, createData: Record<string,
     const sirketId = typeof sirketIdRaw === "string" && sirketIdRaw.trim().length > 0 ? sirketIdRaw : null;
 
     const rows = sirketId
-        ? await txQuery.$queryRaw<Array<{ id: string }>>(
+        ? ((await txQuery.$queryRaw(
             Prisma.sql`
                 SELECT "id"
                 FROM "Arac"
@@ -1091,8 +1222,8 @@ async function findExistingNoPlateAracId(tx: unknown, createData: Record<string,
                 ORDER BY "id" ASC
                 LIMIT 1
             `
-        )
-        : await txQuery.$queryRaw<Array<{ id: string }>>(
+        )) as Array<{ id: string }>)
+        : ((await txQuery.$queryRaw(
             Prisma.sql`
                 SELECT "id"
                 FROM "Arac"
@@ -1104,7 +1235,7 @@ async function findExistingNoPlateAracId(tx: unknown, createData: Record<string,
                 ORDER BY "id" ASC
                 LIMIT 1
             `
-        );
+        )) as Array<{ id: string }>);
 
     const id = rows?.[0]?.id;
     return typeof id === "string" && id.trim().length > 0 ? id : null;
@@ -1134,6 +1265,7 @@ function buildRelationLookupWheres(modelName: string, rawValue: string) {
     const wheres: WhereData[] = [{ id: value }];
 
     if (modelName === "Arac") {
+        const normalizedPlaka = normalizeAracPlaka(value);
         const slashParts = value.split("/").map((part) => part.trim()).filter(Boolean);
         if (slashParts.length >= 2) {
             wheres.push({
@@ -1144,12 +1276,16 @@ function buildRelationLookupWheres(modelName: string, rawValue: string) {
             } as WhereData);
         }
         wheres.push({ plaka: value });
+        if (normalizedPlaka && normalizedPlaka !== value) {
+            wheres.push({ plaka: normalizedPlaka });
+        }
         wheres.push({ saseNo: value });
         return wheres;
     }
 
     if (modelName === "Kullanici") {
-        const parts = value.split(/\s+/).filter(Boolean);
+        const personText = value.split(/\s+-\s+/)[0]?.trim() || value;
+        const parts = personText.split(/\s+/).filter(Boolean);
         if (parts.length >= 2) {
             const ad = parts[0];
             const soyad = parts.slice(1).join(" ");
@@ -1160,9 +1296,9 @@ function buildRelationLookupWheres(modelName: string, rawValue: string) {
                 ],
             } as WhereData);
         }
-        wheres.push({ eposta: value });
-        wheres.push({ tcNo: value });
-        wheres.push({ ad: value });
+        wheres.push({ eposta: personText });
+        wheres.push({ tcNo: personText });
+        wheres.push({ ad: personText });
         return wheres;
     }
 
@@ -1184,11 +1320,25 @@ async function resolveRelationValueToForeignKey(params: {
     rawRelationValue: unknown;
     rowIndex: number;
     cache: Map<string, string>;
+    allowNotFound?: boolean;
+    context?: {
+        importModelName?: string;
+        foreignKeyFieldName?: string;
+        parsedRow?: Record<string, unknown>;
+    };
 }) {
     const relationText = normalizeLookupString(params.rawRelationValue);
     if (!relationText) return null;
 
-    const cacheKey = `${params.relationModelName}|${relationText}`;
+    const scopedAracId =
+        params.context?.importModelName === "yakit" && params.context?.foreignKeyFieldName === "soforId"
+            ? normalizeLookupString(params.context?.parsedRow?.aracId)
+            : null;
+    const scopedSirketId =
+        params.context?.importModelName === "yakit" && params.context?.foreignKeyFieldName === "soforId"
+            ? normalizeLookupString(params.context?.parsedRow?.sirketId)
+            : null;
+    const cacheKey = `${params.relationModelName}|${relationText}|arac:${scopedAracId || ""}|sirket:${scopedSirketId || ""}`;
     const cached = params.cache.get(cacheKey);
     if (cached) return cached;
 
@@ -1199,8 +1349,12 @@ async function resolveRelationValueToForeignKey(params: {
 
     const whereCandidates = buildRelationLookupWheres(params.relationModelName, relationText);
     for (const where of whereCandidates) {
+        const effectiveWhere =
+            params.relationModelName === "Kullanici"
+                ? ({ AND: [where as WhereData, { deletedAt: null }] } as WhereData)
+                : where;
         const matches = await relationDelegate.findMany({
-            where,
+            where: effectiveWhere,
             select: { id: true },
             take: 2,
             orderBy: { id: "asc" },
@@ -1214,12 +1368,83 @@ async function resolveRelationValueToForeignKey(params: {
         }
 
         if (matches.length > 1) {
+            const isYakitSoforResolve =
+                params.context?.importModelName === "yakit" &&
+                params.context?.foreignKeyFieldName === "soforId" &&
+                params.relationModelName === "Kullanici";
+            if (isYakitSoforResolve) {
+                const candidateIds = matches
+                    .map((match) => (typeof match?.id === "string" ? match.id.trim() : ""))
+                    .filter((id) => id.length > 0);
+                const parsedRow = params.context?.parsedRow || {};
+
+                const scopedSirket = normalizeLookupString(parsedRow.sirketId);
+                if (candidateIds.length > 1 && scopedSirket) {
+                    const companyMatches = await relationDelegate.findMany({
+                        where: {
+                            AND: [
+                                { id: { in: candidateIds } },
+                                { sirketId: scopedSirket },
+                                { deletedAt: null },
+                            ],
+                        },
+                        select: { id: true },
+                        orderBy: { id: "asc" },
+                        take: 2,
+                    });
+                    if (companyMatches.length === 1) {
+                        const scopedUserId = normalizeLookupString(companyMatches[0]?.id);
+                        if (scopedUserId) {
+                            params.cache.set(cacheKey, scopedUserId);
+                            return scopedUserId;
+                        }
+                    }
+                }
+                const scopedKurum = normalizeLookupString(parsedRow.calistigiKurum);
+                if (candidateIds.length > 1 && scopedKurum) {
+                    const kurumMatches = await relationDelegate.findMany({
+                        where: {
+                            AND: [
+                                { id: { in: candidateIds } },
+                                { calistigiKurum: { equals: scopedKurum, mode: "insensitive" } },
+                                { deletedAt: null },
+                            ],
+                        },
+                        select: { id: true },
+                        orderBy: { id: "asc" },
+                        take: 2,
+                    });
+                    if (kurumMatches.length === 1) {
+                        const kurumUserId = normalizeLookupString(kurumMatches[0]?.id);
+                        if (kurumUserId) {
+                            params.cache.set(cacheKey, kurumUserId);
+                            return kurumUserId;
+                        }
+                    }
+                }
+
+                if (params.allowNotFound) {
+                    console.warn(
+                        `Excel yakit import: Satir ${params.rowIndex + 2}: ${params.relationColumnKey} degeri birden fazla kayitla eslesti (${relationText}); sofor bos birakildi (zimmetten bagimsiz).`
+                    );
+                    return null;
+                }
+            }
+            if (params.allowNotFound) {
+                console.warn(
+                    `Excel import: Satir ${params.rowIndex + 2}: ${params.relationColumnKey} degeri birden fazla kayitla eslesti (${relationText}); satir atlandi.`
+                );
+                return null;
+            }
             throw new Error(
                 `Satir ${params.rowIndex + 2}: ${params.relationColumnKey} degeri birden fazla kayitla eslesti (${relationText}).`
             );
         }
     }
 
+    if (params.allowNotFound) {
+        return null;
+    }
     throw new Error(`Satir ${params.rowIndex + 2}: ${params.relationColumnKey} icin eslesen kayit bulunamadi (${relationText}).`);
 }
 
@@ -1312,6 +1537,30 @@ export async function GET(
                 }
             }
         }
+        const yakitSirketNameById = new Map<string, string>();
+        if (config.prismaModel === "yakit") {
+            const aracSirketIds = Array.from(
+                new Set(
+                    rows
+                        .map((row) => {
+                            const aracObj = row.arac as Record<string, unknown> | null | undefined;
+                            const rawSirketId = typeof aracObj?.sirketId === "string" ? aracObj.sirketId.trim() : "";
+                            return rawSirketId || null;
+                        })
+                        .filter((id): id is string => Boolean(id))
+                )
+            );
+            if (aracSirketIds.length > 0) {
+                const sirketRows = await prisma.sirket.findMany({
+                    where: { id: { in: aracSirketIds } },
+                    select: { id: true, ad: true },
+                });
+                for (const sirket of sirketRows) {
+                    if (!sirket?.id || !sirket?.ad) continue;
+                    yakitSirketNameById.set(sirket.id, sirket.ad);
+                }
+            }
+        }
 
         const normalizedRows = rows.map((row) => {
             const output: Record<string, unknown> = {};
@@ -1339,6 +1588,35 @@ export async function GET(
                     (typeof kullaniciSirketObj?.ad === "string" ? kullaniciSirketObj.ad : aktifZimmet?.sirketAd || null)
                 );
             }
+            if (config.prismaModel === "yakit") {
+                const aracObj = row.arac as Record<string, unknown> | null | undefined;
+                const soforObj = row.sofor as Record<string, unknown> | null | undefined;
+
+                const rawAracSirketId = typeof aracObj?.sirketId === "string" ? aracObj.sirketId.trim() : "";
+                const bagliSirket =
+                    (typeof (aracObj?.sirket as Record<string, unknown> | null)?.ad === "string"
+                        ? ((aracObj?.sirket as Record<string, unknown>).ad as string)
+                        : null) ||
+                    (rawAracSirketId ? yakitSirketNameById.get(rawAracSirketId) || null : null);
+
+                const aracKurum = typeof aracObj?.calistigiKurum === "string" ? aracObj.calistigiKurum.trim() : "";
+                const soforKurum = typeof soforObj?.calistigiKurum === "string" ? soforObj.calistigiKurum.trim() : "";
+                const soforSirket = typeof (soforObj?.sirket as Record<string, unknown> | null)?.ad === "string"
+                    ? ((soforObj?.sirket as Record<string, unknown>).ad as string).trim()
+                    : "";
+                const aracPlaka = typeof aracObj?.plaka === "string" ? aracObj.plaka.trim() : "";
+
+                output.arac = toExportCell(aracPlaka || relationDisplayValue(aracObj));
+                output.sofor = toExportCell(relationDisplayValue(soforObj));
+                output.bagliSirket = toExportCell(bagliSirket || null);
+                output.calistigiKurum = toExportCell(aracKurum || soforKurum || soforSirket || null);
+            }
+            if (config.prismaModel === "bakim") {
+                const islemYapanFirma =
+                    normalizeLookupString(row.islemYapanFirma) ||
+                    normalizeLookupString(row.servisAdi);
+                output.islemYapanFirma = toExportCell(islemYapanFirma || null);
+            }
             return output;
         });
         const internalColumns =
@@ -1346,6 +1624,10 @@ export async function GET(
                 ? [...columns, "calistigiKurum", "aciklama", "bedel"].filter(
                     (value, index, arr) => arr.indexOf(value) === index
                 )
+                : config.prismaModel === "yakit"
+                    ? [...columns, "bagliSirket", "calistigiKurum"].filter(
+                        (value, index, arr) => arr.indexOf(value) === index
+                    )
                 : columns;
         const finalColumns = applyExportProfile(config.prismaModel, internalColumns);
         const headerLabels = finalColumns.map((key) => getExportHeaderLabel(config.prismaModel, key));
@@ -1398,6 +1680,9 @@ export async function POST(
         if (!config) {
             return NextResponse.json({ error: "Desteklenmeyen import modeli." }, { status: 404 });
         }
+        if (config.prismaModel === "bakim") {
+            await ensureBakimColumns();
+        }
         if (config.filterModel === "sirket" && role !== "ADMIN") {
             return NextResponse.json({ error: "Şirket verisi import işlemi sadece admin yetkisi gerektirir." }, { status: 403 });
         }
@@ -1411,7 +1696,7 @@ export async function POST(
         const exportColumns = buildExportColumns(fields, relationFieldByForeignKey, modelMeta.name);
         const scalarImportColumns = exportColumns.filter((column): column is Extract<ExportColumn, { type: "scalar" }> => column.type === "scalar");
         const relationImportColumns = exportColumns.filter((column): column is Extract<ExportColumn, { type: "relationLookup" }> => column.type === "relationLookup");
-        const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns);
+        const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name);
         const enumMap = getEnumValueMap();
 
         const formData = await req.formData();
@@ -1481,6 +1766,16 @@ export async function POST(
         let created = 0;
         let updated = 0;
         let skipped = 0;
+        const bakimExistingColumns =
+            config.prismaModel === "bakim"
+                ? await getExistingTableColumns(prisma, "Bakim")
+                : null;
+        const affectedYakitAracIds = new Set<string>();
+        const trackYakitAracId = (value: unknown) => {
+            if (config.prismaModel !== "yakit") return;
+            const normalized = typeof value === "string" ? value.trim() : "";
+            if (normalized) affectedYakitAracIds.add(normalized);
+        };
 
         await prisma.$transaction(async (tx) => {
             const model = getModelDelegate(tx, config.prismaModel);
@@ -1489,12 +1784,17 @@ export async function POST(
             }
             const fieldsByName = new Map(fields.map((field) => [field.name, field]));
             const relationCache = new Map<string, string>();
+            const bakimKmByAracId = new Map<string, number>();
+            const yakitKmByAracId = new Map<string, number>();
+            const bakimSoforByAracDateKey = new Map<string, string | null>();
+            const bakimAracKullaniciByAracId = new Map<string, string | null>();
 
             for (let index = 0; index < records.length; index += 1) {
                 const record = records[index];
                 const parsedRow: Record<string, unknown> = {};
                 const rowHasAnyRawValue = hasAnyNonEmptyCell(record);
                 let isCompletelyEmpty = true;
+                let skipCurrentRowReason: string | null = null;
                 const recordHeaders = Object.keys(record)
                     .map((header) => String(header))
                     .filter((header) => header.trim().length > 0);
@@ -1578,10 +1878,195 @@ export async function POST(
                         rawRelationValue: relationValue,
                         rowIndex: index,
                         cache: relationCache,
+                        allowNotFound:
+                            config.prismaModel === "yakit" ||
+                            (config.prismaModel === "bakim" &&
+                                (foreignKeyField.name === "aracId" || foreignKeyField.name === "soforId")),
+                        context: {
+                            importModelName: config.prismaModel,
+                            foreignKeyFieldName: foreignKeyField.name,
+                            parsedRow,
+                        },
                     });
+                    if ((config.prismaModel === "yakit" || config.prismaModel === "bakim") && resolvedForeignKey === null) {
+                        if (foreignKeyField.name === "soforId") {
+                            parsedRow[foreignKeyField.name] = null;
+                            continue;
+                        }
+                        if (foreignKeyField.name === "aracId") {
+                            skipCurrentRowReason = `Satir ${index + 2}: Araç plakası sistemde bulunamadı; satır atlandı.`;
+                            break;
+                        }
+                    }
                     parsedRow[foreignKeyField.name] = coerceValue(foreignKeyField, resolvedForeignKey, enumMap);
                     if (resolvedForeignKey !== null && resolvedForeignKey !== undefined && resolvedForeignKey !== "") {
                         isCompletelyEmpty = false;
+                    }
+                }
+
+                if (skipCurrentRowReason) {
+                    console.warn(`Excel ${config.prismaModel} import:`, skipCurrentRowReason);
+                    skipped += 1;
+                    continue;
+                }
+
+                if (config.prismaModel === "yakit") {
+                    const tutarValue = parsedRow.tutar;
+                    if (tutarValue === undefined || tutarValue === null || tutarValue === "") {
+                        parsedRow.tutar = 0;
+                    }
+                    const aracId = normalizeLookupString(parsedRow.aracId);
+                    if (!aracId) {
+                        console.warn(`Excel yakit import: Satir ${index + 2}: Araç plakası boş veya eşleşmedi; satır atlandı.`);
+                        skipped += 1;
+                        continue;
+                    }
+                    const kmValue = parsedRow.km;
+                    if (kmValue === undefined || kmValue === null || kmValue === "") {
+                        let cachedKm = yakitKmByAracId.get(aracId);
+                        if (typeof cachedKm !== "number") {
+                            const aracDelegate = getModelDelegate(tx, "arac");
+                            const aracRow = await aracDelegate?.findUnique?.({
+                                where: { id: aracId },
+                                select: { guncelKm: true },
+                            });
+                            cachedKm =
+                                typeof aracRow?.guncelKm === "number" && Number.isFinite(aracRow.guncelKm)
+                                    ? Math.trunc(aracRow.guncelKm)
+                                    : 0;
+                        }
+                        parsedRow.km = cachedKm;
+                        yakitKmByAracId.set(aracId, cachedKm);
+                    } else if (typeof kmValue !== "number" || !Number.isFinite(kmValue) || kmValue < 0) {
+                        console.warn(`Excel yakit import: Satir ${index + 2}: KM geçersiz; satır atlandı.`);
+                        skipped += 1;
+                        continue;
+                    } else {
+                        const normalizedKm = Math.trunc(kmValue);
+                        parsedRow.km = normalizedKm;
+                        yakitKmByAracId.set(aracId, normalizedKm);
+                    }
+                    if (parsedRow.soforId === undefined) {
+                        parsedRow.soforId = null;
+                    }
+                }
+
+                if (config.prismaModel === "bakim") {
+                    const aracId = normalizeLookupString(parsedRow.aracId);
+                    if (!aracId) {
+                        console.warn(`Excel servis import: Satir ${index + 2}: Araç bilgisi boş; satır atlandı.`);
+                        skipped += 1;
+                        continue;
+                    }
+
+                    if (parsedRow.yapilanKm === undefined || parsedRow.yapilanKm === null || parsedRow.yapilanKm === "") {
+                        let cachedKm = bakimKmByAracId.get(aracId);
+                        if (typeof cachedKm !== "number") {
+                            const aracDelegate = getModelDelegate(tx, "arac");
+                            const aracRow = await aracDelegate?.findUnique?.({
+                                where: { id: aracId },
+                                select: { guncelKm: true },
+                            });
+                            cachedKm =
+                                typeof aracRow?.guncelKm === "number" && Number.isFinite(aracRow.guncelKm)
+                                    ? Math.trunc(aracRow.guncelKm)
+                                    : 0;
+                            bakimKmByAracId.set(aracId, cachedKm);
+                        }
+                        parsedRow.yapilanKm = cachedKm;
+                    }
+
+                    const rawTutar = parsedRow.tutar;
+                    if (rawTutar === undefined || rawTutar === null || rawTutar === "") {
+                        parsedRow.tutar = 0;
+                    } else if (typeof rawTutar !== "number" || !Number.isFinite(rawTutar)) {
+                        parsedRow.tutar = 0;
+                    }
+
+                    const existingSoforId = normalizeLookupString(parsedRow.soforId);
+                    if (!existingSoforId) {
+                        const bakimTarihi =
+                            parsedRow.bakimTarihi instanceof Date && !Number.isNaN(parsedRow.bakimTarihi.getTime())
+                                ? parsedRow.bakimTarihi
+                                : null;
+                        const lookupKey = `${aracId}::${bakimTarihi ? bakimTarihi.toISOString() : "no-date"}`;
+
+                        let resolvedSoforId = bakimSoforByAracDateKey.get(lookupKey);
+                        if (resolvedSoforId === undefined) {
+                            resolvedSoforId = null;
+                            const zimmetDelegate = getModelDelegate(tx, "kullaniciZimmet");
+                            if (bakimTarihi && zimmetDelegate?.findMany) {
+                                const zimmetRows = await zimmetDelegate.findMany({
+                                    where: {
+                                        aracId,
+                                        baslangic: { lte: bakimTarihi },
+                                        OR: [{ bitis: null }, { bitis: { gte: bakimTarihi } }],
+                                    } as WhereData,
+                                    orderBy: { baslangic: "desc" },
+                                    select: { kullaniciId: true },
+                                    take: 1,
+                                });
+                                const matched = Array.isArray(zimmetRows) ? zimmetRows[0] : null;
+                                resolvedSoforId =
+                                    typeof matched?.kullaniciId === "string" && matched.kullaniciId.trim().length > 0
+                                        ? matched.kullaniciId.trim()
+                                        : null;
+                            }
+
+                            if (!resolvedSoforId) {
+                                let cachedKullaniciId = bakimAracKullaniciByAracId.get(aracId);
+                                if (cachedKullaniciId === undefined) {
+                                    const aracDelegate = getModelDelegate(tx, "arac");
+                                    const aracRow = await aracDelegate?.findUnique?.({
+                                        where: { id: aracId },
+                                        select: { kullaniciId: true },
+                                    });
+                                    cachedKullaniciId =
+                                        typeof aracRow?.kullaniciId === "string" && aracRow.kullaniciId.trim().length > 0
+                                            ? aracRow.kullaniciId.trim()
+                                            : null;
+                                    bakimAracKullaniciByAracId.set(aracId, cachedKullaniciId);
+                                }
+                                resolvedSoforId = cachedKullaniciId || null;
+                            }
+                            bakimSoforByAracDateKey.set(lookupKey, resolvedSoforId);
+                        }
+
+                        parsedRow.soforId = resolvedSoforId || null;
+                    }
+
+                    const islemYapanFirma =
+                        normalizeLookupString(parsedRow.islemYapanFirma) ||
+                        normalizeLookupString(parsedRow.servisAdi);
+                    parsedRow.islemYapanFirma = islemYapanFirma || null;
+                    if (parsedRow.servisAdi === undefined || parsedRow.servisAdi === null || parsedRow.servisAdi === "") {
+                        parsedRow.servisAdi = islemYapanFirma || null;
+                    }
+
+                    const arizaSikayet = normalizeLookupString(parsedRow.arizaSikayet);
+                    if (parsedRow.kategori === undefined || parsedRow.kategori === null || parsedRow.kategori === "") {
+                        parsedRow.kategori = arizaSikayet ? "ARIZA" : "PERIYODIK_BAKIM";
+                    }
+                    if (parsedRow.tur === undefined || parsedRow.tur === null || parsedRow.tur === "") {
+                        parsedRow.tur = parsedRow.kategori === "ARIZA" ? "ARIZA" : "PERIYODIK";
+                    }
+                }
+
+                if (config.prismaModel === "muayene") {
+                    const gecerlilikTarihi = parsedRow.gecerlilikTarihi;
+                    if (gecerlilikTarihi === undefined || gecerlilikTarihi === null || gecerlilikTarihi === "") {
+                        console.warn(`Excel muayene import: Satir ${index + 2}: Geçerlilik tarihi boş; satır atlandı.`);
+                        skipped += 1;
+                        continue;
+                    }
+                    if (parsedRow.muayeneTarihi === undefined || parsedRow.muayeneTarihi === null || parsedRow.muayeneTarihi === "") {
+                        parsedRow.muayeneTarihi = gecerlilikTarihi;
+                    }
+                    if (parsedRow.aktifMi === undefined) {
+                        parsedRow.aktifMi = true;
+                    }
+                    if (parsedRow.gectiMi === undefined) {
+                        parsedRow.gectiMi = true;
                     }
                 }
 
@@ -1610,8 +2095,40 @@ export async function POST(
                 }
 
                 const whereUnique = getWhereUnique(fields, parsedRow, config.prismaModel);
-                const createData = buildCreateData(fields, parsedRow);
-                const updateData = buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
+                const baseCreateData = buildCreateData(fields, parsedRow);
+                const baseUpdateData = buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
+                const createData =
+                    config.prismaModel === "yakit"
+                        ? applyYakitRelationWritesForCreate(baseCreateData)
+                        : baseCreateData;
+                const updateData =
+                    config.prismaModel === "yakit"
+                        ? applyYakitRelationWritesForUpdate(baseUpdateData, parsedRow)
+                        : baseUpdateData;
+
+                // Legacy Bakim tablolarinda "plaka" kolonu bulunmayabiliyor.
+                // Import satirini aracId üzerinden bagladigimiz icin bu alanı yazmadan da güvenle devam edebiliriz.
+                if (config.prismaModel === "bakim") {
+                    delete createData.plaka;
+                    delete updateData.plaka;
+                    const prunedCreateData = pruneDataByExistingColumns(createData, bakimExistingColumns);
+                    const prunedUpdateData = pruneDataByExistingColumns(updateData, bakimExistingColumns);
+                    Object.keys(createData).forEach((key) => {
+                        if (!(key in prunedCreateData)) delete createData[key];
+                    });
+                    Object.assign(createData, prunedCreateData);
+                    Object.keys(updateData).forEach((key) => {
+                        if (!(key in prunedUpdateData)) delete updateData[key];
+                    });
+                    Object.assign(updateData, prunedUpdateData);
+
+                    if (createData.tutar === undefined || createData.tutar === null || createData.tutar === "") {
+                        createData.tutar = 0;
+                    }
+                    if (updateData.tutar === null || updateData.tutar === "") {
+                        updateData.tutar = 0;
+                    }
+                }
 
                 if (whereUnique) {
                     const existedBefore = await model.findUnique({
@@ -1620,6 +2137,14 @@ export async function POST(
                     });
 
                     if (existedBefore) {
+                        let oncekiAracId: string | null = null;
+                        if (config.prismaModel === "yakit") {
+                            const oncekiKayit = await model.findUnique({
+                                where: whereUnique.where,
+                                select: { aracId: true },
+                            });
+                            oncekiAracId = typeof oncekiKayit?.aracId === "string" ? oncekiKayit.aracId : null;
+                        }
                         if (config.prismaModel === "arac") {
                             updateData.deletedAt = null;
                             updateData.deletedBy = null;
@@ -1627,7 +2152,11 @@ export async function POST(
                         await model.update({
                             where: whereUnique.where,
                             data: updateData,
+                            select: { id: true },
                         });
+                        trackYakitAracId(oncekiAracId);
+                        trackYakitAracId(updateData.aracId);
+                        trackYakitAracId(parsedRow.aracId);
                         updated += 1;
                     } else {
                         if (config.prismaModel === "arac") {
@@ -1636,7 +2165,10 @@ export async function POST(
                         }
                         await model.create({
                             data: createData,
+                            select: { id: true },
                         });
+                        trackYakitAracId(createData.aracId);
+                        trackYakitAracId(parsedRow.aracId);
                         created += 1;
                     }
                 } else {
@@ -1652,6 +2184,7 @@ export async function POST(
                             await model.update({
                                 where: { id: existingNoPlateId },
                                 data: updateData,
+                                select: { id: true },
                             });
                             updated += 1;
                             continue;
@@ -1660,6 +2193,8 @@ export async function POST(
                         createData.deletedAt = null;
                         createData.deletedBy = null;
                         await createAracWithoutPlakaRaw(tx, createData);
+                        trackYakitAracId(createData.aracId);
+                        trackYakitAracId(parsedRow.aracId);
                         created += 1;
                         continue;
                     }
@@ -1685,7 +2220,10 @@ export async function POST(
                                 await model.update({
                                     where: { plaka },
                                     data: updateData,
+                                    select: { id: true },
                                 });
+                                trackYakitAracId(updateData.aracId);
+                                trackYakitAracId(parsedRow.aracId);
                                 updated += 1;
                             } else {
                                 if (config.prismaModel === "arac") {
@@ -1694,7 +2232,10 @@ export async function POST(
                                 }
                                 await model.create({
                                     data: createData,
+                                    select: { id: true },
                                 });
+                                trackYakitAracId(createData.aracId);
+                                trackYakitAracId(parsedRow.aracId);
                                 created += 1;
                             }
                             continue;
@@ -1702,7 +2243,9 @@ export async function POST(
                     }
 
                     try {
-                        await model.create({ data: createData });
+                        await model.create({ data: createData, select: { id: true } });
+                        trackYakitAracId(createData.aracId);
+                        trackYakitAracId(parsedRow.aracId);
                         created += 1;
                     } catch (createError) {
                         const createMessage = String((createError as Error)?.message || "");
@@ -1734,7 +2277,10 @@ export async function POST(
                                 await model.update({
                                     where: { plaka },
                                     data: updateData,
+                                    select: { id: true },
                                 });
+                                trackYakitAracId(updateData.aracId);
+                                trackYakitAracId(parsedRow.aracId);
                                 updated += 1;
                             } else {
                                 if (config.prismaModel === "arac") {
@@ -1743,7 +2289,10 @@ export async function POST(
                                 }
                                 await model.create({
                                     data: createData,
+                                    select: { id: true },
                                 });
+                                trackYakitAracId(createData.aracId);
+                                trackYakitAracId(parsedRow.aracId);
                                 created += 1;
                             }
                             continue;
@@ -1755,10 +2304,17 @@ export async function POST(
             }
         });
 
+        if (config.prismaModel === "yakit" && affectedYakitAracIds.size > 0) {
+            await Promise.all([...affectedYakitAracIds].map((aracId) => syncAracGuncelKm(aracId, prisma)));
+        }
+
         if (created === 0 && updated === 0 && skipped === records.length) {
             return NextResponse.json(
                 {
-                    error: "Dosyada islenecek veri bulunamadi. Tum satirlar bos gorunuyor; lutfen sablona en az bir dolu satir ekleyin.",
+                    error:
+                        config.prismaModel === "bakim"
+                            ? "Dosyadaki satırların tamamı atlandı. Plaka eşleşmeyen veya geçersiz satırlar olabilir; araç plakalarının sistemde kayıtlı olduğundan emin olun."
+                            : "Dosyada islenecek veri bulunamadi. Tum satirlar bos gorunuyor; lutfen sablona en az bir dolu satir ekleyin.",
                 },
                 { status: 400 }
             );
@@ -1790,6 +2346,13 @@ export async function POST(
             return NextResponse.json(
                 { error: "Ayni plaka ile mevcut kayit var. Import satiri mevcut kayit olarak guncellenecek sekilde duzenlendi; lutfen tekrar deneyin." },
                 { status: 400 }
+            );
+        }
+        if (isBakimSchemaCompatibilityError(error)) {
+            await ensureBakimColumns();
+            return NextResponse.json(
+                { error: "Servis kaydı kolon uyumsuzluğu tespit edildi ve otomatik onarım denendi. Lütfen aynı dosyayı tekrar içe aktarın." },
+                { status: 409 }
             );
         }
         return NextResponse.json(

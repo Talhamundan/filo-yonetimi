@@ -17,6 +17,7 @@ import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 
 const EMPTY = {
     aracId: "",
@@ -36,7 +37,7 @@ const FormFields = ({
     formData: any;
     setFormData: any;
     araclar: { id: string; plaka: string; marka?: string | null; model?: string | null; bulunduguIl?: string | null }[];
-    soforler: { id: string; adSoyad: string }[];
+    soforler: { id: string; adSoyad: string; sirketAd?: string | null; calistigiKurum?: string | null }[];
 }) => {
     const selectedArac = araclar.find((a) => a.id === formData.aracId);
 
@@ -71,8 +72,8 @@ const FormFields = ({
                     { value: "", label: "Seçiniz..." },
                     ...soforler.map((s) => ({
                         value: s.id,
-                        label: s.adSoyad,
-                        searchText: s.adSoyad,
+                        label: getPersonelOptionLabel(s),
+                        searchText: getPersonelOptionSearchText(s),
                     })),
                 ]}
             />
@@ -107,7 +108,7 @@ export default function CezalarClient({
 }: {
     initialData: CezaRow[];
     araclar: { id: string; plaka: string; marka?: string | null; model?: string | null; bulunduguIl?: string | null }[];
-    soforler: { id: string; adSoyad: string }[];
+    soforler: { id: string; adSoyad: string; sirketAd?: string | null; calistigiKurum?: string | null }[];
     ozet: {
         toplamCezaMaliyeti: number;
         enCokCezaYiyenSofor: { adSoyad: string; toplamTutar: number };
@@ -300,8 +301,8 @@ export default function CezalarClient({
                             { value: "TUMU", label: "Tümü" },
                             ...sortedSoforler.map((s) => ({
                                 value: s.id,
-                                label: s.adSoyad,
-                                searchText: s.adSoyad,
+                                label: getPersonelOptionLabel(s),
+                                searchText: getPersonelOptionSearchText(s),
                             })),
                         ]}
                     />

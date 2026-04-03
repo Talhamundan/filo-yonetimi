@@ -147,6 +147,8 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
                     ad: true,
                     soyad: true,
                     rol: true,
+                    calistigiKurum: true,
+                    sirket: { select: { ad: true } },
                 },
                 orderBy: [{ ad: "asc" }, { soyad: "asc" }],
             })
@@ -168,7 +170,11 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
         <ArizalarClient
             initialData={rows as unknown as ArizaRow[]}
             araclar={aracOptions as any[]}
-            personeller={personeller as any[]}
+            personeller={(personeller as any[]).map((p) => ({
+                ...p,
+                sirketAd: p.sirket?.ad || null,
+                calistigiKurum: p.calistigiKurum || null,
+            }))}
         />
     );
 }

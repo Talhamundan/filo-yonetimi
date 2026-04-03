@@ -5,23 +5,23 @@ import type {
     DashboardVehicleCostItem,
     GenericWhere,
 } from "@/lib/dashboard-types";
-import { toNumber } from "@/lib/dashboard-helpers";
+import { getVehicleUsageScopeWhere, toNumber } from "@/lib/dashboard-helpers";
 
 const EXCLUDED_MASRAF_TURLERI: readonly MasrafKategorisi[] = [
     MasrafKategorisi.YAKIT,
-    MasrafKategorisi.HGS_YUKLEME,
 ];
 
 type GroupRow = { aracId: string; _sum: { tutar: number | null } };
+type YakitGroupRow = { aracId: string; _sum: { tutar: number | null; litre: number | null } };
 
 type VehicleAccumulator = {
     plaka: string;
     markaModel: string;
     toplam: number;
     yakit: number;
+    yakitLitre: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;
@@ -47,41 +47,86 @@ function getAverage(values: number[]) {
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
+function getUsageScopedExpenseWhere(scope: GenericWhere): GenericWhere {
+    const rawScope = (scope || {}) as Record<string, unknown>;
+    const normalizedSirketId = typeof rawScope.sirketId === "string" ? rawScope.sirketId.trim() : "";
+    if (!normalizedSirketId) {
+        return scope;
+    }
+
+    const restScope = { ...rawScope };
+    delete restScope.sirketId;
+
+    const vehicleUsageWhere = getVehicleUsageScopeWhere({ sirketId: normalizedSirketId });
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleUsageWhere });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
+function getExpenseScopedWhere(scope: GenericWhere, vehicleScope?: GenericWhere): GenericWhere {
+    if (!vehicleScope || Object.keys((vehicleScope || {}) as Record<string, unknown>).length === 0) {
+        return getUsageScopedExpenseWhere(scope);
+    }
+
+    const restScope = { ...((scope || {}) as Record<string, unknown>) };
+    delete restScope.sirketId;
+
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleScope });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
 async function groupYakit(where: Prisma.YakitWhereInput) {
-    return prisma.yakit.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).yakit.groupBy({ by: ["aracId"], where, _sum: { tutar: true, litre: true } }) as Promise<YakitGroupRow[]>;
 }
 
 async function groupBakim(where: Prisma.BakimWhereInput) {
-    return prisma.bakim.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).bakim.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupMuayene(where: Prisma.MuayeneWhereInput) {
-    return prisma.muayene.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
-}
-
-async function groupHgs(where: Prisma.HgsYuklemeWhereInput) {
-    return prisma.hgsYukleme.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).muayene.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupCeza(where: Prisma.CezaWhereInput) {
-    return prisma.ceza.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).ceza.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupKasko(where: Prisma.KaskoWhereInput) {
-    return prisma.kasko.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).kasko.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupTrafik(where: Prisma.TrafikSigortasiWhereInput) {
-    return prisma.trafikSigortasi.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).trafikSigortasi.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupMasraf(where: Prisma.MasrafWhereInput) {
-    return prisma.masraf.groupBy({ by: ["aracId"], where, _sum: { tutar: true } });
+    return (prisma as any).masraf.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
-export async function getFleetStatusData(scope: GenericWhere) {
+function addVehicleFuel(map: Record<string, VehicleAccumulator>, rows: YakitGroupRow[]) {
+    for (const row of rows) {
+        if (!row?.aracId || !map[row.aracId]) continue;
+        const costValue = toNumber(row._sum.tutar);
+        const litreValue = toNumber(row._sum.litre);
+        map[row.aracId].yakit += costValue;
+        map[row.aracId].yakitLitre += litreValue;
+        map[row.aracId].toplam += costValue;
+    }
+}
+
+export async function getFleetStatusData(scope: GenericWhere, vehicleScopeOverride?: GenericWhere) {
+    const usageScopedVehicleWhere = vehicleScopeOverride || getVehicleUsageScopeWhere(scope);
     const vehicleScope = {
-        ...(scope as Prisma.AracWhereInput),
+        ...(usageScopedVehicleWhere as Prisma.AracWhereInput),
         deletedAt: null,
     } as Prisma.AracWhereInput;
 
@@ -111,11 +156,14 @@ export async function getDashboardVehicleData(params: {
     scope: GenericWhere;
     cezaScope: GenericWhere;
     dateContext: DashboardDateContext;
+    vehicleScope?: GenericWhere;
 }) {
-    const { scope, cezaScope, dateContext } = params;
+    const { scope, dateContext, vehicleScope } = params;
     const { seciliAyBasi, seciliAySonu, oncekiDonemBasi, oncekiDonemSonu } = dateContext;
-    const vehicleScope = {
-        ...(scope as Prisma.AracWhereInput),
+    const usageScopedVehicleWhere = vehicleScope || getVehicleUsageScopeWhere(scope);
+    const expenseScope = getExpenseScopedWhere(scope, usageScopedVehicleWhere);
+    const vehicleWhere = {
+        ...(usageScopedVehicleWhere as Prisma.AracWhereInput),
         deletedAt: null,
     } as Prisma.AracWhereInput;
 
@@ -124,7 +172,6 @@ export async function getDashboardVehicleData(params: {
         currentYakit,
         currentBakim,
         currentMuayene,
-        currentHgs,
         currentCeza,
         currentKasko,
         currentTrafik,
@@ -132,37 +179,43 @@ export async function getDashboardVehicleData(params: {
         prevYakit,
         prevBakim,
         prevMuayene,
-        prevHgs,
         prevCeza,
         prevKasko,
         prevTrafik,
         prevMasraf,
     ] = await Promise.all([
         prisma.arac.findMany({
-            where: vehicleScope,
+            where: vehicleWhere,
             select: { id: true, plaka: true, marka: true, model: true },
         }),
-        groupYakit({ ...(scope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupBakim({ ...(scope as Prisma.BakimWhereInput), bakimTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupMuayene({ ...(scope as Prisma.MuayeneWhereInput), muayeneTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupHgs({ ...(scope as Prisma.HgsYuklemeWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupCeza({ ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupKasko({ ...(scope as Prisma.KaskoWhereInput), baslangicTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
-        groupTrafik({ ...(scope as Prisma.TrafikSigortasiWhereInput), baslangicTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupYakit({ ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupBakim({ ...(expenseScope as Prisma.BakimWhereInput), bakimTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupMuayene({ ...(expenseScope as Prisma.MuayeneWhereInput), muayeneTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupCeza({ ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupKasko({ ...(expenseScope as Prisma.KaskoWhereInput), baslangicTarihi: { gte: seciliAyBasi, lte: seciliAySonu } }),
+        groupTrafik({
+            ...(expenseScope as Prisma.TrafikSigortasiWhereInput),
+            baslangicTarihi: { gte: seciliAyBasi, lte: seciliAySonu },
+        }),
         groupMasraf({
-            ...(scope as Prisma.MasrafWhereInput),
+            ...(expenseScope as Prisma.MasrafWhereInput),
             tur: { notIn: [...EXCLUDED_MASRAF_TURLERI] },
             tarih: { gte: seciliAyBasi, lte: seciliAySonu },
         }),
-        groupYakit({ ...(scope as Prisma.YakitWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupBakim({ ...(scope as Prisma.BakimWhereInput), bakimTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupMuayene({ ...(scope as Prisma.MuayeneWhereInput), muayeneTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupHgs({ ...(scope as Prisma.HgsYuklemeWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupCeza({ ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupKasko({ ...(scope as Prisma.KaskoWhereInput), baslangicTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
-        groupTrafik({ ...(scope as Prisma.TrafikSigortasiWhereInput), baslangicTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
+        groupYakit({ ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
+        groupBakim({ ...(expenseScope as Prisma.BakimWhereInput), bakimTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
+        groupMuayene({ ...(expenseScope as Prisma.MuayeneWhereInput), muayeneTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
+        groupCeza({ ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } }),
+        groupKasko({
+            ...(expenseScope as Prisma.KaskoWhereInput),
+            baslangicTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
+        }),
+        groupTrafik({
+            ...(expenseScope as Prisma.TrafikSigortasiWhereInput),
+            baslangicTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
+        }),
         groupMasraf({
-            ...(scope as Prisma.MasrafWhereInput),
+            ...(expenseScope as Prisma.MasrafWhereInput),
             tur: { notIn: [...EXCLUDED_MASRAF_TURLERI] },
             tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
         }),
@@ -171,13 +224,13 @@ export async function getDashboardVehicleData(params: {
     const vehicleMap: Record<string, VehicleAccumulator> = {};
     for (const arac of araclar) {
         vehicleMap[arac.id] = {
-            plaka: arac.plaka,
+            plaka: arac.plaka || "-",
             markaModel: `${arac.marka} ${arac.model}`.trim(),
             toplam: 0,
             yakit: 0,
+            yakitLitre: 0,
             bakim: 0,
             muayene: 0,
-            hgs: 0,
             ceza: 0,
             kasko: 0,
             trafik: 0,
@@ -185,10 +238,9 @@ export async function getDashboardVehicleData(params: {
         };
     }
 
-    addVehicleCost(vehicleMap, currentYakit, "yakit");
+    addVehicleFuel(vehicleMap, currentYakit);
     addVehicleCost(vehicleMap, currentBakim, "bakim");
     addVehicleCost(vehicleMap, currentMuayene, "muayene");
-    addVehicleCost(vehicleMap, currentHgs, "hgs");
     addVehicleCost(vehicleMap, currentCeza, "ceza");
     addVehicleCost(vehicleMap, currentKasko, "kasko");
     addVehicleCost(vehicleMap, currentTrafik, "trafik");
@@ -201,16 +253,16 @@ export async function getDashboardVehicleData(params: {
             markaModel: row.markaModel,
             toplam: row.toplam,
             yakit: row.yakit,
+            yakitLitre: row.yakitLitre,
             bakim: row.bakim,
             muayene: row.muayene,
-            hgs: row.hgs,
             ceza: row.ceza,
             kasko: row.kasko,
             trafik: row.trafik,
             diger: row.diger,
         }))
-        .filter((row) => row.toplam > 0)
-        .sort((a, b) => b.toplam - a.toplam);
+        .filter((row) => row.toplam > 0 || toNumber(row.yakitLitre) > 0)
+        .sort((a, b) => (b.toplam - a.toplam) || (toNumber(b.yakitLitre) - toNumber(a.yakitLitre)));
 
     const previousTotalByVehicle: Record<string, number> = {};
     const addPreviousRows = (rows: GroupRow[]) => {
@@ -225,7 +277,6 @@ export async function getDashboardVehicleData(params: {
     addPreviousRows(prevYakit);
     addPreviousRows(prevBakim);
     addPreviousRows(prevMuayene);
-    addPreviousRows(prevHgs);
     addPreviousRows(prevCeza);
     addPreviousRows(prevKasko);
     addPreviousRows(prevTrafik);
@@ -234,7 +285,7 @@ export async function getDashboardVehicleData(params: {
     const previousValues = Object.values(previousTotalByVehicle).filter((value) => value > 0);
 
     return {
-        vehicleCostReport: allVehicleCosts.slice(0, 10),
+        vehicleCostReport: allVehicleCosts,
         top5Expenses: allVehicleCosts.slice(0, 5).map((row) => ({ plaka: row.plaka, tutar: row.toplam })),
         ortalamaAracMaliyeti: getAverage(allVehicleCosts.map((row) => row.toplam)),
         oncekiOrtalamaAracMaliyeti: getAverage(previousValues),

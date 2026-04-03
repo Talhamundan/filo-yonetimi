@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import useSWR from "swr";
 import { Card, CardHeader, CardTitle, CardContent } from "../ui/card";
 import { Button } from "../ui/button";
@@ -86,7 +86,6 @@ const COST_CATEGORY_LEGEND = [
     { key: "yakit", label: "Yakıt", color: "#22C55E" },
     { key: "bakim", label: "Servis", color: "#F59E0B" },
     { key: "muayene", label: "Muayene", color: "#0EA5E9" },
-    { key: "hgs", label: "HGS", color: "#8B5CF6" },
     { key: "ceza", label: "Ceza", color: "#EF4444" },
     { key: "kasko", label: "Kasko", color: "#6366F1" },
     { key: "trafik", label: "Trafik", color: "#06B6D4" },
@@ -97,7 +96,6 @@ const COMPANY_COST_BADGE_COLORS: Record<string, string> = {
     yakit: "bg-emerald-50 text-emerald-700 border-emerald-200",
     bakim: "bg-amber-50 text-amber-700 border-amber-200",
     muayene: "bg-sky-50 text-sky-700 border-sky-200",
-    hgs: "bg-violet-50 text-violet-700 border-violet-200",
     ceza: "bg-rose-50 text-rose-700 border-rose-200",
     kasko: "bg-indigo-50 text-indigo-700 border-indigo-200",
     trafik: "bg-cyan-50 text-cyan-700 border-cyan-200",
@@ -112,9 +110,58 @@ const DRIVER_COST_BADGE_COLORS: Record<string, string> = {
 
 const DRIVER_CATEGORY_LEGEND = [
     { key: "yakit", label: "Yakıt", color: "#22C55E" },
-    { key: "ariza", label: "Arıza", color: "#F59E0B" },
+    { key: "ariza", label: "Servis", color: "#F59E0B" },
     { key: "ceza", label: "Ceza", color: "#EF4444" },
 ] as const;
+
+function getFuelDisplayValue(row: Record<string, unknown> | null | undefined) {
+    return Number(row?.yakitLitre ?? row?.yakit ?? 0);
+}
+
+function getCategoryDisplayValue(row: Record<string, unknown> | null | undefined, categoryKey: string) {
+    if (categoryKey === "yakit" || categoryKey === "yakitLitre") return getFuelDisplayValue(row);
+    return Number(row?.[categoryKey] || 0);
+}
+
+function formatCurrencyValue(value: number) {
+    return `₺${Number(value || 0).toLocaleString("tr-TR")}`;
+}
+
+function formatLitreValue(value: number) {
+    return `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
+}
+
+function formatFuelAverageValue(value: number) {
+    return `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} L/100 km`;
+}
+
+function formatCategoryValue(categoryKey: string, value: number) {
+    return categoryKey === "yakit" || categoryKey === "yakitLitre"
+        ? formatLitreValue(value)
+        : formatCurrencyValue(value);
+}
+
+function truncateAxisLabel(value: unknown, maxLength = 12) {
+    const raw = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+    if (!raw) return "-";
+    if (raw.length <= maxLength) return raw;
+    return `${raw.slice(0, Math.max(1, maxLength - 3))}...`;
+}
+
+function formatDriverAxisLabel(value: unknown) {
+    const raw = typeof value === "string" ? value.trim() : String(value ?? "").trim();
+    if (!raw) return "-";
+
+    const parts = raw.split(/\s+/).filter(Boolean);
+    if (parts.length >= 2) {
+        const firstName = truncateAxisLabel(parts[0], 10);
+        const lastNameInitial = parts[parts.length - 1]?.charAt(0)?.toUpperCase() || "";
+        const shortName = lastNameInitial ? `${firstName} ${lastNameInitial}.` : firstName;
+        if (shortName.length <= 14) return shortName;
+    }
+
+    return truncateAxisLabel(raw, 14);
+}
 
 export default function DashboardClient({ initialData, isTechnicalPersonnel, recentRecords, role }: DashboardClientProps) {
     const { canAccessAllCompanies } = useDashboardScope();
@@ -147,10 +194,13 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         vehicleCostReport = [],
         driverCostReport = [],
         companyCostReport = [],
+        vehicleFuelAverageReport = [],
+        driverFuelAverageReport = [],
     } = data || {} as any;
 
     const calendarCardRef = useRef<HTMLDivElement | null>(null);
     const [calendarCardHeight, setCalendarCardHeight] = React.useState<number | null>(null);
+    const [fuelAverageMode, setFuelAverageMode] = useState<"ARAC" | "PERSONEL">("ARAC");
 
     useEffect(() => {
         const element = calendarCardRef.current;
@@ -166,16 +216,21 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         return () => observer.disconnect();
     }, []);
 
-    const yearlyPieData = useMemo(() => {
-        return COST_CATEGORY_LEGEND
-            .map((category) => ({
-                key: category.key,
-                name: category.label,
-                color: category.color,
-                value: monthlyExpenseTrend.reduce((sum: number, row: any) => sum + Number(row[category.key] || 0), 0),
-            }))
-            .filter((item) => item.value > 0);
-    }, [monthlyExpenseTrend]);
+    const yearlyPieData = useMemo(
+        () =>
+            COST_CATEGORY_LEGEND
+                .map((category) => ({
+                    key: category.key,
+                    name: category.label,
+                    color: category.color,
+                    value: monthlyExpenseTrend.reduce(
+                        (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                        0
+                    ),
+                }))
+                .filter((item) => item.value > 0),
+        [monthlyExpenseTrend]
+    );
 
     const monthForMonthlyPie = useMemo(() => {
         const parsed = Number(selectedAy);
@@ -200,7 +255,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 key: category.key,
                 name: category.label,
                 color: category.color,
-                value: Number(selectedMonthRow[category.key] || 0),
+                value: getCategoryDisplayValue(selectedMonthRow, category.key),
             }))
             .filter((item) => item.value > 0);
     }, [selectedMonthRow]);
@@ -208,15 +263,21 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     const dailyTotalData = useMemo(
         () =>
             dailyExpenseTrend
-                .map((row: any) => ({ ...row, toplam: Number(row.toplam || 0) }))
-                .filter((row: any) => row.toplam > 0),
+                .map((row: any) => ({
+                    ...row,
+                    displayToplam: COST_CATEGORY_LEGEND.reduce(
+                        (sum: number, category) => sum + getCategoryDisplayValue(row, category.key),
+                        0
+                    ),
+                }))
+                .filter((row: any) => Number(row.displayToplam || 0) > 0),
         [dailyExpenseTrend]
     );
 
     const dailyStackCategories = useMemo(
         () =>
             COST_CATEGORY_LEGEND.filter((category) =>
-                dailyExpenseTrend.some((row: any) => Number(row[category.key] || 0) > 0)
+                dailyExpenseTrend.some((row: any) => getCategoryDisplayValue(row, category.key) > 0)
             ),
         [dailyExpenseTrend]
     );
@@ -227,22 +288,37 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 key: category.key,
                 name: category.label,
                 color: category.color,
-                value: dailyExpenseTrend.reduce((sum: number, row: any) => sum + Number(row[category.key] || 0), 0),
+                value: dailyExpenseTrend.reduce(
+                    (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                    0
+                ),
             })).filter((item) => item.value > 0),
         [dailyExpenseTrend]
     );
 
-    const yearlyPieTotal = useMemo(
-        () => yearlyPieData.reduce((sum: number, item: { value: number }) => sum + item.value, 0),
+    const yearlyFuelTotal = useMemo(
+        () => yearlyPieData.find((item) => item.key === "yakit")?.value || 0,
         [yearlyPieData]
     );
-    const monthlyPieTotal = useMemo(
-        () => monthlyPieData.reduce((sum: number, item: { value: number }) => sum + item.value, 0),
+    const yearlyOtherCostTotal = useMemo(
+        () => yearlyPieData.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
+        [yearlyPieData]
+    );
+    const monthlyFuelTotal = useMemo(
+        () => monthlyPieData.find((item) => item.key === "yakit")?.value || 0,
         [monthlyPieData]
     );
-    const dailyTotal = useMemo(
-        () => dailyTotalData.reduce((sum: number, row: any) => sum + Number(row.toplam || 0), 0),
-        [dailyTotalData]
+    const monthlyOtherCostTotal = useMemo(
+        () => monthlyPieData.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
+        [monthlyPieData]
+    );
+    const dailyFuelTotal = useMemo(
+        () => dailyCategorySummary.find((item) => item.key === "yakit")?.value || 0,
+        [dailyCategorySummary]
+    );
+    const dailyOtherCostTotal = useMemo(
+        () => dailyCategorySummary.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
+        [dailyCategorySummary]
     );
     const isAdminOrYetkili = role === "ADMIN" || role === "YETKILI";
     const shouldShowVehicleAndDriverCostLists = isAdminOrYetkili;
@@ -259,22 +335,41 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         () => [...vehicleCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)),
         [vehicleCostReport]
     );
+    const vehicleTop10CostReport = useMemo(
+        () => sortedVehicleCostReport.slice(0, 10),
+        [sortedVehicleCostReport]
+    );
     const sortedDriverCostReport = useMemo(
         () => [...driverCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)),
         [driverCostReport]
     );
     const monthlyServiceCost = Number(selectedMonthRow?.bakim || 0);
-    const monthlyAverageServiceCost = metrics.aktifArac > 0 ? Math.round(monthlyServiceCost / metrics.aktifArac) : 0;
+    const monthlyServiceVehicleCount = useMemo(
+        () => vehicleCostReport.filter((row: any) => Number(row?.bakim || 0) > 0).length,
+        [vehicleCostReport]
+    );
+    const monthlyAverageServiceCost =
+        monthlyServiceVehicleCount > 0 ? Math.round(monthlyServiceCost / monthlyServiceVehicleCount) : 0;
     const vehicleStackCategories = useMemo(
         () =>
             COST_CATEGORY_LEGEND.filter((category) =>
-                vehicleCostReport.some((row: any) => Number(row[category.key] || 0) > 0)
+                vehicleTop10CostReport.some((row: any) => getCategoryDisplayValue(row, category.key) > 0)
             ),
-        [vehicleCostReport]
+        [vehicleTop10CostReport]
     );
     const vehicleReportTotal = useMemo(
         () => vehicleCostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
         [vehicleCostReport]
+    );
+    const monthlyVehicleCostCount = useMemo(
+        () => vehicleCostReport.filter((row: any) => Number(row?.toplam || 0) > 0).length,
+        [vehicleCostReport]
+    );
+    const monthlyAverageVehicleCost =
+        monthlyVehicleCostCount > 0 ? Math.round(vehicleReportTotal / monthlyVehicleCostCount) : 0;
+    const vehicleTop10ReportTotal = useMemo(
+        () => vehicleTop10CostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
+        [vehicleTop10CostReport]
     );
     const vehicleCategorySummary = useMemo(
         () =>
@@ -282,9 +377,20 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 key: category.key,
                 name: category.label,
                 color: category.color,
-                value: vehicleCostReport.reduce((sum: number, row: any) => sum + Number(row?.[category.key] || 0), 0),
+                value: vehicleTop10CostReport.reduce(
+                    (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                    0
+                ),
             })).filter((item) => item.value > 0),
+        [vehicleTop10CostReport]
+    );
+    const vehicleFuelTotal = useMemo(
+        () => vehicleCostReport.reduce((sum: number, row: any) => sum + getFuelDisplayValue(row), 0),
         [vehicleCostReport]
+    );
+    const vehicleTop10FuelTotal = useMemo(
+        () => vehicleCategorySummary.find((item) => item.key === "yakit")?.value || 0,
+        [vehicleCategorySummary]
     );
     const driverTop10CostReport = useMemo(
         () => sortedDriverCostReport.slice(0, 10),
@@ -298,16 +404,130 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         () => driverCostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
         [driverCostReport]
     );
+    const monthlyDriverCostCount = useMemo(
+        () => driverCostReport.filter((row: any) => Number(row?.toplam || 0) > 0).length,
+        [driverCostReport]
+    );
+    const monthlyAverageDriverCost =
+        monthlyDriverCostCount > 0 ? Math.round(driverReportTotal / monthlyDriverCostCount) : 0;
     const driverCategorySummary = useMemo(
         () =>
             DRIVER_CATEGORY_LEGEND.map((category) => ({
                 key: category.key,
                 name: category.label,
                 color: category.color,
-                value: driverTop10CostReport.reduce((sum: number, row: any) => sum + Number(row?.[category.key] || 0), 0),
+                value: driverTop10CostReport.reduce(
+                    (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                    0
+                ),
             })),
         [driverTop10CostReport]
     );
+    const driverTop10FuelTotal = useMemo(
+        () => driverCategorySummary.find((item) => item.key === "yakit")?.value || 0,
+        [driverCategorySummary]
+    );
+    const companyFuelTotal = useMemo(
+        () => companyCostReport.reduce((sum: number, row: any) => sum + getFuelDisplayValue(row), 0),
+        [companyCostReport]
+    );
+    const driverFuelTotal = useMemo(
+        () => driverCostReport.reduce((sum: number, row: any) => sum + getFuelDisplayValue(row), 0),
+        [driverCostReport]
+    );
+    const sortedVehicleFuelAverageReport = useMemo(
+        () =>
+            [...vehicleFuelAverageReport]
+                .sort((a: any, b: any) => Number(b.averageLitresPer100Km || 0) - Number(a.averageLitresPer100Km || 0))
+                .slice(0, 10),
+        [vehicleFuelAverageReport]
+    );
+    const driverFuelAverageBenchmark = useMemo(() => {
+        const values = [...driverFuelAverageReport]
+            .map((row: any) => Number(row.averageLitresPer100Km || 0))
+            .filter((value: number) => Number.isFinite(value) && value > 0);
+        if (values.length === 0) return 0;
+        return values.reduce((sum: number, value: number) => sum + value, 0) / values.length;
+    }, [driverFuelAverageReport]);
+    const driverFuelAverageReportWithBenchmark = useMemo(
+        () =>
+            [...driverFuelAverageReport].map((row: any) => {
+                const ownAverage = Number(row.averageLitresPer100Km || 0);
+                const benchmark = Number(row.fleetAverageLitresPer100Km || driverFuelAverageBenchmark || 0);
+                const isAbove =
+                    typeof row.isAboveFleetAverage === "boolean"
+                        ? row.isAboveFleetAverage
+                        : benchmark > 0 && ownAverage > benchmark;
+                return {
+                    ...row,
+                    fleetAverageLitresPer100Km: benchmark,
+                    isAboveFleetAverage: isAbove,
+                };
+            }),
+        [driverFuelAverageBenchmark, driverFuelAverageReport]
+    );
+    const selectedFuelAverageRows = useMemo(
+        () =>
+            fuelAverageMode === "ARAC"
+                ? sortedVehicleFuelAverageReport
+                : [...driverFuelAverageReportWithBenchmark]
+                      .sort((a: any, b: any) => Number(b.averageLitresPer100Km || 0) - Number(a.averageLitresPer100Km || 0))
+                      .slice(0, 10),
+        [driverFuelAverageReportWithBenchmark, fuelAverageMode, sortedVehicleFuelAverageReport]
+    );
+    const driverAboveAverageRows = useMemo(
+        () =>
+            [...driverFuelAverageReportWithBenchmark]
+                .filter((row: any) => Boolean(row.isAboveFleetAverage))
+                .sort((a: any, b: any) => Number(b.averageLitresPer100Km || 0) - Number(a.averageLitresPer100Km || 0))
+                .slice(0, 8),
+        [driverFuelAverageReportWithBenchmark]
+    );
+    const driverAverageStatusById = useMemo(() => {
+        const map = new Map<string, { isAbove: boolean; benchmark: number; average: number }>();
+        for (const row of driverFuelAverageReportWithBenchmark as any[]) {
+            const id = String(row?.soforId || "").trim();
+            if (!id) continue;
+            map.set(id, {
+                isAbove: Boolean(row.isAboveFleetAverage),
+                benchmark: Number(row.fleetAverageLitresPer100Km || 0),
+                average: Number(row.averageLitresPer100Km || 0),
+            });
+        }
+        return map;
+    }, [driverFuelAverageReportWithBenchmark]);
+    const selectedFuelAverageSummary = useMemo(() => {
+        const count = selectedFuelAverageRows.length;
+        if (count === 0) return { count: 0, average: 0 };
+        const total = selectedFuelAverageRows.reduce(
+            (sum: number, row: any) => sum + Number(row.averageLitresPer100Km || 0),
+            0
+        );
+        return { count, average: total / count };
+    }, [selectedFuelAverageRows]);
+    const fuelAverageChartData = useMemo(() => {
+        if (fuelAverageMode === "ARAC") {
+            return selectedFuelAverageRows.map((item: any) => ({
+                id: item.aracId,
+                axisLabel: truncateAxisLabel(item.plaka || "-", 12),
+                fullLabel: item.plaka || "-",
+                detail: item.markaModel || "-",
+                averageLitresPer100Km: Number(item.averageLitresPer100Km || 0),
+                intervalCount: Number(item.intervalCount || 0),
+            }));
+        }
+
+        return selectedFuelAverageRows.map((item: any) => ({
+            id: item.soforId,
+            axisLabel: formatDriverAxisLabel(item.adSoyad || "-"),
+            fullLabel: item.adSoyad || "Personel",
+            detail: "Personel",
+            averageLitresPer100Km: Number(item.averageLitresPer100Km || 0),
+            intervalCount: Number(item.intervalCount || 0),
+            benchmarkAverageLitresPer100Km: Number(item.fleetAverageLitresPer100Km || driverFuelAverageBenchmark || 0),
+            isAboveAverage: Boolean(item.isAboveFleetAverage),
+        }));
+    }, [driverFuelAverageBenchmark, fuelAverageMode, selectedFuelAverageRows]);
 
     const urgentOperationArizalar = useMemo(
         () => operationArizalar.filter((row: any) => row.oncelik === "KRITIK" || row.oncelik === "YUKSEK").slice(0, 8),
@@ -390,22 +610,64 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         return "text-slate-500";
     };
 
+    const buildScopedHref = (href: string) => {
+        const [path, queryString = ""] = href.split("?");
+        const params = new URLSearchParams(queryString);
+        if (selectedSirketId && !params.has("sirket")) params.set("sirket", selectedSirketId);
+        if (selectedYil && !params.has("yil")) params.set("yil", selectedYil);
+        if (selectedAy && !params.has("ay")) params.set("ay", selectedAy);
+        const query = params.toString();
+        return query ? `${path}?${query}` : path;
+    };
+
     const navigateWithScope = (href: string) => {
-        if (href.includes("sirket=") || href.includes("yil=")) {
-            router.push(href);
+        router.push(buildScopedHref(href));
+    };
+
+    const navigateFuelAverageDetail = (index: number) => {
+        const item = selectedFuelAverageRows[index];
+        if (!item) return;
+
+        if (fuelAverageMode === "ARAC") {
+            const aracId = String(item?.aracId || "").trim();
+            navigateWithScope(aracId ? `/dashboard/araclar/${aracId}` : "/dashboard/araclar");
             return;
         }
-        const scopedParams = new URLSearchParams();
-        if (selectedSirketId) scopedParams.set("sirket", selectedSirketId);
-        if (selectedYil) scopedParams.set("yil", selectedYil);
-        if (selectedAy) scopedParams.set("ay", selectedAy);
-        const query = scopedParams.toString();
-        if (!query) {
-            router.push(href);
-            return;
-        }
-        const joinChar = href.includes("?") ? "&" : "?";
-        router.push(`${href}${joinChar}${query}`);
+
+        const soforId = String(item?.soforId || "").trim();
+        navigateWithScope(soforId ? `/dashboard/personel/${soforId}` : "/dashboard/personel");
+    };
+
+    const renderFuelAverageTick = (props: any) => {
+        const { x = 0, y = 0, payload, index = -1 } = props;
+        const item = selectedFuelAverageRows[index];
+        const clickable =
+            fuelAverageMode === "ARAC"
+                ? Boolean(String(item?.aracId || "").trim())
+                : Boolean(String(item?.soforId || "").trim());
+        const isAboveAverage =
+            fuelAverageMode === "PERSONEL" && Boolean(item?.isAboveFleetAverage || item?.isAboveAverage);
+
+        return (
+            <g transform={`translate(${x},${y})`}>
+                <text
+                    x={-4}
+                    y={0}
+                    dy={4}
+                    textAnchor="end"
+                    fill={isAboveAverage ? "#B91C1C" : clickable ? "#3730A3" : "#0F172A"}
+                    style={{
+                        fontSize: 12,
+                        fontWeight: 600,
+                        cursor: clickable ? "pointer" : "default",
+                        textDecoration: clickable || isAboveAverage ? "underline" : "none",
+                    }}
+                    onClick={clickable ? () => navigateFuelAverageDetail(index) : undefined}
+                >
+                    {String(payload?.value || "-")}
+                </text>
+            </g>
+        );
     };
 
     const renderOperationTrackingCard = () => (
@@ -567,7 +829,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         <CardContent>
                             <p className="text-sm text-slate-500 mb-6">Yeni bir periyodik bakım veya arıza kaydı oluşturun.</p>
                             <Button className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold" asChild>
-                                <Link href="/dashboard/bakimlar?add=true">
+                                <Link href="/dashboard/servis-kayitlari?add=true">
                                     İşlem Başlat <ArrowRight className="ml-2 h-4 w-4" />
                                 </Link>
                             </Button>
@@ -689,9 +951,9 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             <p className="text-sm font-medium">Aylık Ortalama Araç Maliyeti</p>
                             <div className="p-1.5 bg-amber-50 rounded-md text-amber-600"><Truck size={16} /></div>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900">₺{metrics.ortalamaAracMaliyeti.toLocaleString("tr-TR")}</h3>
+                        <h3 className="text-2xl font-bold text-slate-900">₺{monthlyAverageVehicleCost.toLocaleString("tr-TR")}</h3>
                         <p className="text-xs text-slate-500 font-medium mt-2">
-                            {metrics.aracMaliyetOrtalamaAdet} araç ortalaması
+                            Maliyet kaydı bulunan {monthlyVehicleCostCount} araç üzerinden
                         </p>
                         <p className={`text-xs font-medium mt-1 ${getChangeClassName(metrics.aracMaliyetDegisimYuzdesi)}`}>
                             {formatChangeText(metrics.aracMaliyetDegisimYuzdesi)} {metrics.comparisonLabel}
@@ -716,9 +978,9 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             <p className="text-sm font-medium text-slate-500">Aylık Ortalama Personel Maliyeti</p>
                             <div className="p-1.5 bg-emerald-50 rounded-md text-emerald-600"><Users size={16} /></div>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900">₺{metrics.ortalamaSoforMaliyeti.toLocaleString("tr-TR")}</h3>
+                        <h3 className="text-2xl font-bold text-slate-900">₺{monthlyAverageDriverCost.toLocaleString("tr-TR")}</h3>
                         <p className="text-xs text-slate-500 font-medium mt-2">
-                            {metrics.soforMaliyetOrtalamaAdet} personel ortalaması
+                            Maliyet kaydı bulunan {monthlyDriverCostCount} personel üzerinden
                         </p>
                         <p className={`text-xs font-medium mt-1 ${getChangeClassName(metrics.soforMaliyetDegisimYuzdesi)}`}>
                             {formatChangeText(metrics.soforMaliyetDegisimYuzdesi)} {metrics.comparisonLabel}
@@ -740,12 +1002,17 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
-                            <p className="text-sm font-medium text-slate-500">Aylık Ortalama Yakıt Maliyeti</p>
+                            <p className="text-sm font-medium text-slate-500">Aylık Ortalama Yakıt Tüketimi</p>
                             <div className="p-1.5 bg-indigo-50 rounded-md text-indigo-600"><Fuel size={16} /></div>
                         </div>
-                        <h3 className="text-2xl font-bold text-slate-900">₺{metrics.ortalamaYakit.toLocaleString("tr-TR")}</h3>
+                        <h3 className="text-2xl font-bold text-slate-900">
+                            {Number(metrics.ortalamaYakit || 0).toLocaleString("tr-TR", {
+                                minimumFractionDigits: 1,
+                                maximumFractionDigits: 1,
+                            })} L/100 km
+                        </h3>
                         <p className="text-xs text-slate-500 font-medium mt-2">
-                            Aktif araçlar üzerinden
+                            Araçların tüketim ortalaması
                         </p>
                         <p className={`text-xs font-medium mt-1 ${getChangeClassName(metrics.yakitDegisimYuzdesi)}`}>
                             {formatChangeText(metrics.yakitDegisimYuzdesi)} {metrics.comparisonLabel}
@@ -757,11 +1024,11 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     <Card
                         role="button"
                         tabIndex={0}
-                        onClick={() => navigateWithScope("/dashboard/bakimlar")}
+                        onClick={() => navigateWithScope("/dashboard/servis-kayitlari")}
                         onKeyDown={(event) => {
                             if (event.key === "Enter" || event.key === " ") {
                                 event.preventDefault();
-                                navigateWithScope("/dashboard/bakimlar");
+                                navigateWithScope("/dashboard/servis-kayitlari");
                             }
                         }}
                         className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 hover:shadow-md"
@@ -773,7 +1040,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             </div>
                             <h3 className="text-2xl font-bold text-slate-900">₺{monthlyAverageServiceCost.toLocaleString("tr-TR")}</h3>
                             <p className="text-xs text-slate-500 font-medium mt-2">
-                                Aktif araçlar üzerinden
+                                Servise giden {monthlyServiceVehicleCount} araç üzerinden
                             </p>
                             <p className={`text-xs font-medium mt-1 ${getChangeClassName(metrics.servisMaliyetDegisimYuzdesi)}`}>
                                 {formatChangeText(metrics.servisMaliyetDegisimYuzdesi)} {metrics.comparisonLabel}
@@ -798,12 +1065,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 {isAllMonthSelected
                                     ? `Yıl Bazlı Kategori Dağılımı (${selectedYil || new Date().getFullYear()})`
-                                    : "Gün Bazlı Gider Dağılımı"}
+                                    : "Gün Bazlı Kategori Dağılımı"}
                             </CardTitle>
                             <p className="text-xs text-slate-500">
                                 {isAllMonthSelected
-                                    ? `Toplam: ₺${yearlyPieTotal.toLocaleString("tr-TR")}`
-                                    : `${selectedMonthRow?.name || "-"} toplamı: ₺${dailyTotal.toLocaleString("tr-TR")}`}
+                                    ? `Yakıt: ${formatLitreValue(yearlyFuelTotal)} • Diğer gider: ${formatCurrencyValue(yearlyOtherCostTotal)}`
+                                    : `${selectedMonthRow?.name || "-"} • Yakıt: ${formatLitreValue(dailyFuelTotal)} • Diğer gider: ${formatCurrencyValue(dailyOtherCostTotal)}`}
                             </p>
                         </CardHeader>
                         <CardContent className="px-4 pb-4 pt-2 flex flex-col">
@@ -815,7 +1082,14 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                 <Tooltip
                                                     cursor={false}
                                                     contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
-                                                    formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
+                                                    formatter={(value, name, entry) => {
+                                                        const payload =
+                                                            entry && typeof entry === "object" && "payload" in entry
+                                                                ? (entry as { payload?: Record<string, unknown> }).payload
+                                                                : undefined;
+                                                        const key = typeof payload?.key === "string" ? payload.key : "";
+                                                        return [formatCategoryValue(key, Number(value ?? 0)), String(name)];
+                                                    }}
                                                 />
                                                 <Pie
                                                     data={yearlyPieData}
@@ -852,15 +1126,27 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                     axisLine={false}
                                                     tickLine={false}
                                                     tick={{ fontSize: 11, fill: "#64748B" }}
-                                                    tickFormatter={(val) => `₺${Math.round(Number(val) / 1000)}k`}
+                                                    tickFormatter={(val) => Number(val).toLocaleString("tr-TR")}
                                                 />
                                                 <Tooltip
                                                     cursor={false}
                                                     contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0" }}
                                                     content={({ active, payload, label }) => {
                                                         if (!active || !payload || payload.length === 0) return null;
-                                                        const row = payload[0]?.payload as { toplam?: number } | undefined;
-                                                        const total = Number(row?.toplam || 0);
+                                                        const fuelTotal = payload.reduce(
+                                                            (sum, item) =>
+                                                                (String(item.dataKey) === "yakit" || String(item.dataKey) === "yakitLitre")
+                                                                    ? sum + Number(item.value ?? 0)
+                                                                    : sum,
+                                                            0
+                                                        );
+                                                        const otherTotal = payload.reduce(
+                                                            (sum, item) =>
+                                                                (String(item.dataKey) !== "yakit" && String(item.dataKey) !== "yakitLitre")
+                                                                    ? sum + Number(item.value ?? 0)
+                                                                    : sum,
+                                                            0
+                                                        );
                                                         return (
                                                             <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                                                                 <p className="text-xs font-semibold text-slate-900">{`${String(label || "-")}. gün`}</p>
@@ -871,14 +1157,18 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                                                 {String(item.name || item.dataKey || "-")}
                                                                             </span>
                                                                             <span className="font-semibold text-slate-700">
-                                                                                ₺{Number(item.value ?? 0).toLocaleString("tr-TR")}
+                                                                                {formatCategoryValue(String(item.dataKey || ""), Number(item.value ?? 0))}
                                                                             </span>
                                                                         </div>
                                                                     ))}
                                                                 </div>
-                                                                <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
-                                                                    Toplam: ₺{total.toLocaleString("tr-TR")}
-                                                                </div>
+                                                                {(fuelTotal > 0 || otherTotal > 0) ? (
+                                                                    <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
+                                                                        {fuelTotal > 0 ? `Yakıt: ${formatLitreValue(fuelTotal)}` : null}
+                                                                        {fuelTotal > 0 && otherTotal > 0 ? " • " : null}
+                                                                        {otherTotal > 0 ? `Diğer: ${formatCurrencyValue(otherTotal)}` : null}
+                                                                    </div>
+                                                                ) : null}
                                                             </div>
                                                         );
                                                     }}
@@ -886,7 +1176,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                 {dailyStackCategories.map((category, index) => (
                                                     <Bar
                                                         key={`daily-cost-${category.key}`}
-                                                        dataKey={category.key}
+                                                        dataKey={category.key === "yakit" ? "yakitLitre" : category.key}
                                                         name={category.label}
                                                         stackId="gunluk"
                                                         fill={category.color}
@@ -910,7 +1200,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                                             {item.name}
                                         </span>
-                                        <span className="font-semibold text-slate-800">₺{item.value.toLocaleString('tr-TR')}</span>
+                                        <span className="font-semibold text-slate-800">{formatCategoryValue(item.key, item.value)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -923,7 +1213,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 Ay Bazlı Kategori Dağılımı
                             </CardTitle>
                             <p className="text-xs text-slate-500">
-                                {selectedMonthRow?.name || "-"} toplamı: ₺{monthlyPieTotal.toLocaleString("tr-TR")}
+                                {selectedMonthRow?.name || "-"} • Yakıt: {formatLitreValue(monthlyFuelTotal)} • Diğer gider: {formatCurrencyValue(monthlyOtherCostTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-4 pb-4 pt-2 flex flex-col">
@@ -934,7 +1224,14 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             <Tooltip
                                                 cursor={false}
                                                 contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
-                                                formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
+                                                formatter={(value, name, entry) => {
+                                                    const payload =
+                                                        entry && typeof entry === "object" && "payload" in entry
+                                                            ? (entry as { payload?: Record<string, unknown> }).payload
+                                                            : undefined;
+                                                    const key = typeof payload?.key === "string" ? payload.key : "";
+                                                    return [formatCategoryValue(key, Number(value ?? 0)), String(name)];
+                                                }}
                                             />
                                             <Pie
                                                 data={monthlyPieData}
@@ -964,7 +1261,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                                             {item.name}
                                         </span>
-                                        <span className="font-semibold text-slate-800">₺{item.value.toLocaleString('tr-TR')}</span>
+                                        <span className="font-semibold text-slate-800">{formatCategoryValue(item.key, item.value)}</span>
                                     </div>
                                 ))}
                             </div>
@@ -979,12 +1276,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 Araç Bazlı Toplam Maliyet (Top 10)
                             </CardTitle>
                             <p className="text-xs text-slate-500">
-                                Toplam: ₺{vehicleReportTotal.toLocaleString("tr-TR")}
+                                Yakıt: {formatLitreValue(vehicleTop10FuelTotal)} • Diğer gider: {formatCurrencyValue(vehicleTop10ReportTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-2 pb-4 pt-2 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart accessibilityLayer={false} data={vehicleCostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                                <BarChart accessibilityLayer={false} data={vehicleTop10CostReport} margin={{ top: 10, right: 20, left: 10, bottom: 46 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
                                     <XAxis
                                         dataKey="plaka"
@@ -992,21 +1289,39 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fontSize: 12, fill: '#0F172A', fontWeight: 600 }}
+                                        interval={0}
+                                        angle={-25}
+                                        textAnchor="end"
+                                        tickMargin={8}
+                                        height={52}
+                                        tickFormatter={(value) => truncateAxisLabel(value, 10)}
                                     />
                                     <YAxis
                                         type="number"
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fontSize: 12, fill: '#64748B' }}
-                                        tickFormatter={(val) => `₺${Math.round(Number(val) / 1000)}k`}
+                                        tickFormatter={(val) => Number(val).toLocaleString("tr-TR")}
                                     />
                                     <Tooltip
                                         cursor={false}
                                         contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
                                         content={({ active, payload, label }) => {
                                             if (!active || !payload || payload.length === 0) return null;
-                                            const row = payload[0]?.payload as { toplam?: number } | undefined;
-                                            const total = Number(row?.toplam || 0);
+                                            const fuelTotal = payload.reduce(
+                                                (sum, item) =>
+                                                    (String(item.dataKey) === "yakit" || String(item.dataKey) === "yakitLitre")
+                                                        ? sum + Number(item.value ?? 0)
+                                                        : sum,
+                                                0
+                                            );
+                                            const otherTotal = payload.reduce(
+                                                (sum, item) =>
+                                                    (String(item.dataKey) !== "yakit" && String(item.dataKey) !== "yakitLitre")
+                                                        ? sum + Number(item.value ?? 0)
+                                                        : sum,
+                                                0
+                                            );
                                             return (
                                                 <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                                                     <p className="text-xs font-semibold text-slate-900">{String(label || "-")}</p>
@@ -1017,14 +1332,18 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                                     {String(item.name || item.dataKey || "-")}
                                                                 </span>
                                                                 <span className="font-semibold text-slate-700">
-                                                                    ₺{Number(item.value ?? 0).toLocaleString("tr-TR")}
+                                                                    {formatCategoryValue(String(item.dataKey || ""), Number(item.value ?? 0))}
                                                                 </span>
                                                             </div>
                                                         ))}
                                                     </div>
-                                                    <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
-                                                        Toplam: ₺{total.toLocaleString("tr-TR")}
-                                                    </div>
+                                                    {(fuelTotal > 0 || otherTotal > 0) ? (
+                                                        <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
+                                                            {fuelTotal > 0 ? `Yakıt: ${formatLitreValue(fuelTotal)}` : null}
+                                                            {fuelTotal > 0 && otherTotal > 0 ? " • " : null}
+                                                            {otherTotal > 0 ? `Diğer: ${formatCurrencyValue(otherTotal)}` : null}
+                                                        </div>
+                                                    ) : null}
                                                 </div>
                                             );
                                         }}
@@ -1032,7 +1351,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                     {vehicleStackCategories.map((category, index) => (
                                         <Bar
                                             key={`vehicle-cost-${category.key}`}
-                                            dataKey={category.key}
+                                            dataKey={category.key === "yakit" ? "yakitLitre" : category.key}
                                             name={category.label}
                                             stackId="arac"
                                             fill={category.color}
@@ -1050,7 +1369,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                                         {item.name}
                                     </span>
-                                    <span className="font-semibold text-slate-800">₺{item.value.toLocaleString("tr-TR")}</span>
+                                    <span className="font-semibold text-slate-800">{formatCategoryValue(item.key, item.value)}</span>
                                 </div>
                             ))}
                         </div>
@@ -1062,12 +1381,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 Personel Bazlı Maliyet (Top 10)
                             </CardTitle>
                             <p className="text-xs text-slate-500">
-                                Toplam: ₺{driverTop10ReportTotal.toLocaleString("tr-TR")}
+                                Yakıt: {formatLitreValue(driverTop10FuelTotal)} • Diğer gider: {formatCurrencyValue(driverTop10ReportTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-2 pb-4 pt-2 h-[320px]">
                             <ResponsiveContainer width="100%" height="100%">
-                                <BarChart accessibilityLayer={false} data={driverTop10CostReport} margin={{ top: 10, right: 20, left: 10, bottom: 10 }}>
+                                <BarChart accessibilityLayer={false} data={driverTop10CostReport} margin={{ top: 10, right: 20, left: 10, bottom: 72 }}>
                                     <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
                                     <XAxis
                                         dataKey="adSoyad"
@@ -1076,21 +1395,32 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                         tickLine={false}
                                         tick={{ fontSize: 11, fill: '#0F172A', fontWeight: 600 }}
                                         interval={0}
+                                        angle={-35}
+                                        textAnchor="end"
+                                        tickMargin={8}
+                                        height={76}
+                                        tickFormatter={formatDriverAxisLabel}
                                     />
                                     <YAxis
                                         type="number"
                                         axisLine={false}
                                         tickLine={false}
                                         tick={{ fontSize: 12, fill: '#64748B' }}
-                                        tickFormatter={(val) => `₺${Math.round(Number(val) / 1000)}k`}
+                                        tickFormatter={(val) => Number(val).toLocaleString("tr-TR")}
                                     />
                                     <Tooltip
                                         cursor={false}
                                         contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
-                                        formatter={(value, name) => [`₺${Number(value ?? 0).toLocaleString('tr-TR')}`, String(name)]}
+                                        formatter={(value, name, entry) => {
+                                            const key =
+                                                entry && typeof entry === "object" && "dataKey" in entry
+                                                    ? String((entry as { dataKey?: unknown }).dataKey || "")
+                                                    : "";
+                                            return [formatCategoryValue(key, Number(value ?? 0)), String(name)];
+                                        }}
                                     />
-                                    <Bar dataKey="yakit" name="Yakıt" stackId="sofor" fill="#22C55E" radius={[0, 0, 0, 0]} maxBarSize={42} />
-                                    <Bar dataKey="ariza" name="Arıza" stackId="sofor" fill="#F59E0B" radius={[0, 0, 0, 0]} maxBarSize={42} />
+                                    <Bar dataKey="yakitLitre" name="Yakıt" stackId="sofor" fill="#22C55E" radius={[0, 0, 0, 0]} maxBarSize={42} />
+                                    <Bar dataKey="ariza" name="Servis" stackId="sofor" fill="#F59E0B" radius={[0, 0, 0, 0]} maxBarSize={42} />
                                     <Bar dataKey="ceza" name="Ceza" stackId="sofor" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={42} />
                                 </BarChart>
                             </ResponsiveContainer>
@@ -1102,7 +1432,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                         <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
                                         {item.name}
                                     </span>
-                                    <span className="font-semibold text-slate-800">₺{item.value.toLocaleString("tr-TR")}</span>
+                                    <span className="font-semibold text-slate-800">{formatCategoryValue(item.key, item.value)}</span>
                                 </div>
                             ))}
                         </div>
@@ -1112,12 +1442,168 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
             {shouldShowVehicleAndDriverCostLists && (
                 <div className="space-y-4">
+                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                        <CardHeader className="pb-2 px-5 pt-5">
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <CardTitle className="text-sm font-semibold text-slate-900">
+                                        Ortalama Yakıt Tüketimi
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-500 mt-1">
+                                        {fuelAverageMode === "ARAC"
+                                            ? `Araç bazlı tüketim ortalaması • ${selectedFuelAverageSummary.count} araç`
+                                            : `Personel bazlı tüketim ortalaması • ${selectedFuelAverageSummary.count} personel`}
+                                        {selectedFuelAverageSummary.count > 0
+                                            ? ` • Toplam ortalama: ${formatFuelAverageValue(selectedFuelAverageSummary.average)}`
+                                            : ""}
+                                        {fuelAverageMode === "PERSONEL" && driverAboveAverageRows.length > 0
+                                            ? ` • Ortalama üstü: ${driverAboveAverageRows.length} şoför`
+                                            : ""}
+                                    </p>
+                                </div>
+
+                                <div className="inline-flex items-center gap-2">
+                                    <label htmlFor="fuel-average-mode" className="text-xs font-semibold text-slate-500">
+                                        Görünüm
+                                    </label>
+                                    <select
+                                        id="fuel-average-mode"
+                                        value={fuelAverageMode}
+                                        onChange={(event) =>
+                                            setFuelAverageMode(event.target.value === "PERSONEL" ? "PERSONEL" : "ARAC")
+                                        }
+                                        className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs font-semibold text-slate-700 outline-none transition focus:border-slate-400"
+                                    >
+                                        <option value="ARAC">Araç</option>
+                                        <option value="PERSONEL">Personel</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="px-3 pb-4 pt-2 h-[360px]">
+                            {fuelAverageChartData.length > 0 ? (
+                                <ResponsiveContainer width="100%" height="100%">
+                                    <BarChart
+                                        accessibilityLayer={false}
+                                        data={fuelAverageChartData}
+                                        layout="vertical"
+                                        margin={{ top: 6, right: 20, left: 2, bottom: 6 }}
+                                    >
+                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#F1F5F9" />
+                                        <XAxis
+                                            type="number"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            tick={{ fontSize: 12, fill: "#64748B" }}
+                                            tickFormatter={(val) => Number(val).toLocaleString("tr-TR", { maximumFractionDigits: 1 })}
+                                        />
+                                        <YAxis
+                                            type="category"
+                                            dataKey="axisLabel"
+                                            axisLine={false}
+                                            tickLine={false}
+                                            interval={0}
+                                            tick={renderFuelAverageTick}
+                                            width={125}
+                                        />
+                                        <Tooltip
+                                            cursor={false}
+                                            contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0" }}
+                                            content={({ active, payload }) => {
+                                                if (!active || !payload || payload.length === 0) return null;
+                                                const raw = payload[0]?.payload as
+                                                    | {
+                                                          fullLabel?: string;
+                                                          detail?: string;
+                                                          averageLitresPer100Km?: number;
+                                                          intervalCount?: number;
+                                                          benchmarkAverageLitresPer100Km?: number;
+                                                          isAboveAverage?: boolean;
+                                                      }
+                                                    | undefined;
+                                                const avg = Number(raw?.averageLitresPer100Km || 0);
+                                                const intervalCount = Number(raw?.intervalCount || 0);
+                                                const benchmark = Number(raw?.benchmarkAverageLitresPer100Km || 0);
+                                                const isAboveAverage = Boolean(raw?.isAboveAverage);
+
+                                                return (
+                                                    <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                                                        <p className="text-xs font-semibold text-slate-900">{raw?.fullLabel || "-"}</p>
+                                                        <p className="text-[11px] text-slate-500 mt-0.5">{raw?.detail || "-"}</p>
+                                                        <p className="text-xs font-bold text-slate-900 mt-2">
+                                                            {formatFuelAverageValue(avg)}
+                                                        </p>
+                                                        <p className="text-[11px] text-slate-500">
+                                                            {intervalCount} dolum aralığı
+                                                        </p>
+                                                        {benchmark > 0 ? (
+                                                            <p className="text-[11px] text-slate-500">
+                                                                İş makinesi ort: {formatFuelAverageValue(benchmark)}
+                                                            </p>
+                                                        ) : null}
+                                                        {isAboveAverage ? (
+                                                            <span className="mt-1 inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                                                Ortalama Üstü
+                                                            </span>
+                                                        ) : null}
+                                                    </div>
+                                                );
+                                            }}
+                                        />
+                                        <Bar
+                                            dataKey="averageLitresPer100Km"
+                                            name="Ortalama Yakıt"
+                                            fill={fuelAverageMode === "ARAC" ? "#4F46E5" : "#059669"}
+                                            radius={[0, 4, 4, 0]}
+                                            maxBarSize={22}
+                                            cursor="pointer"
+                                            onClick={(_, index) => navigateFuelAverageDetail(index)}
+                                        >
+                                            {fuelAverageMode === "PERSONEL"
+                                                ? fuelAverageChartData.map((entry: any) => (
+                                                      <Cell
+                                                          key={`fuel-avg-person-${entry.id}`}
+                                                          fill={entry.isAboveAverage ? "#DC2626" : "#059669"}
+                                                      />
+                                                  ))
+                                                : null}
+                                        </Bar>
+                                    </BarChart>
+                                </ResponsiveContainer>
+                            ) : (
+                                <div className="h-full flex items-center justify-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                    Seçili dönem için ortalama yakıt verisi yok.
+                                </div>
+                            )}
+                            {fuelAverageMode === "PERSONEL" ? (
+                                <div className="mt-2 border-t border-slate-200 pt-2">
+                                    <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Ortalama Üstü Şoförler</p>
+                                    {driverAboveAverageRows.length > 0 ? (
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {driverAboveAverageRows.map((row: any) => (
+                                                <Link
+                                                    key={`above-driver-${row.soforId}`}
+                                                    href={buildScopedHref(`/dashboard/personel/${row.soforId}`)}
+                                                    className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
+                                                >
+                                                    {row.adSoyad}: {formatFuelAverageValue(Number(row.averageLitresPer100Km || 0))}
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <p className="text-[11px] text-slate-400">Ortalama üstü şoför bulunmuyor.</p>
+                                    )}
+                                </div>
+                            ) : null}
+                        </CardContent>
+                    </Card>
+
                     {shouldShowCompanyCostReport && (
                         <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
                             <CardHeader className="pb-2 px-5 pt-5">
-                                <CardTitle className="text-sm font-semibold text-slate-900">Şirket Bazlı Toplam Gider</CardTitle>
+                                <CardTitle className="text-sm font-semibold text-slate-900">Şirket Bazlı Aylık Gider</CardTitle>
                                 <p className="text-xs text-slate-500">
-                                    Toplam: ₺{companyReportTotal.toLocaleString("tr-TR")}
+                                    Yakıt: {formatLitreValue(companyFuelTotal)} • Diğer gider: {formatCurrencyValue(companyReportTotal)}
                                 </p>
                             </CardHeader>
                             <CardContent className="px-5 pb-5 pt-1">
@@ -1127,14 +1613,16 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             (() => {
                                                 const maliyetKalemleri = [
                                                     { key: "bakim", label: "Servis", tutar: Number(item.bakim || 0) },
-                                                    { key: "yakit", label: "Yakıt", tutar: Number(item.yakit || 0) },
+                                                    { key: "yakit", label: "Yakıt", tutar: getFuelDisplayValue(item) },
                                                     { key: "muayene", label: "Muayene", tutar: Number(item.muayene || 0) },
-                                                    { key: "hgs", label: "HGS", tutar: Number(item.hgs || 0) },
                                                     { key: "ceza", label: "Ceza", tutar: Number(item.ceza || 0) },
                                                     { key: "kasko", label: "Kasko", tutar: Number(item.kasko || 0) },
                                                     { key: "trafik", label: "Trafik", tutar: Number(item.trafik || 0) },
                                                     { key: "diger", label: "Diğer", tutar: Number(item.diger || 0) },
                                                 ].filter((kalem) => kalem.tutar > 0);
+                                                const companyHref = item.sirketId
+                                                    ? buildScopedHref(`/dashboard/sirketler?sirket=${item.sirketId}`)
+                                                    : buildScopedHref("/dashboard/sirketler");
 
                                                 return (
                                                     <div
@@ -1142,9 +1630,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                         className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                                                     >
                                                         <div className="flex items-center justify-between gap-2">
-                                                            <p className="text-xs font-medium text-slate-700 truncate pr-2">
+                                                            <Link
+                                                                href={companyHref}
+                                                                className="text-xs font-medium text-slate-700 truncate pr-2 hover:text-indigo-700 hover:underline underline-offset-2"
+                                                            >
                                                                 {item.sirketAd}
-                                                            </p>
+                                                            </Link>
                                                             <p className="text-sm font-black text-rose-600 whitespace-nowrap">
                                                                 ₺{item.toplam.toLocaleString("tr-TR")}
                                                             </p>
@@ -1156,7 +1647,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                                         key={`${item.sirketId || "bagimsiz"}-${kalem.key}`}
                                                                         className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${COMPANY_COST_BADGE_COLORS[kalem.key] || COMPANY_COST_BADGE_COLORS.diger}`}
                                                                     >
-                                                                        {kalem.label}: ₺{kalem.tutar.toLocaleString("tr-TR")}
+                                                                        {kalem.label}: {kalem.key === "yakit" ? formatLitreValue(kalem.tutar) : formatCurrencyValue(kalem.tutar)}
                                                                     </span>
                                                                 ))}
                                                             </div>
@@ -1180,9 +1671,9 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                     <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-2 px-5 pt-5">
-                            <CardTitle className="text-sm font-semibold text-slate-900">Araç Bazlı Toplam Gider</CardTitle>
+                            <CardTitle className="text-sm font-semibold text-slate-900">Araç Bazlı Aylık Gider</CardTitle>
                             <p className="text-xs text-slate-500">
-                                Toplam: ₺{vehicleReportTotal.toLocaleString("tr-TR")}
+                                Yakıt: {formatLitreValue(vehicleFuelTotal)} • Diğer gider: {formatCurrencyValue(vehicleReportTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-5 pb-5 pt-1">
@@ -1190,26 +1681,31 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 <div className="space-y-2">
                                     {sortedVehicleCostReport.map((item, index) => (
                                         (() => {
-                                            const maliyetKalemleri = [
-                                                { key: "bakim", label: "Servis", tutar: Number(item.bakim || 0) },
-                                                { key: "yakit", label: "Yakıt", tutar: Number(item.yakit || 0) },
+                                                const maliyetKalemleri = [
+                                                    { key: "bakim", label: "Servis", tutar: Number(item.bakim || 0) },
+                                                    { key: "yakit", label: "Yakıt", tutar: getFuelDisplayValue(item) },
                                                 { key: "muayene", label: "Muayene", tutar: Number(item.muayene || 0) },
-                                                { key: "hgs", label: "HGS", tutar: Number(item.hgs || 0) },
                                                 { key: "ceza", label: "Ceza", tutar: Number(item.ceza || 0) },
                                                 { key: "kasko", label: "Kasko", tutar: Number(item.kasko || 0) },
                                                 { key: "trafik", label: "Trafik", tutar: Number(item.trafik || 0) },
-                                                { key: "diger", label: "Diğer", tutar: Number(item.diger || 0) },
-                                            ].filter((kalem) => kalem.tutar > 0);
+                                                    { key: "diger", label: "Diğer", tutar: Number(item.diger || 0) },
+                                                ].filter((kalem) => kalem.tutar > 0);
+                                                const vehicleHref = item.aracId
+                                                    ? buildScopedHref(`/dashboard/araclar/${item.aracId}`)
+                                                    : buildScopedHref("/dashboard/araclar");
 
-                                            return (
-                                                <div
+                                                return (
+                                                    <div
                                                     key={`${item.aracId || item.plaka || "arac"}-${index}`}
-                                                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
+                                                        className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
-                                                        <p className="text-xs font-medium text-slate-700 truncate pr-2">
+                                                        <Link
+                                                            href={vehicleHref}
+                                                            className="text-xs font-medium text-slate-700 truncate pr-2 hover:text-indigo-700 hover:underline underline-offset-2"
+                                                        >
                                                             {item.plaka || "Araç"}
-                                                        </p>
+                                                        </Link>
                                                         <p className="text-sm font-black text-rose-600 whitespace-nowrap">
                                                             ₺{Number(item.toplam || 0).toLocaleString("tr-TR")}
                                                         </p>
@@ -1221,7 +1717,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                                     key={`${item.aracId || item.plaka || "arac"}-${kalem.key}`}
                                                                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${COMPANY_COST_BADGE_COLORS[kalem.key] || COMPANY_COST_BADGE_COLORS.diger}`}
                                                                 >
-                                                                    {kalem.label}: ₺{kalem.tutar.toLocaleString("tr-TR")}
+                                                                    {kalem.label}: {kalem.key === "yakit" ? formatLitreValue(kalem.tutar) : formatCurrencyValue(kalem.tutar)}
                                                                 </span>
                                                             ))}
                                                         </div>
@@ -1243,9 +1739,9 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
                     <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-2 px-5 pt-5">
-                            <CardTitle className="text-sm font-semibold text-slate-900">Personel Bazlı Toplam Gider</CardTitle>
+                            <CardTitle className="text-sm font-semibold text-slate-900">Personel Bazlı Aylık Gider</CardTitle>
                             <p className="text-xs text-slate-500">
-                                Toplam: ₺{driverReportTotal.toLocaleString("tr-TR")}
+                                Yakıt: {formatLitreValue(driverFuelTotal)} • Diğer gider: {formatCurrencyValue(driverReportTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-5 pb-5 pt-1">
@@ -1254,10 +1750,15 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                     {sortedDriverCostReport.map((item, index) => (
                                         (() => {
                                             const maliyetKalemleri = [
-                                                { key: "yakit", label: "Yakıt", tutar: Number(item.yakit || 0) },
-                                                { key: "ariza", label: "Arıza", tutar: Number(item.ariza || 0) },
+                                                { key: "yakit", label: "Yakıt", tutar: getFuelDisplayValue(item) },
+                                                { key: "ariza", label: "Servis", tutar: Number(item.ariza || 0) },
                                                 { key: "ceza", label: "Ceza", tutar: Number(item.ceza || 0) },
                                             ].filter((kalem) => kalem.tutar > 0);
+                                            const personId = item.soforId || item.kullaniciId;
+                                            const personHref = personId
+                                                ? buildScopedHref(`/dashboard/personel/${personId}`)
+                                                : buildScopedHref("/dashboard/personel");
+                                            const driverFuelState = personId ? driverAverageStatusById.get(String(personId)) : null;
 
                                             return (
                                                 <div
@@ -1265,9 +1766,19 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                     className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2"
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
-                                                        <p className="text-xs font-medium text-slate-700 truncate pr-2">
-                                                            {item.adSoyad || "Personel"}
-                                                        </p>
+                                                        <div className="flex min-w-0 items-center gap-1.5">
+                                                            <Link
+                                                                href={personHref}
+                                                                className="text-xs font-medium text-slate-700 truncate pr-1 hover:text-indigo-700 hover:underline underline-offset-2"
+                                                            >
+                                                                {item.adSoyad || "Personel"}
+                                                            </Link>
+                                                            {driverFuelState?.isAbove ? (
+                                                                <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[9px] font-semibold text-rose-700">
+                                                                    Ortalama Üstü
+                                                                </span>
+                                                            ) : null}
+                                                        </div>
                                                         <p className="text-sm font-black text-rose-600 whitespace-nowrap">
                                                             ₺{Number(item.toplam || 0).toLocaleString("tr-TR")}
                                                         </p>
@@ -1279,7 +1790,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                                     key={`${item.soforId || item.kullaniciId || item.adSoyad || "personel"}-${kalem.key}`}
                                                                     className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${DRIVER_COST_BADGE_COLORS[kalem.key]}`}
                                                                 >
-                                                                    {kalem.label}: ₺{kalem.tutar.toLocaleString("tr-TR")}
+                                                                    {kalem.label}: {kalem.key === "yakit" ? formatLitreValue(kalem.tutar) : formatCurrencyValue(kalem.tutar)}
                                                                 </span>
                                                             ))}
                                                         </div>

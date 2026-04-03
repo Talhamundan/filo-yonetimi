@@ -299,7 +299,7 @@ async function getDocumentExpirationReport(params: {
             return items.map((item) => {
                 const daysLeft = Math.ceil((item.tarih.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
                 return {
-                    Plaka: arac.plaka,
+                    Plaka: arac.plaka || "-",
                     Sirket: arac.sirket?.ad || "-",
                     Tur: item.tur,
                     SonTarih: formatDate(item.tarih),
@@ -399,8 +399,12 @@ async function getVehicleExpenseReport(params: {
         }),
     ]);
 
-    const toMap = (rows: Array<{ aracId: string; _sum: { tutar: number | null } }>) =>
-        new Map(rows.map((row) => [row.aracId, row._sum.tutar || 0]));
+    const toMap = (rows: Array<{ aracId: string | null; _sum: { tutar: number | null } }>) =>
+        new Map(
+            rows
+                .filter((row): row is { aracId: string; _sum: { tutar: number | null } } => typeof row.aracId === "string" && row.aracId.length > 0)
+                .map((row) => [row.aracId, row._sum.tutar || 0])
+        );
 
     const yakitMap = toMap(yakitRows);
     const bakimMap = toMap(bakimRows);
@@ -415,7 +419,7 @@ async function getVehicleExpenseReport(params: {
             const ceza = cezaMap.get(arac.id) || 0;
             const toplam = yakit + bakim + masraf + ceza;
             return {
-                Plaka: arac.plaka,
+                Plaka: arac.plaka || "-",
                 Sirket: arac.sirket?.ad || "-",
                 Yakit: Number(yakit.toFixed(2)),
                 Bakim: Number(bakim.toFixed(2)),

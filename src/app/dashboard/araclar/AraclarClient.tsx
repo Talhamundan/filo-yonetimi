@@ -14,6 +14,7 @@ import { createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 const ILLER = [
     { value: 'ISTANBUL', label: 'İSTANBUL' },
@@ -44,7 +45,6 @@ const EMPTY = {
     calistigiKurum: '',
     sirketId: '',
     kullaniciId: '',
-    hgsNo: '',
     ruhsatSeriNo: '',
     saseNo: '',
     kategori: 'BINEK'
@@ -69,6 +69,10 @@ const FormFields = ({
     showInitialMuayeneField?: boolean,
     allowIndependentOption?: boolean,
 }) => {
+    const hasKiralikSirket = React.useMemo(
+        () => sirketler.some((sirket) => isKiralikSirketName(sirket.ad)),
+        [sirketler]
+    );
     const firmaOptions = React.useMemo(() => {
         const options = [...kullaniciFirmaOptions];
         const currentFirma = typeof formData.calistigiKurum === "string" ? formData.calistigiKurum.trim() : "";
@@ -188,6 +192,9 @@ const FormFields = ({
                         Şirket Seçiniz
                     </option>
                 )}
+                {allowIndependentOption && !hasKiralikSirket ? (
+                    <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>
+                ) : null}
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
@@ -240,10 +247,6 @@ const FormFields = ({
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">HGS No</label>
-            <Input value={formData.hgsNo} onChange={e => setFormData({...formData, hgsNo: e.target.value})} className="h-9" />
-        </div>
-        <div className="space-y-1.5">
             <label className="text-sm font-medium">Ruhsat Seri No</label>
             <Input value={formData.ruhsatSeriNo} onChange={e => setFormData({...formData, ruhsatSeriNo: e.target.value})} className="h-9" />
         </div>
@@ -272,6 +275,7 @@ export default function AraclarClient({
     role?: string | null
 }) {
     const isTeknik = role === "TEKNIK";
+    const isAdminUser = role === "ADMIN";
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies, canAssignIndependentRecords } = useDashboardScope();
     const searchParams = useSearchParams();
@@ -412,7 +416,6 @@ export default function AraclarClient({
             calistigiKurum: (row as any).calistigiKurum || row.kullanici?.sirket?.ad || '',
             sirketId: row.sirket?.id || (row as any).sirketId || '',
             kullaniciId: (row as any).kullaniciId || row.kullanici?.id || '',
-            hgsNo: row.hgsNo || '',
             ruhsatSeriNo: (row as any).ruhsatSeriNo || '',
             saseNo: (row as any).saseNo || '',
             kategori: row.kategori || 'BINEK'
@@ -422,7 +425,7 @@ export default function AraclarClient({
 
 
     const columnsWithActions = [
-        ...getColumns(canAccessAllCompanies, isTeknik),
+        ...getColumns(canAccessAllCompanies, isTeknik, isAdminUser),
         {
             id: 'actions',
             header: 'İşlemler',

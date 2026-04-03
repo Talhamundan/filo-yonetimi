@@ -176,21 +176,26 @@ model Bakim {
   bakimTarihi     DateTime
   yapilanKm       Int
   sonrakiBakimKm  Int?
+  plaka           String?
+  arizaSikayet    String?
+  degisenParca    String?
+  islemYapanFirma String?
   servisAdi       String?
   yapilanIslemler String?
   tutar           Float          @default(0)
   tur             BakimTuru      @default(PERIYODIK)
-  aracId          String
+  aracId          String?
   soforId         String?
   sirketId        String?
   kategori        ServisKategori @default(PERIYODIK_BAKIM)
   saseNo          String?
   deletedAt       DateTime?
   deletedBy       String?
-  arac            Arac           @relation(fields: [aracId], references: [id])
+  arac            Arac?          @relation(fields: [aracId], references: [id], onDelete: SetNull)
   sofor           Kullanici?     @relation("BakimSoforRelation", fields: [soforId], references: [id])
   arizaKaydi      ArizaKaydi?
 
+  @@index([plaka])
   @@index([aracId])
   @@index([soforId])
   @@index([sirketId])

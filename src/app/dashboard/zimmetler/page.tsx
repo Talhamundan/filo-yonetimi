@@ -111,7 +111,13 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
                     },
                 },
             } as any,
-            select: { id: true, ad: true, soyad: true },
+            select: {
+                id: true,
+                ad: true,
+                soyad: true,
+                calistigiKurum: true,
+                sirket: { select: { ad: true } },
+            },
             orderBy: { ad: 'asc' }
         })
     ]);
@@ -239,7 +245,12 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
         <ZimmetlerClient 
             initialZimmetler={zimmetlerWithCost as unknown as SoforZimmetRow[]} 
             araclar={araclar}
-            kullanicilar={kullanicilar.map((k: any) => ({ id: k.id, adSoyad: `${k.ad} ${k.soyad}` }))}
+            kullanicilar={kullanicilar.map((k: any) => ({
+                id: k.id,
+                adSoyad: `${k.ad} ${k.soyad}`.trim(),
+                sirketAd: k.sirket?.ad || k.calistigiKurum || null,
+                calistigiKurum: k.calistigiKurum || null,
+            }))}
             isTeknik={role === "TEKNIK"}
         />
     );

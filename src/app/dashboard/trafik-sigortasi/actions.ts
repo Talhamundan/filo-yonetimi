@@ -4,6 +4,7 @@ import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { ensureSigortaAcenteColumns, getExistingSigortaColumns, isSigortaOptionalFieldCompatibilityError } from "@/lib/sigorta-schema-compat";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/trafik-sigortasi';
 const EVRAK_PATH = "/dashboard/evrak-takip";
@@ -34,6 +35,10 @@ export async function createSigorta(data: {
             id: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
         const runCreate = async (columns: Set<string>) => {
             const createData: any = {
                 aracId: arac.id,
@@ -44,7 +49,7 @@ export async function createSigorta(data: {
                 tutar: data.tutar !== undefined ? Number(data.tutar) : null,
                 aktifMi: data.aktifMi ?? true,
             };
-            if (columns.has("sirketId")) createData.sirketId = arac.sirketId || null;
+            if (columns.has("sirketId")) createData.sirketId = usageSirketId || null;
             if (columns.has("acente")) createData.acente = data.acente || null;
 
             const operations: any[] = [];
@@ -120,6 +125,10 @@ export async function renewSigorta(id: string, data: {
                 id: true,
                 sirketId: true,
             });
+            const usageSirketId = await resolveVehicleUsageCompanyId({
+                aracId: arac.id,
+                fallbackSirketId: arac.sirketId || (mevcutKayit as any).sirketId || null,
+            });
 
             const yenilemeTarihi = new Date(data.yenilemeTarihi);
             const bitisTarihi = data.bitisTarihi
@@ -135,7 +144,7 @@ export async function renewSigorta(id: string, data: {
                 tutar: data.tutar !== undefined ? Number(data.tutar) : null,
                 aktifMi: true,
             };
-            if (columns.has("sirketId")) createData.sirketId = arac.sirketId || (mevcutKayit as any).sirketId || null;
+            if (columns.has("sirketId")) createData.sirketId = usageSirketId || (mevcutKayit as any).sirketId || null;
             if (columns.has("acente")) createData.acente = data.acente || (mevcutKayit as any).acente || null;
 
             await prisma.$transaction([
@@ -194,6 +203,10 @@ export async function updateSigorta(id: string, data: any) {
         const arac = data.aracId
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId || (mevcutKayit as any).sirketId || null,
+        });
 
         const updateData: any = {
             aracId: arac.id,
@@ -204,7 +217,7 @@ export async function updateSigorta(id: string, data: any) {
             tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
             aktifMi: typeof data.aktifMi === "boolean" ? data.aktifMi : undefined,
         };
-        if (columns.has("sirketId")) updateData.sirketId = arac.sirketId || (mevcutKayit as any).sirketId || null;
+        if (columns.has("sirketId")) updateData.sirketId = usageSirketId || (mevcutKayit as any).sirketId || null;
         if (columns.has("acente")) updateData.acente = data.acente ?? undefined;
 
         try {

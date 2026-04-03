@@ -20,7 +20,7 @@ export async function getSelectedYil(
     const parsed = Number(value);
     const currentYear = new Date().getFullYear();
 
-    if (!Number.isInteger(parsed) || parsed < 2000 || parsed > 2100) {
+    if (!Number.isInteger(parsed) || parsed < 2000 || parsed > currentYear) {
         return currentYear;
     }
 
@@ -47,6 +47,10 @@ export async function getSelectedAy(
     const currentMonth = new Date().getMonth() + 1;
 
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) {
+        return currentMonth;
+    }
+
+    if (Number.isInteger(parsedYear) && parsedYear > currentYear) {
         return currentMonth;
     }
 

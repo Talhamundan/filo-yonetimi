@@ -30,11 +30,19 @@ export async function getKullanicilarSelect() {
             },
         },
         orderBy: [{ ad: "asc" }, { soyad: "asc" }],
-        select: { id: true, ad: true, soyad: true },
+        select: {
+            id: true,
+            ad: true,
+            soyad: true,
+            calistigiKurum: true,
+            sirket: { select: { ad: true } },
+        },
     });
     return kullanicilar.map((k) => ({
         id: k.id,
         adSoyad: `${k.ad || ""} ${k.soyad || ""}`.trim(),
+        sirketAd: k.sirket?.ad || k.calistigiKurum || null,
+        calistigiKurum: k.calistigiKurum || null,
     }));
 }
 

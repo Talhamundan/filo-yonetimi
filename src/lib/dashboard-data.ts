@@ -1,9 +1,10 @@
 import type { DashboardComparisonGranularity, DashboardData, GenericWhere } from "@/lib/dashboard-types";
 import { buildDateContext, getCezaScopeWhere, getDegisimYuzdesi } from "@/lib/dashboard-helpers";
-import { getDashboardCostData } from "@/lib/dashboard-cost.service";
+import { getDashboardCostData, getDashboardFuelConsumptionData } from "@/lib/dashboard-cost.service";
 import { getDashboardCalendarData } from "@/lib/dashboard-calendar.service";
 import { getDashboardVehicleData, getFleetStatusData } from "@/lib/dashboard-vehicle.service";
 import { getDashboardDriverData } from "@/lib/dashboard-driver.service";
+import { getDashboardFuelAverageData } from "@/lib/dashboard-fuel-average.service";
 
 export type {
     DashboardCalendarEvent,
@@ -11,11 +12,13 @@ export type {
     DashboardComparisonGranularity,
     DashboardData,
     DashboardDriverCostItem,
+    DashboardDriverFuelAverageItem,
     DashboardEventStatus,
     DashboardEventType,
     DashboardDailyTrendItem,
     DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
+    DashboardVehicleFuelAverageItem,
     DashboardVehicleCostItem,
 } from "@/lib/dashboard-types";
 
@@ -60,32 +63,38 @@ function getEmptyDashboardData(): DashboardData {
         vehicleCostReport: [],
         driverCostReport: [],
         companyCostReport: [],
+        vehicleFuelAverageReport: [],
+        driverFuelAverageReport: [],
     };
 }
 
 async function getDashboardDataUnsafe(
     sirketFilter: GenericWhere | null,
+    vehicleScopeFilter: GenericWhere | null = null,
     selectedYil = new Date().getFullYear(),
     selectedAy = new Date().getMonth() + 1,
     comparisonGranularity: DashboardComparisonGranularity = "AY"
 ): Promise<DashboardData> {
     const scope = sirketFilter || {};
+    const vehicleScope = vehicleScopeFilter || scope;
     const cezaScope = getCezaScopeWhere(scope);
     const dateContext = buildDateContext(selectedYil, selectedAy, comparisonGranularity);
 
-    const [fleetData, costData, calendarData, vehicleData, driverData] = await Promise.all([
-        getFleetStatusData(scope),
-        getDashboardCostData({ scope, cezaScope, dateContext, comparisonGranularity }),
-        getDashboardCalendarData({ scope, cezaScope, dateContext }),
-        getDashboardVehicleData({ scope, cezaScope, dateContext }),
-        getDashboardDriverData({ scope, cezaScope, dateContext }),
+    const [fleetData, costData, fuelConsumptionData, calendarData, vehicleData, driverData, fuelAverageData] = await Promise.all([
+        getFleetStatusData(scope, vehicleScope),
+        getDashboardCostData({ scope, cezaScope, vehicleScope, dateContext, comparisonGranularity }),
+        getDashboardFuelConsumptionData({ scope, vehicleScope, dateContext }),
+        getDashboardCalendarData({ scope, cezaScope, dateContext, vehicleScope }),
+        getDashboardVehicleData({ scope, cezaScope, dateContext, vehicleScope }),
+        getDashboardDriverData({ scope, cezaScope, dateContext, vehicleScope }),
+        getDashboardFuelAverageData({ scope, dateContext, vehicleScope }),
     ]);
 
     const aylikToplamGider = costData.current.toplam;
     const oncekiDonemToplamGider = costData.previous.toplam;
 
-    const ortalamaYakit = fleetData.aktifArac > 0 ? Math.round(costData.current.yakit / fleetData.aktifArac) : 0;
-    const oncekiOrtalamaYakit = fleetData.aktifArac > 0 ? Math.round(costData.previous.yakit / fleetData.aktifArac) : 0;
+    const ortalamaYakit = fuelConsumptionData.currentAverageLitresPer100Km;
+    const oncekiOrtalamaYakit = fuelConsumptionData.previousAverageLitresPer100Km;
 
     const comparisonLabel = comparisonGranularity === "AY" ? "geçen aya göre" : "geçen yıla göre";
 
@@ -128,17 +137,26 @@ async function getDashboardDataUnsafe(
         vehicleCostReport: vehicleData.vehicleCostReport,
         driverCostReport: driverData.driverCostReport,
         companyCostReport: costData.companyCostReport,
+        vehicleFuelAverageReport: fuelAverageData.vehicleFuelAverageReport,
+        driverFuelAverageReport: fuelAverageData.driverFuelAverageReport,
     };
 }
 
 export async function getDashboardData(
     sirketFilter: GenericWhere | null,
+    vehicleScopeFilter: GenericWhere | null = null,
     selectedYil = new Date().getFullYear(),
     selectedAy = new Date().getMonth() + 1,
     comparisonGranularity: DashboardComparisonGranularity = "AY"
 ): Promise<DashboardData> {
     try {
-        return await getDashboardDataUnsafe(sirketFilter, selectedYil, selectedAy, comparisonGranularity);
+        return await getDashboardDataUnsafe(
+            sirketFilter,
+            vehicleScopeFilter,
+            selectedYil,
+            selectedAy,
+            comparisonGranularity
+        );
     } catch (error) {
         console.warn("Dashboard verileri alinamadi. Bos veri ile devam ediliyor.", error);
         return getEmptyDashboardData();

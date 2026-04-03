@@ -8,10 +8,12 @@ import { getModelFilter } from "@/lib/auth-utils";
 import { assertKmWriteConsistency, normalizeKmInput, syncAracGuncelKm } from "@/lib/km-consistency";
 import { syncAracDurumu } from "@/lib/arac-durum";
 import { logEntityActivity } from "@/lib/activity-log";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const ARIZALAR_PATH = "/dashboard/arizalar";
 const ARACLAR_PATH = "/dashboard/araclar";
-const BAKIMLAR_PATH = "/dashboard/bakimlar";
+const SERVIS_KAYITLARI_PATH = "/dashboard/servis-kayitlari";
+const LEGACY_BAKIMLAR_PATH = "/dashboard/bakimlar";
 const PERSONEL_PATH = "/dashboard/personel";
 const DASHBOARD_PATH = "/dashboard";
 
@@ -65,7 +67,8 @@ function resolveArizaActionError(error: unknown, fallback: string) {
 function revalidateArizaPages(aracId?: string, soforId?: string | null) {
     revalidatePath(ARIZALAR_PATH);
     revalidatePath(ARACLAR_PATH);
-    revalidatePath(BAKIMLAR_PATH);
+    revalidatePath(SERVIS_KAYITLARI_PATH);
+    revalidatePath(LEGACY_BAKIMLAR_PATH);
     revalidatePath(PERSONEL_PATH);
     revalidatePath(DASHBOARD_PATH);
     if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
@@ -129,12 +132,16 @@ export async function createArizaKaydi(data: {
                 : null;
         const fallbackSoforId = await getAracActiveSoforId(arac.id, arac.kullaniciId || null);
         const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
 
         const created = await (prisma as any).arizaKaydi.create({
             data: {
                 aracId: arac.id,
                 ...(ARIZA_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
-                sirketId: arac.sirketId,
+                sirketId: usageSirketId,
                 aciklama: data.aciklama,
                 oncelik: normalizeArizaOncelik(data.oncelik),
                 km: normalizedKm,
@@ -203,6 +210,7 @@ export async function updateArizaKaydi(
         const arac = await getScopedAracOrThrow(mevcut.aracId, {
             id: true,
             plaka: true,
+            sirketId: true,
             kullaniciId: true,
         });
 
@@ -220,11 +228,16 @@ export async function updateArizaKaydi(
             mevcut.soforId || arac.kullaniciId || null
         );
         const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId || mevcut.sirketId,
+        });
 
         const updated = await (prisma as any).arizaKaydi.update({
             where: { id },
             data: {
                 ...(ARIZA_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
+                sirketId: usageSirketId || mevcut.sirketId,
                 aciklama: data.aciklama,
                 oncelik: normalizeArizaOncelik(data.oncelik),
                 km: normalizedKm,
@@ -368,18 +381,24 @@ export async function tamamlaArizaKaydi(
         const yapilanIslemler = data?.yapilanIslemler ?? kayit.yapilanIslemler ?? null;
         const tutar = typeof data?.tutar === "number" ? data.tutar : typeof kayit.tutar === "number" ? kayit.tutar : 0;
         const shouldCreateBakim = data?.createBakim !== false;
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: kayit.aracId,
+            fallbackSirketId: kayit.sirketId || kayit.arac.sirketId,
+        });
 
         let bakimId = kayit.bakimId as string | null;
         if (shouldCreateBakim && !bakimId) {
             const bakim = await (prisma as any).bakim.create({
                 data: {
                     aracId: kayit.aracId,
-                    sirketId: kayit.sirketId || kayit.arac.sirketId,
+                    sirketId: usageSirketId || kayit.sirketId || kayit.arac.sirketId,
                     ...(BAKIM_HAS_SOFOR_ID ? { soforId: kayit.soforId || null } : {}),
                     bakimTarihi: new Date(),
                     yapilanKm: km,
                     kategori: "ARIZA",
                     tur: "ARIZA",
+                    arizaSikayet: kayit.aciklama || null,
+                    islemYapanFirma: servisAdi,
                     servisAdi,
                     yapilanIslemler,
                     tutar,

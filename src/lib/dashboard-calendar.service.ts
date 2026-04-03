@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { differenceInCalendarDays } from "date-fns";
 import { prisma } from "@/lib/prisma";
-import { formatDateKey } from "@/lib/dashboard-helpers";
+import { formatDateKey, getVehicleUsageScopeWhere } from "@/lib/dashboard-helpers";
 import type {
     DashboardArizaOncelik,
     DashboardCalendarEvent,
@@ -54,18 +54,62 @@ function getEventStatus(daysLeft: number): DashboardEventStatus {
     return "PLANLI";
 }
 
+function getUsageScopedExpenseWhere(scope: GenericWhere): GenericWhere {
+    const rawScope = (scope || {}) as Record<string, unknown>;
+    const normalizedSirketId = typeof rawScope.sirketId === "string" ? rawScope.sirketId.trim() : "";
+    if (!normalizedSirketId) {
+        return scope;
+    }
+
+    const restScope = { ...rawScope };
+    delete restScope.sirketId;
+
+    const vehicleUsageWhere = getVehicleUsageScopeWhere({ sirketId: normalizedSirketId });
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleUsageWhere });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
+function getExpenseScopedWhere(scope: GenericWhere, vehicleScope?: GenericWhere): GenericWhere {
+    if (!vehicleScope || Object.keys((vehicleScope || {}) as Record<string, unknown>).length === 0) {
+        return getUsageScopedExpenseWhere(scope);
+    }
+
+    const restScope = { ...((scope || {}) as Record<string, unknown>) };
+    delete restScope.sirketId;
+
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleScope });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
 export async function getDashboardCalendarData(params: {
     scope: GenericWhere;
     cezaScope: GenericWhere;
     dateContext: DashboardDateContext;
+    vehicleScope?: GenericWhere;
 }) {
-    const { scope, cezaScope, dateContext } = params;
+    const { scope, cezaScope, dateContext, vehicleScope } = params;
+    void cezaScope;
     const { bugun, normalizedYear } = dateContext;
     const seciliYilBasi = new Date(normalizedYear, 0, 1, 0, 0, 0, 0);
     const seciliYilSonu = new Date(normalizedYear, 11, 31, 23, 59, 59, 999);
+    const usageScopedVehicleWhere = {
+        ...((vehicleScope || getVehicleUsageScopeWhere(scope)) as Prisma.AracWhereInput),
+        deletedAt: null,
+    } as Prisma.AracWhereInput;
+    const expenseScope = getExpenseScopedWhere(scope, usageScopedVehicleWhere);
 
     const araclar = await prisma.arac.findMany({
-        where: scope as Prisma.AracWhereInput,
+        where: usageScopedVehicleWhere,
         select: {
             id: true,
             plaka: true,
@@ -95,24 +139,24 @@ export async function getDashboardCalendarData(params: {
     const arizaModel = (prisma as any).arizaKaydi;
     const [muayeneRows, kaskoRows, trafikRows, unpaidCezalar, arizaRows] = await Promise.all([
         prisma.muayene.findMany({
-            where: { ...(scope as Prisma.MuayeneWhereInput), aracId: { in: aracIds } },
+            where: { ...(expenseScope as Prisma.MuayeneWhereInput), aracId: { in: aracIds } },
             orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { muayeneTarihi: "desc" }, { gecerlilikTarihi: "desc" }],
             select: { id: true, aracId: true, gecerlilikTarihi: true },
         }),
         prisma.kasko.findMany({
-            where: { ...(scope as Prisma.KaskoWhereInput), aracId: { in: aracIds } },
+            where: { ...(expenseScope as Prisma.KaskoWhereInput), aracId: { in: aracIds } },
             orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { baslangicTarihi: "desc" }, { bitisTarihi: "desc" }],
             select: { id: true, aracId: true, bitisTarihi: true },
         }),
         prisma.trafikSigortasi.findMany({
-            where: { ...(scope as Prisma.TrafikSigortasiWhereInput), aracId: { in: aracIds } },
+            where: { ...(expenseScope as Prisma.TrafikSigortasiWhereInput), aracId: { in: aracIds } },
             orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { baslangicTarihi: "desc" }, { bitisTarihi: "desc" }],
             select: { id: true, aracId: true, bitisTarihi: true },
         }),
         prisma.ceza.findMany({
             where: {
                 AND: [
-                    cezaScope as Prisma.CezaWhereInput,
+                    expenseScope as Prisma.CezaWhereInput,
                     { odendiMi: { not: true } },
                     {
                         OR: [
@@ -136,7 +180,7 @@ export async function getDashboardCalendarData(params: {
         arizaModel?.findMany
             ? arizaModel.findMany({
                   where: {
-                      ...(scope as Record<string, unknown>),
+                      arac: usageScopedVehicleWhere,
                       durum: { in: ["ACIK", "SERVISTE"] },
                   },
                   select: {

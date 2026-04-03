@@ -4,15 +4,55 @@ import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as xlsx from "xlsx";
 import { ActivityActionType, ActivityEntityType, iller } from "@prisma/client";
-import { getModelFilter } from "@/lib/auth-utils";
+import { canAccessAllCompanies, getCurrentSirketId, getModelFilter } from "@/lib/auth-utils";
 import { assertAuthenticatedUser, getScopedKullaniciOrThrow, resolveActionSirketId } from "@/lib/action-scope";
 import { assertKmWriteConsistency, normalizeKmInput, resolveAracGuncelKmForUpdate, syncAracGuncelKm } from "@/lib/km-consistency";
 import { syncAracDurumu } from "@/lib/arac-durum";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE } from "@/lib/ruhsat-sahibi";
+import { canRoleAssignIndependentRecords } from "@/lib/policy";
 
 const PATH = "/dashboard/araclar";
 const toUpperTr = (value: string) => value.toLocaleUpperCase("tr-TR");
+
+function normalizeSirketSelection(value: unknown) {
+    if (typeof value !== "string") return null;
+    const normalized = value.trim();
+    return normalized || null;
+}
+
+async function ensureKiralikSirketId() {
+    const existing = await prisma.sirket.findFirst({
+        where: { ad: { equals: KIRALIK_SIRKET_ADI, mode: "insensitive" } },
+        select: { id: true },
+    });
+    if (existing?.id) {
+        return existing.id;
+    }
+
+    const created = await prisma.sirket.create({
+        data: { ad: KIRALIK_SIRKET_ADI },
+        select: { id: true },
+    });
+    return created.id;
+}
+
+async function resolveRuhsatSahibiSirketId(inputSirketId?: string | null) {
+    const normalized = normalizeSirketSelection(inputSirketId);
+    if (normalized === KIRALIK_SIRKET_OPTION_VALUE) {
+        const [actor, hasGlobalAccess, currentSirketId] = await Promise.all([
+            assertAuthenticatedUser(),
+            canAccessAllCompanies(),
+            getCurrentSirketId(),
+        ]);
+        if (!hasGlobalAccess || !canRoleAssignIndependentRecords((actor as any).rol, currentSirketId)) {
+            throw new Error("Kiralık ruhsat sahibi seçimi için yetkiniz bulunmuyor.");
+        }
+        return ensureKiralikSirketId();
+    }
+    return resolveActionSirketId(normalized);
+}
 
 function normalizeIlEnum(value: unknown): iller {
     const raw = String(value || "")
@@ -68,19 +108,19 @@ export async function createArac(data: {
     calistigiKurum?: string | null;
     sirketId?: string | null;
     kullaniciId?: string | null;
-    hgsNo?: string | null;
     ruhsatSeriNo?: string | null;
     saseNo?: string | null;
     kategori?: any;
 }) {
     try {
         const actor = await assertAuthenticatedUser();
-        const requestedSirketId = await resolveActionSirketId(data.sirketId);
+        const requestedSirketId = await resolveRuhsatSahibiSirketId(data.sirketId);
         const normalizedPlaka = data.plaka.replace(/\s+/g, '').toUpperCase();
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true, calistigiKurum: true })
             : null;
-        const sirketId = requestedSirketId || kullanici?.sirketId || null;
+        const selectedKiralik = normalizeSirketSelection(data.sirketId) === KIRALIK_SIRKET_OPTION_VALUE;
+        const sirketId = requestedSirketId || (selectedKiralik ? null : (kullanici?.sirketId || null));
         const guncelKm = normalizeKmInput(data.guncelKm) ?? 0;
         const bedel = normalizeBedelInput(data.bedel);
         const personelKurum =
@@ -126,7 +166,6 @@ export async function createArac(data: {
                 calistigiKurum: resolvedCalistigiKurum,
                 sirketId,
                 kullaniciId: kullanici?.id || null,
-                hgsNo: data.hgsNo || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
                 durum: kullanici ? "AKTIF" : "BOSTA",
@@ -226,12 +265,13 @@ export async function updateArac(id: string, data: any) {
             return { success: false, error: "Araç bulunamadı veya yetkiniz yok." };
         }
         const requestedSirketId = data.sirketId !== undefined
-            ? await resolveActionSirketId(data.sirketId)
+            ? await resolveRuhsatSahibiSirketId(data.sirketId)
             : oldArac.sirketId;
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true, calistigiKurum: true })
             : null;
-        const nextSirketId = requestedSirketId || kullanici?.sirketId || null;
+        const selectedKiralik = data.sirketId !== undefined && normalizeSirketSelection(data.sirketId) === KIRALIK_SIRKET_OPTION_VALUE;
+        const nextSirketId = requestedSirketId || (selectedKiralik ? null : (kullanici?.sirketId || null));
         const personelKurum =
             typeof kullanici?.calistigiKurum === "string" && kullanici.calistigiKurum.trim().length > 0
                 ? kullanici.calistigiKurum.trim()
@@ -278,7 +318,6 @@ export async function updateArac(id: string, data: any) {
                 calistigiKurum: resolvedCalistigiKurum,
                 sirketId: nextSirketId,
                 kullaniciId: kullanici?.id || null,
-                hgsNo: data.hgsNo || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
                 kategori: data.kategori || undefined
@@ -482,11 +521,11 @@ export async function deleteArac(id: string) {
         revalidatePath("/dashboard/trafik-sigortasi");
         revalidatePath("/dashboard/muayeneler");
         revalidatePath("/dashboard/yakitlar");
-        revalidatePath("/dashboard/hgs");
         revalidatePath("/dashboard/cezalar");
         revalidatePath("/dashboard/ceza-masraflari");
         revalidatePath("/dashboard/masraflar");
         revalidatePath("/dashboard/dokumanlar");
+        revalidatePath("/dashboard/servis-kayitlari");
         revalidatePath("/dashboard/bakimlar");
         revalidatePath("/dashboard/zimmetler");
         return { success: true };

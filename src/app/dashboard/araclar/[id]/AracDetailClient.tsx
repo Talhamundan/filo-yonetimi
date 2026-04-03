@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-    Car, Users, Wrench, Fuel, ArrowLeft, Activity, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, CreditCard, FileText, Plus, Pencil, Trash2
+    Car, Users, Wrench, Fuel, ArrowLeft, Activity, Gauge, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, FileText, Plus, Pencil, Trash2
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -17,7 +17,6 @@ import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { createZimmet, finalizeZimmet } from "../../zimmetler/actions";
-import { createHgs } from "../../hgs/actions";
 import { addBakim } from "../../bakimlar/actions";
 import { createYakit } from "../../yakitlar/actions";
 import { createMasraf } from "../../masraflar/actions";
@@ -33,6 +32,8 @@ import { PersonelLink } from "@/components/links/RecordLinks";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
+import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AracDetaySaaS = any;
@@ -51,7 +52,7 @@ const twoYearsAfter = (dateStr: string) => {
     return toDateTimeLocalInput(date);
 };
 
-const MASRAF_TURLERI = ['BAKIM_ONARIM', 'LASTIK', 'TEMIZLIK', 'OTOPARK', 'KOPRU_OBO', 'DIGER'];
+const MASRAF_TURLERI = ['BAKIM_ONARIM', 'LASTIK', 'TEMIZLIK', 'OTOPARK', 'HGS_YUKLEME', 'KOPRU_OBO', 'DIGER'];
 const DOKUMAN_TURLERI = [
     { label: "Ruhsat", value: "RUHSAT" },
     { label: "Trafik Sigortası", value: "SIGORTA" },
@@ -72,14 +73,15 @@ const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; description: string }> = {
     soforGecmisi: { button: "Zimmet Ekle", title: "Yeni Zimmet Kaydı", description: "Bu araca yeni şoför ataması yapın." },
     ruhsat: { button: "Ruhsat Belgesi Ekle", title: "Ruhsat Belgesi Ekle", description: "Aracın ruhsat belgesini bu ekrandan kaydedin." },
-    hgs: { button: "HGS Yükleme Ekle", title: "HGS Yükleme Kaydı", description: "Tutar ve tarih girerek HGS yüklemesi ekleyin." },
     bakim: { button: "Servis Kaydı Ekle", title: "Servis Kaydı Ekle", description: "Periyodik bakım veya arıza kaydını bu sekmeden oluşturun." },
-    yakit: { button: "Yakıt Kaydı Ekle", title: "Yakıt Alımı Kaydı", description: "Litre ve litre fiyatını girin, toplam otomatik hesaplanır." },
+    yakit: { button: "Yakıt Kaydı Ekle", title: "Yakıt Alım Bilgisi", description: "Yeni yakıt kaydını tablo alanlarıyla uyumlu şekilde girin." },
     masraflar: { button: "Masraf Ekle", title: "Ek Masraf Kaydı", description: "Araç için kategori bazlı gider kaydı oluşturun." },
     sigorta: { button: "Poliçe Ekle", title: "Sigorta / Kasko Kaydı", description: "Trafik sigortası veya kasko kaydı ekleyin." },
     muayene: { button: "Muayene Ekle", title: "Muayene Kaydı", description: "Muayene tarih, sonuç ve ücret bilgilerini kaydedin." },
     dokuman: { button: "Evrak Ekle", title: "Yeni Evrak", description: "Araça ait dijital evrağı sisteme kaydedin." },
 };
+
+const YAKIT_CIKISI_OPTIONS = ["Mithra", "Binlik Bidon"] as const;
 
 type SoforOption = {
     id: string;
@@ -98,7 +100,7 @@ export default function AracDetailClient({
     sirketler: Array<{ id: string; ad: string; bulunduguIl?: string | null }>;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
-    const { canAssignIndependentRecords } = useDashboardScope();
+    const { canAssignIndependentRecords, canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
     const [loading, setLoading] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState("ozet");
@@ -115,27 +117,19 @@ export default function AracDetailClient({
         ad: "",
         dosyaUrl: "",
     });
-    const [hgsForm, setHgsForm] = React.useState({
-        tarih: todayDate(),
-        etiketNo: arac.hgsNo || "",
-        tutar: "",
-        km: String(arac.guncelKm || 0),
-    });
     const [bakimForm, setBakimForm] = React.useState({
-        kategori: "PERIYODIK_BAKIM" as "PERIYODIK_BAKIM" | "ARIZA",
         bakimTarihi: todayDate(),
-        yapilanKm: String(arac.guncelKm || 0),
-        servisAdi: "",
+        arizaSikayet: "",
         yapilanIslemler: "",
+        degisenParca: "",
+        islemYapanFirma: "",
         tutar: "",
     });
     const [yakitForm, setYakitForm] = React.useState({
         tarih: nowDateTimeLocal(),
         litre: "",
-        litreFiyati: "",
         km: String(arac.guncelKm || 0),
         istasyon: "",
-        odemeYontemi: "NAKIT",
     });
     const [masrafForm, setMasrafForm] = React.useState({
         tarih: todayDate(),
@@ -205,7 +199,6 @@ export default function AracDetailClient({
         kategori: arac.kategori || "BINEK",
         calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
         sirketId: arac.sirket?.id || "",
-        hgsNo: arac.hgsNo || "",
         ruhsatSeriNo: arac.ruhsatSeriNo || "",
         aciklama: arac.aciklama || "",
         saseNo: arac.saseNo || "",
@@ -215,6 +208,16 @@ export default function AracDetailClient({
         () => sortByTextValue(kullanicilar, (k) => k.adSoyad),
         [kullanicilar]
     );
+    const hasKiralikSirket = React.useMemo(
+        () => sirketler.some((sirket) => isKiralikSirketName(sirket.ad)),
+        [sirketler]
+    );
+    const aracYakitOrtalamasi = React.useMemo(() => {
+        const raw = Number(arac.ortalamaYakit100Km);
+        if (!Number.isFinite(raw) || raw <= 0) return null;
+        return raw;
+    }, [arac.ortalamaYakit100Km]);
+    const aracYakitAralikSayisi = Number(arac.ortalamaYakitIntervalSayisi || 0);
     const editAracFormKullanicilar = React.useMemo(() => {
         if (!arac.kullanici?.id) {
             return sortedKullanicilar;
@@ -259,19 +262,30 @@ export default function AracDetailClient({
         }
 
         const options = new Map<string, SoforOption>();
-        const ekle = (id?: string | null, adSoyad?: string | null) => {
+        const ekle = (option?: Partial<SoforOption> | null) => {
+            const id = option?.id;
             if (!id) return;
-            const text = (adSoyad || "").trim();
+            const text = (option?.adSoyad || "").trim();
             if (!text) return;
-            options.set(id, { id, adSoyad: text });
+            options.set(id, {
+                id,
+                adSoyad: text,
+                sirketId: option?.sirketId || null,
+                sirketAd: option?.sirketAd || null,
+            });
         };
 
-        ekle(arac.kullanici.id, `${arac.kullanici.ad || ""} ${arac.kullanici.soyad || ""}`);
+        ekle({
+            id: arac.kullanici.id,
+            adSoyad: `${arac.kullanici.ad || ""} ${arac.kullanici.soyad || ""}`.trim(),
+            sirketId: arac.kullanici.sirket?.id || null,
+            sirketAd: arac.kullanici.sirket?.ad || null,
+        });
 
         const seciliSoforId = editArizaRow?.soforId || arizaEditForm.soforId;
         const seciliSofor = sortedKullanicilar.find((k) => k.id === seciliSoforId);
         if (seciliSofor) {
-            ekle(seciliSofor.id, seciliSofor.adSoyad);
+            ekle(seciliSofor);
         }
 
         return Array.from(options.values());
@@ -299,7 +313,6 @@ export default function AracDetailClient({
             kategori: arac.kategori || "BINEK",
             calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
             sirketId: arac.sirket?.id || "",
-            hgsNo: arac.hgsNo || "",
             ruhsatSeriNo: arac.ruhsatSeriNo || "",
             aciklama: arac.aciklama || "",
             saseNo: arac.saseNo || "",
@@ -337,7 +350,6 @@ export default function AracDetailClient({
             kategori: aracEditForm.kategori,
             calistigiKurum: aracEditForm.calistigiKurum || null,
             sirketId: aracEditForm.sirketId || null,
-            hgsNo: aracEditForm.hgsNo || null,
             ruhsatSeriNo: aracEditForm.ruhsatSeriNo || null,
             aciklama: aracEditForm.aciklama || null,
             saseNo: forceUppercase(aracEditForm.saseNo || ""),
@@ -582,30 +594,21 @@ export default function AracDetailClient({
             });
         } else if (tab === "ruhsat") {
             setRuhsatDokumanForm({ ad: "", dosyaUrl: "" });
-        } else if (tab === "hgs") {
-            setHgsForm({
-                tarih: todayDate(),
-                etiketNo: arac.hgsNo || "",
-                tutar: "",
-                km: String(arac.guncelKm || 0),
-            });
         } else if (tab === "bakim") {
             setBakimForm({
-                kategori: "PERIYODIK_BAKIM",
                 bakimTarihi: todayDate(),
-                yapilanKm: String(arac.guncelKm || 0),
-                servisAdi: "",
+                arizaSikayet: "",
                 yapilanIslemler: "",
+                degisenParca: "",
+                islemYapanFirma: "",
                 tutar: "",
             });
         } else if (tab === "yakit") {
             setYakitForm({
                 tarih: nowDateTimeLocal(),
                 litre: "",
-                litreFiyati: "",
                 km: String(arac.guncelKm || 0),
                 istasyon: "",
-                odemeYontemi: "NAKIT",
             });
         } else if (tab === "masraflar") {
             setMasrafForm({
@@ -674,51 +677,41 @@ export default function AracDetailClient({
                 });
                 if (!res.success) throw new Error(res.error || "Ruhsat belgesi oluşturulamadı.");
                 toast.success("Ruhsat belgesi eklendi.");
-            } else if (activeTab === "hgs") {
-                if (!hgsForm.tutar) {
-                    toast.warning("Eksik Bilgi", { description: "Yükleme tutarı zorunludur." });
-                    return;
-                }
-                const res = await createHgs({
-                    aracId: arac.id,
-                    tarih: hgsForm.tarih,
-                    etiketNo: hgsForm.etiketNo,
-                    tutar: Number(hgsForm.tutar),
-                    km: hgsForm.km ? Number(hgsForm.km) : undefined,
-                });
-                if (!res.success) throw new Error(res.error || "HGS yükleme kaydı oluşturulamadı.");
-                toast.success("HGS yükleme kaydı eklendi.");
             } else if (activeTab === "bakim") {
-                if (!bakimForm.bakimTarihi || !bakimForm.yapilanKm || !bakimForm.tutar) {
-                    toast.warning("Eksik Bilgi", { description: "Tarih, KM ve tutar zorunludur." });
+                if (!bakimForm.bakimTarihi || !bakimForm.tutar) {
+                    toast.warning("Eksik Bilgi", { description: "Tarih ve tutar zorunludur." });
                     return;
                 }
                 const res = await addBakim({
                     aracId: arac.id,
                     bakimTarihi: new Date(bakimForm.bakimTarihi),
-                    yapilanKm: Number(bakimForm.yapilanKm),
-                    kategori: bakimForm.kategori,
-                    servisAdi: bakimForm.servisAdi || undefined,
+                    arizaSikayet: bakimForm.arizaSikayet || undefined,
                     yapilanIslemler: bakimForm.yapilanIslemler || undefined,
+                    degisenParca: bakimForm.degisenParca || undefined,
+                    islemYapanFirma: bakimForm.islemYapanFirma || undefined,
                     tutar: Number(bakimForm.tutar),
                 });
                 if (!res.success) throw new Error(res.error || "Servis kaydı oluşturulamadı.");
                 toast.success("Servis kaydı eklendi.");
             } else if (activeTab === "yakit") {
                 const litre = Number(yakitForm.litre || 0);
-                const litreFiyati = Number(yakitForm.litreFiyati || 0);
-                if (!litre || !litreFiyati || !yakitForm.km) {
-                    toast.warning("Eksik Bilgi", { description: "Litre, litre fiyatı ve KM zorunludur." });
+                if (!litre) {
+                    toast.warning("Eksik Bilgi", { description: "Litre zorunludur." });
+                    return;
+                }
+                const kmText = String(yakitForm.km || "").trim();
+                const kmValue = kmText ? Number(kmText) : null;
+                if (kmText && (!Number.isFinite(kmValue) || Number(kmValue) < 0)) {
+                    toast.warning("Geçersiz Bilgi", { description: "KM alanını kontrol edin." });
                     return;
                 }
                 const res = await createYakit({
                     aracId: arac.id,
                     tarih: yakitForm.tarih,
                     litre,
-                    tutar: litre * litreFiyati,
-                    km: Number(yakitForm.km),
+                    tutar: 0,
+                    km: kmValue,
                     istasyon: yakitForm.istasyon || undefined,
-                    odemeYontemi: yakitForm.odemeYontemi,
                 });
                 if (!res.success) throw new Error(res.error || "Yakıt kaydı oluşturulamadı.");
                 toast.success("Yakıt kaydı eklendi.");
@@ -808,8 +801,8 @@ export default function AracDetailClient({
                                 { value: "", label: "Şoför seçiniz..." },
                                 ...sortedKullanicilar.map((k) => ({
                                     value: k.id,
-                                    label: k.adSoyad,
-                                    searchText: k.adSoyad,
+                                    label: getPersonelOptionLabel(k),
+                                    searchText: getPersonelOptionSearchText(k),
                                 })),
                             ]}
                         />
@@ -847,58 +840,28 @@ export default function AracDetailClient({
             );
         }
 
-        if (activeTab === "hgs") {
-            return (
-                <div className="grid gap-4 py-4">
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">İşlem Tarihi</label>
-                        <Input type="datetime-local" value={hgsForm.tarih} onChange={e => setHgsForm({ ...hgsForm, tarih: e.target.value })} className="h-9" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Etiket No</label>
-                            <Input value={hgsForm.etiketNo} onChange={e => setHgsForm({ ...hgsForm, etiketNo: e.target.value })} className="h-9" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
-                            <Input type="number" value={hgsForm.tutar} onChange={e => setHgsForm({ ...hgsForm, tutar: e.target.value })} className="h-9" />
-                        </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">İşlem KM</label>
-                        <Input type="number" value={hgsForm.km} onChange={e => setHgsForm({ ...hgsForm, km: e.target.value })} className="h-9" />
-                    </div>
-                </div>
-            );
-        }
-
         if (activeTab === "bakim") {
             return (
                 <div className="grid gap-4 py-4">
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Kategori</label>
-                        <select value={bakimForm.kategori} onChange={e => setBakimForm({ ...bakimForm, kategori: e.target.value as "PERIYODIK_BAKIM" | "ARIZA" })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                            <option value="PERIYODIK_BAKIM">Periyodik Bakım</option>
-                            <option value="ARIZA">Arıza</option>
-                        </select>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                            <Input type="datetime-local" value={bakimForm.bakimTarihi} onChange={e => setBakimForm({ ...bakimForm, bakimTarihi: e.target.value })} className="h-9" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
-                            <Input type="number" value={bakimForm.yapilanKm} onChange={e => setBakimForm({ ...bakimForm, yapilanKm: e.target.value })} className="h-9" />
-                        </div>
+                        <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
+                        <Input type="datetime-local" value={bakimForm.bakimTarihi} onChange={e => setBakimForm({ ...bakimForm, bakimTarihi: e.target.value })} className="h-9" />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Servis Adı</label>
-                        <Input value={bakimForm.servisAdi} onChange={e => setBakimForm({ ...bakimForm, servisAdi: e.target.value })} className="h-9" />
+                        <label className="text-sm font-medium">Arıza Şikayet</label>
+                        <textarea value={bakimForm.arizaSikayet} onChange={e => setBakimForm({ ...bakimForm, arizaSikayet: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none" />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Yapılan İşlemler</label>
+                        <label className="text-sm font-medium">Yapılan İşlem</label>
                         <textarea value={bakimForm.yapilanIslemler} onChange={e => setBakimForm({ ...bakimForm, yapilanIslemler: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Değişen Parça</label>
+                        <Input value={bakimForm.degisenParca} onChange={e => setBakimForm({ ...bakimForm, degisenParca: e.target.value })} className="h-9" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">İşlem Yapan Firma</label>
+                        <Input value={bakimForm.islemYapanFirma} onChange={e => setBakimForm({ ...bakimForm, islemYapanFirma: e.target.value })} className="h-9" />
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
@@ -909,9 +872,12 @@ export default function AracDetailClient({
         }
 
         if (activeTab === "yakit") {
-            const litre = Number(yakitForm.litre || 0);
-            const litreFiyati = Number(yakitForm.litreFiyati || 0);
-            const toplam = litre * litreFiyati;
+            const yakitCikisiOptions = (() => {
+                const current = typeof yakitForm.istasyon === "string" ? yakitForm.istasyon.trim() : "";
+                if (!current) return [...YAKIT_CIKISI_OPTIONS];
+                const exists = YAKIT_CIKISI_OPTIONS.some((item) => item.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0);
+                return exists ? [...YAKIT_CIKISI_OPTIONS] : [...YAKIT_CIKISI_OPTIONS, current];
+            })();
 
             return (
                 <div className="grid gap-4 py-4">
@@ -921,35 +887,27 @@ export default function AracDetailClient({
                     </div>
                     <div className="grid grid-cols-2 gap-3">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Litre <span className="text-red-500">*</span></label>
-                            <Input type="number" step="0.01" value={yakitForm.litre} onChange={e => setYakitForm({ ...yakitForm, litre: e.target.value })} className="h-9" />
+                            <label className="text-sm font-medium">Alınan Litre <span className="text-red-500">*</span></label>
+                            <Input type="number" step="0.01" value={yakitForm.litre} onChange={e => setYakitForm({ ...yakitForm, litre: e.target.value })} placeholder="0.00" className="h-9" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Litre Fiyatı (₺) <span className="text-red-500">*</span></label>
-                            <Input type="number" step="0.01" value={yakitForm.litreFiyati} onChange={e => setYakitForm({ ...yakitForm, litreFiyati: e.target.value })} className="h-9" />
+                            <label className="text-sm font-medium">KM/Saat (Opsiyonel)</label>
+                            <Input type="number" value={yakitForm.km} onChange={e => setYakitForm({ ...yakitForm, km: e.target.value })} placeholder="123456" className="h-9" />
                         </div>
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium text-slate-500">Toplam (₺)</label>
-                        <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-                            {toplam > 0 ? toplam.toFixed(2) : "—"}
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
-                            <Input type="number" value={yakitForm.km} onChange={e => setYakitForm({ ...yakitForm, km: e.target.value })} className="h-9" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">İstasyon</label>
-                            <Input value={yakitForm.istasyon} onChange={e => setYakitForm({ ...yakitForm, istasyon: e.target.value })} className="h-9" />
-                        </div>
-                    </div>
-                    <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Ödeme Tipi</label>
-                        <select value={yakitForm.odemeYontemi} onChange={e => setYakitForm({ ...yakitForm, odemeYontemi: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                            <option value="NAKIT">Nakit</option>
-                            <option value="TASIT_TANIMA">Taşıt Tanıma</option>
+                        <label className="text-sm font-medium">Yakıt Çıkışı</label>
+                        <select
+                            value={yakitForm.istasyon}
+                            onChange={e => setYakitForm({ ...yakitForm, istasyon: e.target.value })}
+                            className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                        >
+                            <option value="">Seçiniz...</option>
+                            {yakitCikisiOptions.map((item) => (
+                                <option key={item} value={item}>
+                                    {item}
+                                </option>
+                            ))}
                         </select>
                     </div>
                 </div>
@@ -1247,6 +1205,9 @@ export default function AracDetailClient({
                                         ) : (
                                             <option value="" disabled>Şirket Seçiniz</option>
                                         )}
+                                        {canAssignIndependentRecords && !hasKiralikSirket ? (
+                                            <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>
+                                        ) : null}
                                         {sirketler.map((sirket) => (
                                             <option key={sirket.id} value={sirket.id}>
                                                 {sirket.ad}
@@ -1295,14 +1256,6 @@ export default function AracDetailClient({
                                 </div>
                                 <div className="col-span-2 pt-1">
                                     <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">HGS No</label>
-                                    <Input
-                                        value={aracEditForm.hgsNo}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, hgsNo: event.target.value }))}
-                                        className="h-9"
-                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Ruhsat Seri No</label>
@@ -1362,9 +1315,17 @@ export default function AracDetailClient({
                             <div className="flex flex-wrap items-center gap-4 mt-4 text-sm font-medium text-slate-500">
                                 <div className="flex items-center gap-1.5"><MapPin size={16} /> {arac.bulunduguIl}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
-                                <div className="flex items-center gap-1.5"><Activity size={16} /> {arac.guncelKm.toLocaleString('tr-TR')} km</div>
+                                <div className="flex items-center gap-1.5"><Gauge size={16} /> {arac.guncelKm.toLocaleString('tr-TR')} km</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
-                                <div className="flex items-center gap-1.5 font-mono text-xs">{arac.hgsNo ? `HGS: ${arac.hgsNo}` : 'HGS Kaydı Yok'}</div>
+                                <div className="flex items-center gap-1.5">
+                                    <Fuel size={16} />
+                                    {aracYakitOrtalamasi !== null
+                                        ? `${aracYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km`
+                                        : "Yakıt ortalaması yok"}
+                                    {aracYakitOrtalamasi !== null && aracYakitAralikSayisi > 0 ? (
+                                        <span className="text-[11px] text-slate-400">({aracYakitAralikSayisi} aralık)</span>
+                                    ) : null}
+                                </div>
                                 {arac.sirket && (
                                     <>
                                         <div className="w-1 h-1 rounded-full bg-slate-300" />
@@ -1462,8 +1423,8 @@ export default function AracDetailClient({
                                                         { value: "", label: "Şoför seçiniz..." },
                                                         ...sortedKullanicilar.map((k) => ({
                                                             value: k.id,
-                                                            label: k.adSoyad,
-                                                            searchText: k.adSoyad,
+                                                            label: getPersonelOptionLabel(k),
+                                                            searchText: getPersonelOptionSearchText(k),
                                                         })),
                                                     ]}
                                                 />
@@ -1565,8 +1526,8 @@ export default function AracDetailClient({
                                             { value: "", label: "Seçilmedi" },
                                             ...arizaSoforOptions.map((k) => ({
                                                 value: k.id,
-                                                label: k.adSoyad,
-                                                searchText: k.adSoyad,
+                                                label: getPersonelOptionLabel(k),
+                                                searchText: getPersonelOptionSearchText(k),
                                             })),
                                         ]}
                                     />
@@ -1631,9 +1592,6 @@ export default function AracDetailClient({
                         </TabsTrigger>
                         <TabsTrigger value="ruhsat" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <FileText size={16} className="mr-2" /> Ruhsat Bilgileri
-                        </TabsTrigger>
-                        <TabsTrigger value="hgs" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
-                            <CreditCard size={16} className="mr-2" /> HGS Yüklemeleri
                         </TabsTrigger>
                         <TabsTrigger value="bakim" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Wrench size={16} className="mr-2" /> Servis Kayıtları
@@ -1821,48 +1779,18 @@ export default function AracDetailClient({
                             </div>
                         </TabsContent>
 
-                        {/* 4. HGS YÜKLEMELERİ */}
-                        <TabsContent value="hgs">
-                            <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
-                                <Table>
-                                    <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
-                                        <TableRow>
-                                            <TableHead className="font-semibold text-slate-500">Yükleme Tarihi</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Etiket No</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Uygulanan KM</TableHead>
-                                            <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {arac.hgsYuklemeler && arac.hgsYuklemeler.length > 0 ? (
-                                            arac.hgsYuklemeler.map((h: any) => (
-                                                <TableRow key={h.id}>
-                                                    <TableCell className="text-slate-700">{formatDate(h.tarih)}</TableCell>
-                                                    <TableCell className="text-slate-900 font-mono text-sm">{h.etiketNo || arac.hgsNo || '-'}</TableCell>
-                                                    <TableCell className="text-slate-700">{h.km?.toLocaleString() || '-'} km</TableCell>
-                                                    <TableCell className="font-bold text-slate-900 text-right">₺{h.tutar.toLocaleString()}</TableCell>
-                                                </TableRow>
-                                            ))
-                                        ) : (
-                                            <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">HGS yükleme kaydı bulunmuyor.</TableCell></TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                            </Card>
-                        </TabsContent>
-
-                        {/* 5. BAKIM */}
+                        {/* 4. BAKIM */}
                         <TabsContent value="bakim">
                             <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
                                 <Table>
                                     <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                                         <TableRow>
-                                            <TableHead className="font-semibold text-slate-500">İşlem Tarihi</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Kategori</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Servis Adı</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Uygulanan KM</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Yapılan İşlemler</TableHead>
-                                            <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Tarih</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Arıza Şikayet</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Yapılan İşlem</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Değişen Parça</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">İşlem Yapan Firma</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">Masraf Tutarı</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1870,17 +1798,11 @@ export default function AracDetailClient({
                                             arac.bakimlar.map((b: AracDetaySaaS) => (
                                                 <TableRow key={b.id}>
                                                     <TableCell className="text-slate-700">{formatDate(b.bakimTarihi)}</TableCell>
-                                                    <TableCell>
-                                                        {(b.kategori || (b.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM")) === "ARIZA" ? (
-                                                            <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none">Arıza</Badge>
-                                                        ) : (
-                                                            <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none">Periyodik Bakım</Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="text-slate-900">{b.servisAdi || '-'}</TableCell>
-                                                    <TableCell className="text-slate-700">{b.yapilanKm.toLocaleString()} km</TableCell>
-                                                    <TableCell className="text-slate-600 max-w-[200px] truncate" title={b.yapilanIslemler}>{b.yapilanIslemler || '-'}</TableCell>
-                                                    <TableCell className="font-bold text-slate-900 text-right">₺{b.tutar.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-slate-600 max-w-[220px] truncate" title={b.arizaSikayet || ""}>{b.arizaSikayet || '-'}</TableCell>
+                                                    <TableCell className="text-slate-600 max-w-[220px] truncate" title={b.yapilanIslemler || ""}>{b.yapilanIslemler || '-'}</TableCell>
+                                                    <TableCell className="text-slate-600 max-w-[220px] truncate" title={b.degisenParca || ""}>{b.degisenParca || '-'}</TableCell>
+                                                    <TableCell className="text-slate-900">{b.islemYapanFirma || b.servisAdi || '-'}</TableCell>
+                                                    <TableCell className="font-bold text-slate-900 text-right">₺{Number(b.tutar || 0).toLocaleString("tr-TR")}</TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
@@ -1993,6 +1915,7 @@ export default function AracDetailClient({
                                     <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                                         <TableRow>
                                             <TableHead className="font-semibold text-slate-500">Tarih</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Personel</TableHead>
                                             <TableHead className="font-semibold text-slate-500">İstasyon</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Araç KM</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Litre (L)</TableHead>
@@ -2004,6 +1927,22 @@ export default function AracDetailClient({
                                             arac.yakitlar.map((y: AracDetaySaaS) => (
                                                 <TableRow key={y.id}>
                                                     <TableCell className="text-slate-700">{formatDate(y.tarih)}</TableCell>
+                                                    <TableCell className="text-slate-700">
+                                                        {y.sofor?.id ? (
+                                                            <div className="flex flex-col">
+                                                                <PersonelLink personelId={y.sofor.id} className="hover:text-indigo-600 hover:underline">
+                                                                    {`${y.sofor.ad || ""} ${y.sofor.soyad || ""}`.trim() || "-"}
+                                                                </PersonelLink>
+                                                                {canAccessAllCompanies && (y.sofor?.sirket?.ad || y.sofor?.calistigiKurum) ? (
+                                                                    <span className="text-[11px] font-semibold text-indigo-500 normal-case">
+                                                                        {y.sofor?.sirket?.ad || y.sofor?.calistigiKurum}
+                                                                    </span>
+                                                                ) : null}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-slate-400 italic text-xs">Atanmamış</span>
+                                                        )}
+                                                    </TableCell>
                                                     <TableCell className="text-slate-900">{y.istasyon || '-'}</TableCell>
                                                     <TableCell className="text-slate-700">{y.km.toLocaleString()} km</TableCell>
                                                     <TableCell className="text-slate-700">{y.litre} L</TableCell>
@@ -2011,7 +1950,7 @@ export default function AracDetailClient({
                                                 </TableRow>
                                             ))
                                         ) : (
-                                            <TableRow><TableCell colSpan={5} className="h-32 text-center text-slate-500">Yakıt kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">Yakıt kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>

@@ -40,11 +40,11 @@ function revalidateEntityPaths(entity: SoftDeleteEntity) {
             paths.add("/dashboard/trafik-sigortasi");
             paths.add("/dashboard/muayeneler");
             paths.add("/dashboard/yakitlar");
-            paths.add("/dashboard/hgs");
             paths.add("/dashboard/cezalar");
             paths.add("/dashboard/ceza-masraflari");
             paths.add("/dashboard/masraflar");
             paths.add("/dashboard/dokumanlar");
+            paths.add("/dashboard/servis-kayitlari");
             paths.add("/dashboard/bakimlar");
             paths.add("/dashboard/zimmetler");
             break;
@@ -53,6 +53,7 @@ function revalidateEntityPaths(entity: SoftDeleteEntity) {
             paths.add("/dashboard/finans");
             break;
         case "bakim":
+            paths.add("/dashboard/servis-kayitlari");
             paths.add("/dashboard/bakimlar");
             paths.add("/dashboard/arizalar");
             break;

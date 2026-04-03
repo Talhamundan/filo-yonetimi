@@ -17,7 +17,6 @@ import {
     FileText,
     FolderOpen,
     Building2,
-    CreditCard,
     X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -195,7 +194,7 @@ export default function Sidebar({
                 <SectionTitle title="Operasyonlar" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-0.5 mb-4">
                     <NavItem href="/dashboard/arizalar" icon={AlertTriangle} label="Arıza Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/bakimlar" icon={Wrench} label="Servis Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/servis-kayitlari" icon={Wrench} label="Servis Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/muayeneler" icon={CheckCircle} label="Muayene Takibi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
@@ -203,7 +202,6 @@ export default function Sidebar({
                 <SectionTitle title="Finans" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-0.5 mb-4">
                     <NavItem href="/dashboard/yakitlar" icon={Fuel} label="Yakıt Harcamaları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/hgs" icon={CreditCard} label="HGS Yüklemeleri" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/ceza-masraflari" icon={AlertTriangle} label="Ceza Masrafları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/masraflar" icon={Receipt} label="Genel Masraflar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>

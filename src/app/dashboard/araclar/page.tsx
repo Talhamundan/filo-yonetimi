@@ -1,12 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
-import { getModelFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
+import { getAracUsageFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
+import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 
-const EXCLUDED_MASRAF_TURLERI = ["YAKIT", "HGS_YUKLEME"] as const;
+const EXCLUDED_MASRAF_TURLERI = ["YAKIT"] as const;
 const ARAC_FALLBACK_SELECT = {
     id: true,
     plaka: true,
@@ -16,7 +17,6 @@ const ARAC_FALLBACK_SELECT = {
     bulunduguIl: true,
     guncelKm: true,
     bedel: true,
-    hgsNo: true,
     ruhsatSeriNo: true,
     durum: true,
     kullaniciId: true,
@@ -34,11 +34,25 @@ function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function normalizeCompanyName(value: unknown) {
+    const text = typeof value === "string" ? value.trim() : "";
+    return text.toLocaleLowerCase("tr-TR");
+}
+
 function toSumMap(rows: Array<{ aracId: string; _sum?: { tutar?: number | null } }>) {
     const map = new Map<string, number>();
     for (const row of rows) {
         if (!row?.aracId) continue;
         map.set(row.aracId, toNumber(row?._sum?.tutar));
+    }
+    return map;
+}
+
+function toLitreMap(rows: Array<{ aracId: string; _sum?: { litre?: number | null } }>) {
+    const map = new Map<string, number>();
+    for (const row of rows) {
+        if (!row?.aracId) continue;
+        map.set(row.aracId, toNumber(row?._sum?.litre));
     }
     return map;
 }
@@ -89,7 +103,6 @@ async function getAraclarWithTakipBilgileri(
                     yil: true,
                     bulunduguIl: true,
                     guncelKm: true,
-                    hgsNo: true,
                     ruhsatSeriNo: true,
                     durum: true,
                     kullaniciId: true,
@@ -213,12 +226,22 @@ async function getAraclarWithTakipBilgileri(
         }),
     ]);
 
-    const [yakitByArac, bakimByArac, muayeneByArac, hgsByArac, cezaByArac, kaskoByArac, trafikByArac, masrafByArac] =
+    const [
+        yakitByArac,
+        bakimByArac,
+        muayeneByArac,
+        cezaByArac,
+        kaskoByArac,
+        trafikByArac,
+        masrafByArac,
+        yakitKayitlari,
+        yakitSonKayitKmByArac,
+    ] =
         await Promise.all([
             (prisma as any).yakit.groupBy({
                 where: { aracId: { in: aracIds }, tarih: { gte: rangeStart, lte: rangeEnd } },
                 by: ["aracId"],
-                _sum: { tutar: true },
+                _sum: { tutar: true, litre: true },
             }).catch(() => []),
             (prisma as any).bakim.groupBy({
                 where: { aracId: { in: aracIds }, bakimTarihi: { gte: rangeStart, lte: rangeEnd } },
@@ -227,11 +250,6 @@ async function getAraclarWithTakipBilgileri(
             }).catch(() => []),
             (prisma as any).muayene.groupBy({
                 where: { aracId: { in: aracIds }, muayeneTarihi: { gte: rangeStart, lte: rangeEnd } },
-                by: ["aracId"],
-                _sum: { tutar: true },
-            }).catch(() => []),
-            (prisma as any).hgsYukleme.groupBy({
-                where: { aracId: { in: aracIds }, tarih: { gte: rangeStart, lte: rangeEnd } },
                 by: ["aracId"],
                 _sum: { tutar: true },
             }).catch(() => []),
@@ -259,16 +277,43 @@ async function getAraclarWithTakipBilgileri(
                 by: ["aracId"],
                 _sum: { tutar: true },
             }).catch(() => []),
+            (prisma as any).yakit.findMany({
+                where: { aracId: { in: aracIds }, tarih: { gte: rangeStart, lte: rangeEnd } },
+                select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true },
+                orderBy: [{ aracId: "asc" }, { tarih: "asc" }, { km: "asc" }],
+            }).catch(() => []),
+            (prisma as any).yakit.findMany({
+                where: { aracId: { in: aracIds } },
+                select: { aracId: true, km: true },
+                orderBy: [{ aracId: "asc" }, { tarih: "desc" }, { id: "desc" }],
+                distinct: ["aracId"],
+            }).catch(() => []),
         ]);
 
     const yakitMap = toSumMap(yakitByArac as any[]);
+    const yakitLitreMap = toLitreMap(yakitByArac as any[]);
     const bakimMap = toSumMap(bakimByArac as any[]);
     const muayeneTutarMap = toSumMap(muayeneByArac as any[]);
-    const hgsMap = toSumMap(hgsByArac as any[]);
     const cezaMap = toSumMap(cezaByArac as any[]);
     const kaskoTutarMap = toSumMap(kaskoByArac as any[]);
     const trafikTutarMap = toSumMap(trafikByArac as any[]);
     const digerMap = toSumMap(masrafByArac as any[]);
+    const yakitSonKayitKmMap = new Map<string, number>();
+    for (const row of yakitSonKayitKmByArac as any[]) {
+        if (!row?.aracId) continue;
+        yakitSonKayitKmMap.set(row.aracId, toNumber(row?.km));
+    }
+    const fuelMetricsByVehicleId = buildFuelIntervalMetrics(
+        (yakitKayitlari as any[]).map((row) => ({
+            id: row.id,
+            aracId: row.aracId,
+            tarih: row.tarih,
+            km: row.km,
+            litre: row.litre,
+            tutar: row.tutar,
+            soforId: null,
+        }))
+    ).byVehicleId;
 
     const muayeneMap = new Map<string, any>();
     for (const item of muayeneler as any[]) {
@@ -296,9 +341,13 @@ async function getAraclarWithTakipBilgileri(
         const inferredKullanici = arac.kullanici || aktifZimmet?.kullanici || null;
         const inferredKullaniciId = arac.kullaniciId || inferredKullanici?.id || null;
         const inferredSirket = arac.sirket || (arac.sirketId ? sirketById.get(arac.sirketId) || null : null);
+        const yakitMetrigi = fuelMetricsByVehicleId.get(arac.id);
+        const latestFuelKm = toNumber(yakitSonKayitKmMap.get(arac.id));
+        const resolvedGuncelKm = latestFuelKm > 0 ? Math.trunc(latestFuelKm) : toNumber(arac.guncelKm);
 
         return {
         ...arac,
+        guncelKm: resolvedGuncelKm,
         kullanici: inferredKullanici,
         kullaniciId: inferredKullaniciId,
         sirket: inferredSirket,
@@ -309,17 +358,19 @@ async function getAraclarWithTakipBilgileri(
             yakit: yakitMap.get(arac.id) || 0,
             bakim: bakimMap.get(arac.id) || 0,
             muayene: muayeneTutarMap.get(arac.id) || 0,
-            hgs: hgsMap.get(arac.id) || 0,
             ceza: cezaMap.get(arac.id) || 0,
             kasko: kaskoTutarMap.get(arac.id) || 0,
             trafik: trafikTutarMap.get(arac.id) || 0,
             diger: digerMap.get(arac.id) || 0,
         },
+        yakitToplamLitre: yakitLitreMap.get(arac.id) || 0,
+        ortalamaYakit100Km: yakitMetrigi?.averageLitresPer100Km ?? null,
+        ortalamaYakitKmBasiMaliyet: yakitMetrigi?.averageCostPerKm ?? null,
+        ortalamaYakitIntervalSayisi: yakitMetrigi?.intervalCount ?? 0,
         toplamMaliyet:
             (yakitMap.get(arac.id) || 0) +
             (bakimMap.get(arac.id) || 0) +
             (muayeneTutarMap.get(arac.id) || 0) +
-            (hgsMap.get(arac.id) || 0) +
             (cezaMap.get(arac.id) || 0) +
             (kaskoTutarMap.get(arac.id) || 0) +
             (trafikTutarMap.get(arac.id) || 0) +
@@ -340,7 +391,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
-        getModelFilter('arac', selectedSirketId),
+        getAracUsageFilter(selectedSirketId),
         getPersonnelSelectFilter(),
         getSirketListFilter(),
         getCurrentUserRole()
@@ -350,7 +401,6 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         { plaka: { contains: token, mode: "insensitive" } },
         { marka: { contains: token, mode: "insensitive" } },
         { model: { contains: token, mode: "insensitive" } },
-        { hgsNo: { contains: token, mode: "insensitive" } },
         {
             kullanici: {
                 OR: [
@@ -424,9 +474,34 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         })
     ]);
 
+    const sirketIdByName = new Map<string, string>();
+    for (const sirket of sirketler as Array<{ id?: string; ad?: string }>) {
+        if (!sirket?.id || !sirket?.ad) continue;
+        const normalized = normalizeCompanyName(sirket.ad);
+        if (!normalized) continue;
+        if (!sirketIdByName.has(normalized)) {
+            sirketIdByName.set(normalized, sirket.id);
+        }
+    }
+
+    const araclarWithUsageCompany = (araclar as any[]).map((arac) => {
+        const manualFirma = typeof arac?.calistigiKurum === "string" ? arac.calistigiKurum.trim() : "";
+        const mappedSirketId =
+            typeof arac?.kullanici?.sirket?.id === "string" && arac.kullanici.sirket.id.trim().length > 0
+                ? arac.kullanici.sirket.id
+                : manualFirma
+                    ? sirketIdByName.get(normalizeCompanyName(manualFirma)) || null
+                    : null;
+
+        return {
+            ...arac,
+            calistigiKurumSirketId: mappedSirketId,
+        };
+    });
+
     return (
         <AraclarClient 
-            initialAraclar={araclar as any} 
+            initialAraclar={araclarWithUsageCompany as any} 
             sirketler={sirketler}
             kullanicilar={kullanicilar.map((u: any) => ({
                 id: u.id,

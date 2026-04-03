@@ -24,8 +24,9 @@ export type PersonelRow = {
     };
     toplamMaliyet?: number;
     ortalamaYakit100Km?: number | null;
-    ortalamaYakitKmBasiMaliyet?: number | null;
     ortalamaYakitIntervalSayisi?: number;
+    yakitKarsilastirmaReferans100Km?: number | null;
+    ortalamaUstuYakit?: boolean;
 }
 
 function formatCurrency(value: number) {
@@ -106,7 +107,7 @@ const maliyetColumn: ColumnDef<PersonelRow> = {
         const nonZero = [
             { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
             { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-            { key: "Arıza", value: kalemler.ariza, className: "bg-amber-50 text-amber-700 border-amber-200" },
+            { key: "Servis", value: kalemler.ariza, className: "bg-amber-50 text-amber-700 border-amber-200" },
         ].filter((item) => item.value > 0);
 
         return (
@@ -136,18 +137,26 @@ const yakitOrtalamaColumn: ColumnDef<PersonelRow> = {
     header: "Ortalama Yakıt",
     cell: ({ row }) => {
         const litre100 = row.original.ortalamaYakit100Km;
-        const kmBasiMaliyet = row.original.ortalamaYakitKmBasiMaliyet;
         const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
+        const referans = Number(row.original.yakitKarsilastirmaReferans100Km || 0);
+        const ortalamaUstuYakit = Boolean(row.original.ortalamaUstuYakit);
 
-        if (litre100 == null || kmBasiMaliyet == null || intervalSayisi <= 0) {
+        if (litre100 == null || intervalSayisi <= 0) {
             return <span className="text-slate-400 italic text-xs">Yetersiz veri</span>;
         }
 
         return (
-            <div className="min-w-[150px]">
+            <div className="min-w-[170px]">
                 <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} L/100 km</div>
-                <div className="text-xs text-slate-500">₺{formatDecimal(kmBasiMaliyet)} / km</div>
                 <div className="text-[11px] text-slate-400">{intervalSayisi} dolum aralığı</div>
+                {referans > 0 ? (
+                    <div className="text-[11px] text-slate-500">İş makinesi ort: {formatDecimal(referans)} L/100 km</div>
+                ) : null}
+                {ortalamaUstuYakit ? (
+                    <span className="mt-1 inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                        Ortalama Üstü
+                    </span>
+                ) : null}
             </div>
         );
     },

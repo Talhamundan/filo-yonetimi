@@ -18,6 +18,7 @@ const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR" | "
     MUDUR: "YETKILI",
     MUHASEBECI: "YETKILI",
 };
+const MACHINE_CATEGORY = "SANTIYE";
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -154,35 +155,91 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             });
         });
 
-    const [personeller, sirketler, cezaBySofor, yakitKayitlari, arizaKayitlari, tumZimmetler] = await Promise.all([
+    const [personeller, sirketler] = await Promise.all([
         personellerPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
             select: { id: true, ad: true, bulunduguIl: true },
             orderBy: { ad: 'asc' }
         }),
+    ]);
+
+    const personelIds = (personeller as Array<{ id?: string | null }>)
+        .map((item) => item?.id)
+        .filter((id): id is string => typeof id === "string" && id.length > 0);
+    const directSoforWhere = personelIds.length > 0 ? { soforId: { in: personelIds } } : null;
+    const yakitWhere = directSoforWhere
+        ? ({
+            AND: [
+                { tarih: { gte: rangeStart, lte: rangeEnd } },
+                {
+                    OR: [
+                        (yakitFilter as any),
+                        directSoforWhere,
+                    ],
+                },
+            ],
+        } as any)
+        : ({ ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } } as any);
+    const servisBakimWhere = directSoforWhere
+        ? ({
+            AND: [
+                { bakimTarihi: { gte: rangeStart, lte: rangeEnd } },
+                {
+                    OR: [
+                        (bakimFilter as any),
+                        directSoforWhere,
+                    ],
+                },
+            ],
+        } as any)
+        : ({
+            ...(bakimFilter as any),
+            bakimTarihi: { gte: rangeStart, lte: rangeEnd },
+        } as any);
+
+    const [cezaBySofor, yakitKayitlari, servisKayitlari, tumZimmetler] = await Promise.all([
         (prisma as any).ceza.groupBy({
             where: { ...(cezaFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
             by: ["soforId"],
             _sum: { tutar: true },
         }).catch(() => []),
         (prisma as any).yakit.findMany({
-            where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
-            select: { id: true, aracId: true, tarih: true, tutar: true, litre: true, km: true, soforId: true },
+            where: yakitWhere,
+            select: {
+                id: true,
+                aracId: true,
+                tarih: true,
+                tutar: true,
+                litre: true,
+                km: true,
+                soforId: true,
+                arac: { select: { kullaniciId: true, kategori: true } },
+            },
         }).catch(async () => {
             const fallbackRows = await (prisma as any).yakit.findMany({
-                where: { ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
-                select: { id: true, aracId: true, tarih: true, tutar: true, litre: true, km: true },
+                where: yakitWhere,
+                select: {
+                    id: true,
+                    aracId: true,
+                    tarih: true,
+                    tutar: true,
+                    litre: true,
+                    km: true,
+                    arac: { select: { kullaniciId: true, kategori: true } },
+                },
             }).catch(() => []);
             return (fallbackRows || []).map((row: any) => ({ ...row, soforId: null }));
         }),
         (prisma as any).bakim.findMany({
-            where: {
-                ...(bakimFilter as any),
-                bakimTarihi: { gte: rangeStart, lte: rangeEnd },
-                tur: "ARIZA",
+            where: servisBakimWhere,
+            select: {
+                aracId: true,
+                bakimTarihi: true,
+                tutar: true,
+                soforId: true,
+                arac: { select: { kullaniciId: true } },
             },
-            select: { aracId: true, bakimTarihi: true, tutar: true },
         }).catch(() => []),
         (prisma as any).kullaniciZimmet.findMany({
             where: {
@@ -193,10 +250,6 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             select: { aracId: true, kullaniciId: true, baslangic: true, bitis: true },
         }).catch(() => []),
     ]);
-
-    const personelIds = (personeller as Array<{ id?: string | null }>)
-        .map((item) => item?.id)
-        .filter((id): id is string => typeof id === "string" && id.length > 0);
 
     const aktifZimmetler = personelIds.length
         ? await (prisma as any).kullaniciZimmet.findMany({
@@ -254,42 +307,77 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         upsertCost(ceza.soforId, { ceza: tutar, toplam: tutar });
     }
 
-    for (const yakit of yakitKayitlari as Array<{ aracId: string; tarih: Date; tutar: number; soforId: string | null }>) {
-        const soforId = yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
+    for (const yakit of yakitKayitlari as Array<{
+        aracId: string;
+        tarih: Date;
+        tutar: number;
+        soforId: string | null;
+        arac?: { kullaniciId?: string | null } | null;
+    }>) {
+        const soforId =
+            yakit.soforId ||
+            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
         const tutar = toNumber(yakit.tutar);
         upsertCost(soforId, { yakit: tutar, toplam: tutar });
     }
 
-    for (const ariza of arizaKayitlari as Array<{ aracId: string; bakimTarihi: Date; tutar: number }>) {
-        const soforId = findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
-        const tutar = toNumber(ariza.tutar);
+    for (const servis of servisKayitlari as Array<{
+        aracId: string;
+        bakimTarihi: Date;
+        tutar: number;
+        soforId?: string | null;
+        arac?: { kullaniciId?: string | null } | null;
+    }>) {
+        const soforId =
+            servis.soforId ||
+            findDriverAtDate(zimmetByAracId, servis.aracId, servis.bakimTarihi);
+        const tutar = toNumber(servis.tutar);
         upsertCost(soforId, { ariza: tutar, toplam: tutar });
     }
 
+    const yakitKayitlariIsMakineleri = (yakitKayitlari as Array<{
+        id: string;
+        aracId: string;
+        tarih: Date;
+        tutar: number;
+        litre: number;
+        km: number;
+        soforId: string | null;
+        arac?: { kullaniciId?: string | null; kategori?: string | null } | null;
+    }>).filter((yakit) => yakit?.arac?.kategori === MACHINE_CATEGORY);
+
     const fuelMetricsByDriverId = buildFuelIntervalMetrics(
-        (yakitKayitlari as Array<{
-            id: string;
-            aracId: string;
-            tarih: Date;
-            tutar: number;
-            litre: number;
-            km: number;
-            soforId: string | null;
-        }>).map((yakit) => ({
+        yakitKayitlariIsMakineleri.map((yakit) => ({
             id: yakit.id,
             aracId: yakit.aracId,
             tarih: yakit.tarih,
             km: yakit.km,
             litre: yakit.litre,
             tutar: yakit.tutar,
-            soforId: yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih),
+            soforId:
+                yakit.soforId ||
+                findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih),
         }))
     ).byDriverId;
+    const driverAverageValues = [...fuelMetricsByDriverId.values()]
+        .filter((metric) => metric.intervalCount > 0 && Number(metric.averageLitresPer100Km || 0) > 0)
+        .map((metric) => Number(metric.averageLitresPer100Km || 0));
+    const driverFleetAverage100Km =
+        driverAverageValues.length > 0
+            ? driverAverageValues.reduce((sum, value) => sum + value, 0) / driverAverageValues.length
+            : 0;
 
     const formattedData = personeller.map((p: any) => {
         const zimmetliArac = p.arac || aktifAracByKullaniciId.get(p.id) || null;
         const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
         const yakitOrtalama = fuelMetricsByDriverId.get(p.id);
+        const ortalamaYakit100Km = yakitOrtalama?.averageLitresPer100Km ?? null;
+        const ortalamaYakitIntervalSayisi = yakitOrtalama?.intervalCount ?? 0;
+        const ortalamaUstuYakit =
+            ortalamaYakit100Km != null &&
+            ortalamaYakitIntervalSayisi > 0 &&
+            driverFleetAverage100Km > 0 &&
+            Number(ortalamaYakit100Km) > Number(driverFleetAverage100Km);
         return {
             id: p.id,
             adSoyad: `${p.ad} ${p.soyad}`,
@@ -308,9 +396,11 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
                 ariza: maliyet.ariza,
             },
             toplamMaliyet: maliyet.toplam,
-            ortalamaYakit100Km: yakitOrtalama?.averageLitresPer100Km ?? null,
+            ortalamaYakit100Km,
             ortalamaYakitKmBasiMaliyet: yakitOrtalama?.averageCostPerKm ?? null,
-            ortalamaYakitIntervalSayisi: yakitOrtalama?.intervalCount ?? 0,
+            ortalamaYakitIntervalSayisi,
+            yakitKarsilastirmaReferans100Km: driverFleetAverage100Km > 0 ? driverFleetAverage100Km : null,
+            ortalamaUstuYakit,
         };
     });
 

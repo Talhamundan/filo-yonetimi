@@ -7,6 +7,7 @@ import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThro
 import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = "/dashboard/cezalar";
 const DASHBOARD_PATH = "/dashboard";
@@ -40,6 +41,10 @@ export async function createCeza(data: CezaPayload) {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
         const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
         let created: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
 
@@ -53,7 +58,7 @@ export async function createCeza(data: CezaPayload) {
                     tutar: Number(data.tutar),
                     cezaMaddesi: data.cezaMaddesi,
                     aciklama: data.aciklama || null,
-                    sirketId: arac.sirketId,
+                    sirketId: usageSirketId,
                 }
             });
         } catch (error) {
@@ -68,7 +73,7 @@ export async function createCeza(data: CezaPayload) {
                         tutar: Number(data.tutar),
                         cezaMaddesi: data.cezaMaddesi,
                         aciklama: data.aciklama || null,
-                        sirketId: arac.sirketId,
+                        sirketId: usageSirketId,
                     }
                 });
             } else {
@@ -118,6 +123,10 @@ export async function updateCeza(id: string, data: CezaPayload) {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
         const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
         let updated: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
 
@@ -132,7 +141,7 @@ export async function updateCeza(id: string, data: CezaPayload) {
                     tutar: Number(data.tutar),
                     cezaMaddesi: data.cezaMaddesi,
                     aciklama: data.aciklama || null,
-                    sirketId: arac.sirketId,
+                    sirketId: usageSirketId,
                 }
             });
         } catch (error) {
@@ -148,7 +157,7 @@ export async function updateCeza(id: string, data: CezaPayload) {
                         tutar: Number(data.tutar),
                         cezaMaddesi: data.cezaMaddesi,
                         aciklama: data.aciklama || null,
-                        sirketId: arac.sirketId,
+                        sirketId: usageSirketId,
                     }
                 });
             } else {

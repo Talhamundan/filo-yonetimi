@@ -32,6 +32,17 @@ export type DriverFuelMetric = {
     averageCostPer100Km: number;
 };
 
+export type VehicleFuelMetric = {
+    vehicleId: string;
+    intervalCount: number;
+    totalDistanceKm: number;
+    totalLitres: number;
+    totalAmount: number;
+    averageLitresPer100Km: number;
+    averageCostPerKm: number;
+    averageCostPer100Km: number;
+};
+
 function toTimestamp(value: Date | string) {
     const date = value instanceof Date ? value : new Date(value);
     return Number.isNaN(date.getTime()) ? 0 : date.getTime();
@@ -52,6 +63,7 @@ type DriverAccumulator = {
 export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
     const byCurrentRecordId = new Map<string, FuelIntervalMetric>();
     const byDriverId = new Map<string, DriverFuelMetric>();
+    const byVehicleId = new Map<string, VehicleFuelMetric>();
     const groupedByVehicle = new Map<string, FuelMetricRecord[]>();
 
     for (const record of records) {
@@ -62,6 +74,7 @@ export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
     }
 
     const driverAccumulators = new Map<string, DriverAccumulator>();
+    const vehicleAccumulators = new Map<string, DriverAccumulator>();
 
     for (const [aracId, vehicleRecords] of groupedByVehicle.entries()) {
         const sorted = [...vehicleRecords].sort((a, b) => {
@@ -99,6 +112,18 @@ export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
                 soforId,
             });
 
+            const vehicleAccumulator = vehicleAccumulators.get(aracId) || {
+                intervalCount: 0,
+                totalDistanceKm: 0,
+                totalLitres: 0,
+                totalAmount: 0,
+            };
+            vehicleAccumulator.intervalCount += 1;
+            vehicleAccumulator.totalDistanceKm += distanceKm;
+            vehicleAccumulator.totalLitres += litreUsed;
+            vehicleAccumulator.totalAmount += amountUsed;
+            vehicleAccumulators.set(aracId, vehicleAccumulator);
+
             if (!soforId) continue;
 
             const currentAccumulator = driverAccumulators.get(soforId) || {
@@ -131,5 +156,21 @@ export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
         });
     }
 
-    return { byCurrentRecordId, byDriverId };
+    for (const [vehicleId, accumulator] of vehicleAccumulators.entries()) {
+        if (accumulator.totalDistanceKm <= 0) continue;
+        const averageLitresPer100Km = (accumulator.totalLitres / accumulator.totalDistanceKm) * 100;
+        const averageCostPerKm = accumulator.totalAmount / accumulator.totalDistanceKm;
+        byVehicleId.set(vehicleId, {
+            vehicleId,
+            intervalCount: accumulator.intervalCount,
+            totalDistanceKm: accumulator.totalDistanceKm,
+            totalLitres: accumulator.totalLitres,
+            totalAmount: accumulator.totalAmount,
+            averageLitresPer100Km,
+            averageCostPerKm,
+            averageCostPer100Km: averageCostPerKm * 100,
+        });
+    }
+
+    return { byCurrentRecordId, byDriverId, byVehicleId };
 }

@@ -3,7 +3,7 @@
 import React, { useState, useMemo } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../components/ui/table";
 import { Input } from "../../../components/ui/input";
-import { Search, Plus, Fuel, Receipt, CreditCard, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { Search, Plus, Fuel, Receipt, ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
 import { Card, CardContent } from "../../../components/ui/card";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { AracLink } from "@/components/links/RecordLinks";
@@ -101,7 +101,6 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
 
     const getIconForTur = (tur: string) => {
         if (tur.includes('Yakıt')) return <Fuel size={14} className="text-indigo-500" />;
-        if (tur.includes('HGS')) return <CreditCard size={14} className="text-amber-500" />;
         return <Receipt size={14} className="text-slate-400" />;
     };
 
@@ -109,7 +108,7 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Finans & HGS Defteri</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Finans Defteri</h2>
                     <p className="text-slate-500 text-sm mt-1">Araçların tüm yakıt alımları, muayene ücretleri ve genel gider kalemleri.</p>
                 </div>
                 <div className="flex items-center gap-3 flex-wrap justify-end">

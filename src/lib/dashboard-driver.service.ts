@@ -1,13 +1,14 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import type { DashboardDateContext, DashboardDriverCostItem, GenericWhere } from "@/lib/dashboard-types";
-import { toNumber } from "@/lib/dashboard-helpers";
+import { getVehicleUsageScopeWhere, toNumber } from "@/lib/dashboard-helpers";
 
 type DriverAccumulator = {
     soforId: string;
     adSoyad: string;
     ceza: number;
     yakit: number;
+    yakitLitre: number;
     ariza: number;
     toplam: number;
 };
@@ -16,13 +17,17 @@ type DriverYakitRow = {
     aracId: string;
     tarih: Date;
     tutar: number;
+    litre: number;
     soforId: string | null;
+    arac?: { kullaniciId: string | null } | null;
 };
 
 type DriverArizaRow = {
     aracId: string;
     bakimTarihi: Date;
     tutar: number;
+    soforId: string | null;
+    arac?: { kullaniciId: string | null } | null;
 };
 
 type DriverCezaRow = {
@@ -33,6 +38,43 @@ type DriverCezaRow = {
 function getAverage(values: number[]) {
     if (!values.length) return 0;
     return Math.round(values.reduce((sum, value) => sum + value, 0) / values.length);
+}
+
+function getUsageScopedExpenseWhere(scope: GenericWhere): GenericWhere {
+    const rawScope = (scope || {}) as Record<string, unknown>;
+    const normalizedSirketId = typeof rawScope.sirketId === "string" ? rawScope.sirketId.trim() : "";
+    if (!normalizedSirketId) {
+        return scope;
+    }
+
+    const restScope = { ...rawScope };
+    delete restScope.sirketId;
+
+    const vehicleUsageWhere = getVehicleUsageScopeWhere({ sirketId: normalizedSirketId });
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleUsageWhere });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
+function getExpenseScopedWhere(scope: GenericWhere, vehicleScope?: GenericWhere): GenericWhere {
+    if (!vehicleScope || Object.keys((vehicleScope || {}) as Record<string, unknown>).length === 0) {
+        return getUsageScopedExpenseWhere(scope);
+    }
+
+    const restScope = { ...((scope || {}) as Record<string, unknown>) };
+    delete restScope.sirketId;
+
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push({ arac: vehicleScope });
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
 }
 
 function findDriverAtDate(
@@ -65,6 +107,7 @@ function getOrCreateDriverCost(
             adSoyad: adSoyadMap[soforId] || "Bilinmeyen Şoför",
             ceza: 0,
             yakit: 0,
+            yakitLitre: 0,
             ariza: 0,
             toplam: 0,
         };
@@ -92,16 +135,21 @@ function buildDriverCosts(params: {
     }
 
     for (const yakit of yakitRows) {
-        const soforId = yakit.soforId || findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
+        const soforId =
+            yakit.soforId ||
+            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
         if (!soforId) continue;
         if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
         row.yakit += toNumber(yakit.tutar);
+        row.yakitLitre += toNumber(yakit.litre);
         row.toplam += toNumber(yakit.tutar);
     }
 
     for (const ariza of arizaRows) {
-        const soforId = findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
+        const soforId =
+            ariza.soforId ||
+            findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
         if (!soforId) continue;
         if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
@@ -110,17 +158,23 @@ function buildDriverCosts(params: {
     }
 
     return Object.values(map)
-        .filter((row) => row.toplam > 0)
-        .sort((a, b) => b.toplam - a.toplam);
+        .filter((row) => row.toplam > 0 || row.yakitLitre > 0)
+        .sort((a, b) => (b.toplam - a.toplam) || (b.yakitLitre - a.yakitLitre));
 }
 
 export async function getDashboardDriverData(params: {
     scope: GenericWhere;
     cezaScope: GenericWhere;
     dateContext: DashboardDateContext;
+    vehicleScope?: GenericWhere;
 }) {
-    const { scope, cezaScope, dateContext } = params;
+    const { scope, dateContext, vehicleScope } = params;
     const { seciliAyBasi, seciliAySonu, oncekiDonemBasi, oncekiDonemSonu } = dateContext;
+    const usageScopedVehicleWhere = {
+        ...((vehicleScope || getVehicleUsageScopeWhere(scope)) as Prisma.AracWhereInput),
+        deletedAt: null,
+    } as Prisma.AracWhereInput;
+    const expenseScope = getExpenseScopedWhere(scope, usageScopedVehicleWhere);
 
     const [
         kullanicilar,
@@ -139,39 +193,37 @@ export async function getDashboardDriverData(params: {
             select: { id: true, ad: true, soyad: true },
         }),
         prisma.kullaniciZimmet.findMany({
-            where: { arac: scope as Prisma.AracWhereInput },
+            where: { arac: usageScopedVehicleWhere },
             select: { aracId: true, kullaniciId: true, baslangic: true, bitis: true },
         }),
         prisma.yakit.findMany({
-            where: { ...(scope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
-            select: { aracId: true, tarih: true, tutar: true, soforId: true },
+            where: { ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
+            select: { aracId: true, tarih: true, tutar: true, litre: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.bakim.findMany({
             where: {
-                ...(scope as Prisma.BakimWhereInput),
-                tur: "ARIZA",
+                ...(expenseScope as Prisma.BakimWhereInput),
                 bakimTarihi: { gte: seciliAyBasi, lte: seciliAySonu },
             },
-            select: { aracId: true, bakimTarihi: true, tutar: true },
+            select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
+            where: { ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
             select: { soforId: true, tutar: true },
         }),
         prisma.yakit.findMany({
-            where: { ...(scope as Prisma.YakitWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
-            select: { aracId: true, tarih: true, tutar: true, soforId: true },
+            where: { ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
+            select: { aracId: true, tarih: true, tutar: true, litre: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.bakim.findMany({
             where: {
-                ...(scope as Prisma.BakimWhereInput),
-                tur: "ARIZA",
+                ...(expenseScope as Prisma.BakimWhereInput),
                 bakimTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
             },
-            select: { aracId: true, bakimTarihi: true, tutar: true },
+            select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
+            where: { ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
             select: { soforId: true, tutar: true },
         }),
     ]);
@@ -213,12 +265,14 @@ export async function getDashboardDriverData(params: {
         zimmetByAracId,
     });
 
-    const driverCostReport: DashboardDriverCostItem[] = currentRows.slice(0, 10);
+    const currentCostRows = currentRows.filter((row) => row.toplam > 0);
+    const previousCostRows = previousRows.filter((row) => row.toplam > 0);
+    const driverCostReport: DashboardDriverCostItem[] = currentRows;
 
     return {
         driverCostReport,
-        ortalamaSoforMaliyeti: getAverage(currentRows.map((row) => row.toplam)),
-        oncekiOrtalamaSoforMaliyeti: getAverage(previousRows.map((row) => row.toplam)),
-        soforMaliyetOrtalamaAdet: currentRows.length,
+        ortalamaSoforMaliyeti: getAverage(currentCostRows.map((row) => row.toplam)),
+        oncekiOrtalamaSoforMaliyeti: getAverage(previousCostRows.map((row) => row.toplam)),
+        soforMaliyetOrtalamaAdet: currentCostRows.length,
     };
 }

@@ -6,7 +6,6 @@ export type ExcelEntityKey =
     | "ariza"
     | "bakim"
     | "yakit"
-    | "hgs"
     | "muayene"
     | "kasko"
     | "trafikSigortasi"
@@ -60,7 +59,7 @@ export const EXCEL_ENTITY_CONFIG: Record<ExcelEntityKey, ExcelEntityConfig> = {
         filterModel: "bakim",
         dateField: "bakimTarihi",
         sheetName: "Bakim",
-        fileNamePrefix: "bakimlar",
+        fileNamePrefix: "servis-kayitlari",
     },
     yakit: {
         prismaModel: "yakit",
@@ -69,17 +68,10 @@ export const EXCEL_ENTITY_CONFIG: Record<ExcelEntityKey, ExcelEntityConfig> = {
         sheetName: "Yakit",
         fileNamePrefix: "yakitlar",
     },
-    hgs: {
-        prismaModel: "hgsYukleme",
-        filterModel: "hgs",
-        dateField: "tarih",
-        sheetName: "HGS",
-        fileNamePrefix: "hgs-yuklemeleri",
-    },
     muayene: {
         prismaModel: "muayene",
         filterModel: "muayene",
-        dateField: "muayeneTarihi",
+        dateField: "gecerlilikTarihi",
         sheetName: "Muayene",
         fileNamePrefix: "muayeneler",
     },

@@ -3,6 +3,7 @@
 import React, { startTransition, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsUpDown } from "lucide-react";
+import { isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 type CompanyScopeSwitcherProps = {
     sirketler: { id: string; ad: string }[];
@@ -15,25 +16,51 @@ export default function CompanyScopeSwitcher({ sirketler, allowAllOption = true 
     const searchParams = useSearchParams();
     const [pending, setPending] = useState(false);
 
-    const firstCompanyId = sirketler[0]?.id || "";
+    const visibleSirketler = useMemo(
+        () => sirketler.filter((sirket) => !isKiralikSirketName(sirket.ad)),
+        [sirketler]
+    );
+    const firstCompanyId = visibleSirketler[0]?.id || "";
     const rawSelectedSirketId = searchParams.get("sirket") || "";
     const selectedSirketId = useMemo(() => {
         if (allowAllOption) {
-            return rawSelectedSirketId || "__ALL__";
+            if (!rawSelectedSirketId) return "__ALL__";
+            return visibleSirketler.some((sirket) => sirket.id === rawSelectedSirketId)
+                ? rawSelectedSirketId
+                : "__ALL__";
         }
-        if (rawSelectedSirketId && sirketler.some((sirket) => sirket.id === rawSelectedSirketId)) {
+        if (rawSelectedSirketId && visibleSirketler.some((sirket) => sirket.id === rawSelectedSirketId)) {
             return rawSelectedSirketId;
         }
         return firstCompanyId;
-    }, [allowAllOption, rawSelectedSirketId, sirketler, firstCompanyId]);
+    }, [allowAllOption, rawSelectedSirketId, visibleSirketler, firstCompanyId]);
 
     const selectedLabel = useMemo(() => {
         if (allowAllOption && selectedSirketId === "__ALL__") {
             return "Tum Sirketler";
         }
 
-        return sirketler.find((sirket) => sirket.id === selectedSirketId)?.ad || "Sirket Sec";
-    }, [allowAllOption, selectedSirketId, sirketler]);
+        return visibleSirketler.find((sirket) => sirket.id === selectedSirketId)?.ad || "Sirket Sec";
+    }, [allowAllOption, selectedSirketId, visibleSirketler]);
+
+    React.useEffect(() => {
+        if (!rawSelectedSirketId) return;
+        const hasVisibleSelection = visibleSirketler.some((sirket) => sirket.id === rawSelectedSirketId);
+        if (hasVisibleSelection) return;
+
+        const nextParams = new URLSearchParams(searchParams.toString());
+        if (allowAllOption) {
+            nextParams.delete("sirket");
+        } else if (firstCompanyId) {
+            nextParams.set("sirket", firstCompanyId);
+        } else {
+            nextParams.delete("sirket");
+        }
+
+        const query = nextParams.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname);
+        router.refresh();
+    }, [allowAllOption, firstCompanyId, pathname, rawSelectedSirketId, router, searchParams, visibleSirketler]);
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const value = event.target.value;
@@ -65,7 +92,7 @@ export default function CompanyScopeSwitcher({ sirketler, allowAllOption = true 
                 className="h-9 md:h-10 w-full appearance-none rounded-lg md:rounded-xl border border-slate-200 bg-white pl-2.5 md:pl-2.5 pr-7 md:pr-7 text-left text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
                 {allowAllOption ? <option value="__ALL__">Tum Sirketler</option> : null}
-                {sirketler.map((sirket) => (
+                {visibleSirketler.map((sirket) => (
                     <option key={sirket.id} value={sirket.id}>
                         {sirket.ad}
                     </option>

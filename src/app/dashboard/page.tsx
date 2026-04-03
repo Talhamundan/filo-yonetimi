@@ -1,15 +1,11 @@
 import DashboardClient from "../../components/dashboard/DashboardClient";
-import { getSirketFilter, getCurrentUserRole, getCurrentUserId } from "@/lib/auth-utils";
+import { getAracUsageFilter, getSirketFilter, getCurrentUserRole, getCurrentUserId } from "@/lib/auth-utils";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardOverview(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
-    const rawAy = Array.isArray(resolvedSearchParams.ay) ? resolvedSearchParams.ay[0] : resolvedSearchParams.ay;
-    const parsedAy = Number(rawAy);
-    const hasMonthSelection = Number.isInteger(parsedAy) && parsedAy >= 1 && parsedAy <= 12;
-    const comparisonGranularity = hasMonthSelection ? "AY" : "YIL";
 
     const [selectedSirketId, selectedYil, selectedAy, role, userId] = await Promise.all([
         getSelectedSirketId(resolvedSearchParams),
@@ -18,20 +14,25 @@ export default async function DashboardOverview(props: { searchParams?: Promise<
         getCurrentUserRole(),
         getCurrentUserId(),
     ]);
-    const sirketFilter = await getSirketFilter(selectedSirketId);
+    const comparisonGranularity = selectedAy == null ? "YIL" : "AY";
+    const [sirketFilter, aracFilter] = await Promise.all([
+        getSirketFilter(selectedSirketId),
+        getAracUsageFilter(selectedSirketId),
+    ]);
     
     const isTechnicalPersonnel = role === "TEKNIK";
 
     const data = await getDashboardData(
         sirketFilter || null,
+        (aracFilter as Record<string, unknown>) || null,
         selectedYil,
         selectedAy ?? new Date().getMonth() + 1,
         comparisonGranularity
     );
     let recentRecords: Array<{
         id: string;
-        actionType: any;
-        entityType: any;
+        actionType: string | null;
+        entityType: string | null;
         summary: string;
         createdAt: Date;
     }> = [];

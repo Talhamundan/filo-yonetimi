@@ -14,8 +14,6 @@ export type PolicyModelName =
     | "kasko"
     | "trafikSigortasi"
     | "dokuman"
-    | "hgs"
-    | "hgsYukleme"
     | "activityLog"
     | "kullaniciZimmet"
     | "zimmet"
@@ -56,8 +54,6 @@ const VEHICLE_RELATION_MODELS = new Set<PolicyModelName>([
     "kasko",
     "trafikSigortasi",
     "dokuman",
-    "hgs",
-    "hgsYukleme",
     "kullaniciZimmet",
     "zimmet",
 ]);
@@ -160,15 +156,19 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "yakit":
         case "ceza":
         case "masraf":
-        case "bakim":
         case "arizaKaydi":
         case "muayene":
         case "kasko":
         case "trafikSigortasi":
         case "dokuman":
-        case "hgs":
-        case "hgsYukleme":
             return { arac: getVehicleUsageCompanyFilter(sirketId) };
+        case "bakim":
+            return {
+                OR: [
+                    { arac: getVehicleUsageCompanyFilter(sirketId) },
+                    { sirketId },
+                ],
+            };
         case "activityLog":
             return { companyId: sirketId };
         case "kullaniciZimmet":
@@ -219,6 +219,30 @@ function withActiveVehicleFilter(modelName: PolicyModelName, where: Record<strin
     if (includeDeleted || !VEHICLE_RELATION_MODELS.has(modelName)) {
         return where;
     }
+
+    if (modelName === "bakim") {
+        const existingAracFilter =
+            where.arac && typeof where.arac === "object" && !Array.isArray(where.arac)
+                ? (where.arac as Record<string, unknown>)
+                : {};
+        return {
+            AND: [
+                where,
+                {
+                    OR: [
+                        {
+                            arac: {
+                                ...existingAracFilter,
+                                deletedAt: null,
+                            },
+                        },
+                        { aracId: null },
+                    ],
+                },
+            ],
+        };
+    }
+
     const existingAracFilter =
         where.arac && typeof where.arac === "object" && !Array.isArray(where.arac)
             ? (where.arac as Record<string, unknown>)

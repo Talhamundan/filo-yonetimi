@@ -1,7 +1,6 @@
 "use client"
 
 import { ColumnDef } from "@tanstack/react-table"
-import { Badge } from "../../../components/ui/badge"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
@@ -11,8 +10,10 @@ import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName } fr
 export type BakimRow = {
     id: string;
     bakimTarihi: Date;
-    yapilanKm: number;
-    sonrakiBakimKm: number | null;
+    plaka?: string | null;
+    arizaSikayet?: string | null;
+    degisenParca?: string | null;
+    islemYapanFirma?: string | null;
     servisAdi: string | null;
     yapilanIslemler: string | null;
     tutar: number;
@@ -20,14 +21,14 @@ export type BakimRow = {
     tur?: string;
     soforId?: string | null;
     sofor?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
-    arac: {
+    arac?: {
         id: string;
-        plaka: string;
+        plaka: string | null;
         marka: string;
         model: string;
         sirket?: { ad: string } | null;
         kullanici?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
-    };
+    } | null;
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
@@ -43,77 +44,76 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => {
     },
     {
         accessorKey: "arac_plaka",
-        header: "Araç",
-        accessorFn: (row) => row.arac.plaka,
+        header: "Plaka",
+        accessorFn: (row) => row.arac?.plaka || row.plaka || "-",
         cell: ({ row }) => {
-            const seciliPersonel = row.original.sofor || row.original.arac.kullanici || null;
-            const personelText = seciliPersonel
-                ? getPersonelDisplayName(seciliPersonel)
-                : (row.original.soforId ? ESKI_PERSONEL_ETIKETI : null);
-            const personelId = getActivePersonelId(seciliPersonel);
+            const plaka = row.original.arac?.plaka || row.original.plaka || "-";
+            const subtitle = row.original.arac
+                ? `${row.original.arac.marka} ${row.original.arac.model}`.trim()
+                : "Araç kaydı yok";
             return <VehicleIdentityCell
-                aracId={row.original.arac.id}
-                plaka={row.original.arac.plaka}
-                subtitle={`${row.original.arac.marka} ${row.original.arac.model}`}
-                companyName={row.original.arac.sirket?.ad}
+                aracId={row.original.arac?.id}
+                plaka={plaka}
+                subtitle={subtitle}
+                companyName={row.original.arac?.sirket?.ad}
                 showCompanyInfo={showCompanyInfo}
-                extra={personelText ? (
-                    <PersonelLink
-                        personelId={personelId}
-                        className="text-[11px] text-indigo-500 font-semibold mt-0.5 hover:underline"
-                    >
-                        👤 {personelText}
-                    </PersonelLink>
-                ) : null}
             />
         },
     },
     {
-        accessorKey: "kategori",
-        header: "Kategori",
+        accessorKey: "sofor",
+        header: "Şoför",
+        accessorFn: (row) => {
+            const seciliPersonel = row.sofor || row.arac?.kullanici || null;
+            return seciliPersonel ? getPersonelDisplayName(seciliPersonel) : (row.soforId ? ESKI_PERSONEL_ETIKETI : "-");
+        },
         cell: ({ row }) => {
-            const kategori = row.original.kategori || (row.original.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM");
-            if (kategori === "ARIZA") {
-                return <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none font-semibold">Arıza</Badge>;
-            }
-            return <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none font-semibold">Periyodik Bakım</Badge>;
+            const seciliPersonel = row.original.sofor || row.original.arac?.kullanici || null;
+            const personelText = seciliPersonel
+                ? getPersonelDisplayName(seciliPersonel)
+                : (row.original.soforId ? ESKI_PERSONEL_ETIKETI : "-");
+            const personelId = getActivePersonelId(seciliPersonel);
+
+            return (
+                <PersonelLink personelId={personelId} className="font-semibold text-indigo-600 hover:underline">
+                    {personelText}
+                </PersonelLink>
+            );
         },
     },
     {
-        accessorKey: "servisAdi",
-        header: "Servis Adı",
+        accessorKey: "arizaSikayet",
+        header: "Arıza Şikayet",
         cell: ({ row }) => {
-            return <div className="font-bold text-slate-800">{row.getValue("servisAdi") || '-'}</div>
+            return <div className="text-slate-700 max-w-[260px] truncate" title={row.original.arizaSikayet || ""}>{row.original.arizaSikayet || '-'}</div>
         },
     },
     {
-        accessorKey: "islem",
-        header: "Yapılan İşlemler",
+        accessorKey: "yapilanIslemler",
+        header: "Yapılan İşlem",
         cell: ({ row }) => {
             const islem = row.original.yapilanIslemler;
             return <div className="text-slate-600 max-w-[250px] truncate" title={islem || ''}>{islem || '-'}</div>
         },
     },
     {
-        accessorKey: "yapilanKm",
-        header: "İşlem KM",
+        accessorKey: "degisenParca",
+        header: "Değişen Parça",
         cell: ({ row }) => {
-            return <div className="text-slate-700 font-medium">{row.original.yapilanKm.toLocaleString()} km</div>
+            return <div className="text-slate-700 max-w-[220px] truncate" title={row.original.degisenParca || ""}>{row.original.degisenParca || '-'}</div>
         },
     },
     {
-        accessorKey: "sonrakiBakimKm",
-        header: "Sonraki Bakım KM",
+        accessorKey: "islemYapanFirma",
+        header: "İşlem Yapan Firma",
         cell: ({ row }) => {
-            const snr = row.original.sonrakiBakimKm;
-            return snr
-                ? <Badge variant="outline" className="border-indigo-200 text-indigo-700 bg-indigo-50 shadow-none font-bold">{snr.toLocaleString()} km</Badge>
-                : <span className="text-slate-400 italic text-xs">Belirtilmemiş</span>;
+            const firma = row.original.islemYapanFirma || row.original.servisAdi;
+            return <div className="font-semibold text-slate-800 max-w-[220px] truncate" title={firma || ""}>{firma || '-'}</div>;
         },
     },
     {
         accessorKey: "tutar",
-        header: () => <div className="text-right">Tutar</div>,
+        header: () => <div className="text-right">Masraf Tutarı</div>,
         cell: ({ row }) => {
             return <div className="text-right font-bold text-slate-900">₺{row.original.tutar.toLocaleString('tr-TR')}</div>
         },

@@ -32,9 +32,9 @@ export interface DashboardOperationArizaItem {
 export interface DashboardMonthlyTrendItem {
     name: string;
     yakit: number;
+    yakitLitre?: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;
@@ -47,9 +47,9 @@ export interface DashboardDailyTrendItem {
     gun: number;
     name: string;
     yakit: number;
+    yakitLitre?: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;
@@ -63,9 +63,9 @@ export interface DashboardVehicleCostItem {
     markaModel: string;
     toplam: number;
     yakit: number;
+    yakitLitre?: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;
@@ -78,6 +78,7 @@ export interface DashboardDriverCostItem {
     toplam: number;
     ceza: number;
     yakit: number;
+    yakitLitre?: number;
     ariza: number;
 }
 
@@ -86,13 +87,30 @@ export interface DashboardCompanyCostItem {
     sirketAd: string;
     toplam: number;
     yakit: number;
+    yakitLitre?: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;
     diger: number;
+}
+
+export interface DashboardVehicleFuelAverageItem {
+    aracId: string;
+    plaka: string;
+    markaModel: string;
+    averageLitresPer100Km: number;
+    intervalCount: number;
+}
+
+export interface DashboardDriverFuelAverageItem {
+    soforId: string;
+    adSoyad: string;
+    averageLitresPer100Km: number;
+    intervalCount: number;
+    fleetAverageLitresPer100Km?: number;
+    isAboveFleetAverage?: boolean;
 }
 
 export interface DashboardData {
@@ -135,6 +153,8 @@ export interface DashboardData {
     vehicleCostReport: DashboardVehicleCostItem[];
     driverCostReport: DashboardDriverCostItem[];
     companyCostReport: DashboardCompanyCostItem[];
+    vehicleFuelAverageReport: DashboardVehicleFuelAverageItem[];
+    driverFuelAverageReport: DashboardDriverFuelAverageItem[];
 }
 
 export type DashboardComparisonGranularity = "AY" | "YIL";
@@ -153,7 +173,6 @@ export type CostBreakdown = {
     yakit: number;
     bakim: number;
     muayene: number;
-    hgs: number;
     ceza: number;
     kasko: number;
     trafik: number;

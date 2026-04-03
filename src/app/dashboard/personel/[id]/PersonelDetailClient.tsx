@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-    Mail, Phone, Building2, Briefcase, Car, ArrowLeft, Calendar, Plus, Pencil, Trash2
+    Mail, Phone, Building2, Briefcase, Car, ArrowLeft, Calendar, Plus, Pencil, Trash2, Fuel
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -67,6 +67,18 @@ export default function PersonelDetailClient({
         const zimmetler = Array.isArray(p.zimmetler) ? p.zimmetler : [];
         return zimmetler.find((z: any) => !z.bitis && z.aracId === p.arac?.id) || zimmetler.find((z: any) => !z.bitis) || null;
     }, [p.arac?.id, p.zimmetler]);
+    const personelYakitOrtalamasi = React.useMemo(() => {
+        const raw = Number(p.ortalamaYakit100Km);
+        if (!Number.isFinite(raw) || raw <= 0) return null;
+        return raw;
+    }, [p.ortalamaYakit100Km]);
+    const personelYakitAralikSayisi = Number(p.ortalamaYakitIntervalSayisi || 0);
+    const personelYakitReferansOrtalamasi = React.useMemo(() => {
+        const raw = Number(p.yakitKarsilastirmaReferans100Km);
+        if (!Number.isFinite(raw) || raw <= 0) return null;
+        return raw;
+    }, [p.yakitKarsilastirmaReferans100Km]);
+    const personelOrtalamaUstuYakit = Boolean(p.ortalamaUstuYakit);
 
     const handleUpdate = async () => {
         setLoading(true);
@@ -233,6 +245,26 @@ export default function PersonelDetailClient({
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5"><Building2 size={16} /> {p.calistigiKurum || p.sehir || 'Kurum Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
+                                <div className="flex items-center gap-1.5">
+                                    <Fuel size={16} />
+                                    {personelYakitOrtalamasi !== null
+                                        ? `${personelYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km`
+                                        : "Yakıt ortalaması yok"}
+                                    {personelYakitOrtalamasi !== null && personelYakitAralikSayisi > 0 ? (
+                                        <span className="text-[11px] text-slate-400">({personelYakitAralikSayisi} aralık)</span>
+                                    ) : null}
+                                    {personelYakitReferansOrtalamasi !== null ? (
+                                        <span className="text-[11px] text-slate-500">
+                                            İş makinesi ort: {personelYakitReferansOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km
+                                        </span>
+                                    ) : null}
+                                    {personelOrtalamaUstuYakit ? (
+                                        <span className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                                            Ortalama Üstü
+                                        </span>
+                                    ) : null}
+                                </div>
+                                <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5 text-xs font-mono bg-slate-100 px-2 py-0.5 rounded">TC: {p.tcNo || 'Belirtilmemiş'}</div>
                             </div>
 
@@ -391,6 +423,9 @@ export default function PersonelDetailClient({
                         </TabsTrigger>
                         <TabsTrigger value="arizalar" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                             Arıza Kayıtları
+                        </TabsTrigger>
+                        <TabsTrigger value="servisler" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
+                            Servis Kayıtları
                         </TabsTrigger>
                         <TabsTrigger value="yakit" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                             Yakıt Harcamaları
@@ -601,12 +636,63 @@ export default function PersonelDetailClient({
                         </Card>
                     </TabsContent>
 
+                    <TabsContent value="servisler">
+                        <Card className="overflow-hidden">
+                            <Table>
+                                <TableHeader className="bg-slate-50">
+                                    <TableRow>
+                                        <TableHead>Tarih</TableHead>
+                                        <TableHead>Araç Plaka</TableHead>
+                                        <TableHead>Arıza Şikayet</TableHead>
+                                        <TableHead>Yapılan İşlem</TableHead>
+                                        <TableHead>Değişen Parça</TableHead>
+                                        <TableHead>İşlem Yapan Firma</TableHead>
+                                        <TableHead className="text-right">Tutar</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {p.bakimKayitlari && p.bakimKayitlari.length > 0 ? (
+                                        p.bakimKayitlari.map((b: any) => (
+                                            <TableRow key={b.id}>
+                                                <TableCell>{formatDate(b.bakimTarihi)}</TableCell>
+                                                <TableCell className="font-mono font-bold">
+                                                    <div className="flex flex-col">
+                                                        <AracLink aracId={b.arac?.id} className="hover:text-indigo-600 hover:underline">
+                                                            {b.arac?.plaka || "-"}
+                                                        </AracLink>
+                                                        {canAccessAllCompanies && b.arac?.sirket?.ad ? (
+                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">{b.arac.sirket.ad}</span>
+                                                        ) : null}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-slate-700 max-w-[220px] truncate" title={b.arizaSikayet || ""}>{b.arizaSikayet || "-"}</TableCell>
+                                                <TableCell className="text-slate-700 max-w-[220px] truncate" title={b.yapilanIslemler || ""}>{b.yapilanIslemler || "-"}</TableCell>
+                                                <TableCell className="text-slate-700 max-w-[220px] truncate" title={b.degisenParca || ""}>{b.degisenParca || "-"}</TableCell>
+                                                <TableCell className="text-slate-700">{b.islemYapanFirma || b.servisAdi || "-"}</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">
+                                                    ₺{Number(b.tutar || 0).toLocaleString("tr-TR")}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    ) : (
+                                        <TableRow>
+                                            <TableCell colSpan={7} className="h-32 text-center text-slate-400 italic">
+                                                Bu personele ait servis kaydı bulunmuyor.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </Card>
+                    </TabsContent>
+
                     <TabsContent value="yakit">
                         <Card className="overflow-hidden">
                             <Table>
                                 <TableHeader className="bg-slate-50">
                                     <TableRow>
                                         <TableHead>Tarih</TableHead>
+                                        <TableHead>Araç Plaka</TableHead>
                                         <TableHead>Litre</TableHead>
                                         <TableHead>İstasyon</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
@@ -614,10 +700,20 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.arac?.yakitlar && p.arac.yakitlar.length > 0 ? (
-                                        p.arac.yakitlar.map((y: any) => (
+                                    {(p.yakitKayitlari && p.yakitKayitlari.length > 0) ? (
+                                        p.yakitKayitlari.map((y: any) => (
                                             <TableRow key={y.id}>
                                                 <TableCell>{formatDate(y.tarih)}</TableCell>
+                                                <TableCell className="font-mono font-bold">
+                                                    <div className="flex flex-col">
+                                                        <AracLink aracId={y.arac?.id} className="hover:text-indigo-600 hover:underline">
+                                                            {y.arac?.plaka || "-"}
+                                                        </AracLink>
+                                                        {canAccessAllCompanies && y.arac?.sirket?.ad ? (
+                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">{y.arac.sirket.ad}</span>
+                                                        ) : null}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>{y.litre} L</TableCell>
                                                 <TableCell>{y.istasyon || '-'}</TableCell>
                                                 <TableCell className="text-right font-bold">₺{y.tutar.toLocaleString()}</TableCell>
@@ -626,8 +722,8 @@ export default function PersonelDetailClient({
                                         ))
                                     ) : (
                                         <TableRow>
-                                            <TableCell colSpan={5} className="h-32 text-center text-slate-400 italic">
-                                                Mevcut araç üzerinde yakıt kaydı bulunmuyor.
+                                            <TableCell colSpan={6} className="h-32 text-center text-slate-400 italic">
+                                                Bu personele atanmış yakıt kaydı bulunmuyor.
                                             </TableCell>
                                         </TableRow>
                                     )}

@@ -22,6 +22,7 @@ const TUR_LIST = [
     'LASTIK',
     'TEMIZLIK',
     'OTOPARK',
+    'HGS_YUKLEME',
     'KOPRU_OBO',
     'DIGER'
 ];

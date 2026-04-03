@@ -6,6 +6,7 @@ import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/dokumanlar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -29,6 +30,10 @@ export async function createDokuman(data: {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
 
         const created = await prisma.dokuman.create({
             data: {
@@ -36,7 +41,7 @@ export async function createDokuman(data: {
                 dosyaUrl: data.dosyaUrl,
                 tur: data.tur,
                 aracId: arac.id,
-                sirketId: arac.sirketId,
+                sirketId: usageSirketId,
             }
         });
 

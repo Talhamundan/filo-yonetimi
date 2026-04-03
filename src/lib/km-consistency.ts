@@ -74,7 +74,6 @@ export async function getAracMaxKnownKm(aracId: string, tx: TxClient = prisma) {
         yakitKm,
         bakimKm,
         muayeneKm,
-        hgsKm,
         cezaKm,
         zimmetBaslangicKm,
         zimmetBitisKm,
@@ -82,7 +81,6 @@ export async function getAracMaxKnownKm(aracId: string, tx: TxClient = prisma) {
         safeAggregateMax(tx, "yakit", "km", aracId),
         safeAggregateMax(tx, "bakim", "yapilanKm", aracId),
         safeAggregateMax(tx, "muayene", "km", aracId),
-        safeAggregateMax(tx, "hgsYukleme", "km", aracId),
         safeAggregateMax(tx, "ceza", "km", aracId),
         safeAggregateMax(tx, "kullaniciZimmet", "baslangicKm", aracId),
         safeAggregateMax(tx, "kullaniciZimmet", "bitisKm", aracId),
@@ -93,7 +91,6 @@ export async function getAracMaxKnownKm(aracId: string, tx: TxClient = prisma) {
         yakitKm,
         bakimKm,
         muayeneKm,
-        hgsKm,
         cezaKm,
         zimmetBaslangicKm,
         zimmetBitisKm
@@ -105,7 +102,6 @@ export async function getAracMaxRelatedKm(aracId: string, tx: TxClient = prisma)
         yakitKm,
         bakimKm,
         muayeneKm,
-        hgsKm,
         cezaKm,
         zimmetBaslangicKm,
         zimmetBitisKm,
@@ -113,7 +109,6 @@ export async function getAracMaxRelatedKm(aracId: string, tx: TxClient = prisma)
         safeAggregateMax(tx, "yakit", "km", aracId),
         safeAggregateMax(tx, "bakim", "yapilanKm", aracId),
         safeAggregateMax(tx, "muayene", "km", aracId),
-        safeAggregateMax(tx, "hgsYukleme", "km", aracId),
         safeAggregateMax(tx, "ceza", "km", aracId),
         safeAggregateMax(tx, "kullaniciZimmet", "baslangicKm", aracId),
         safeAggregateMax(tx, "kullaniciZimmet", "bitisKm", aracId),
@@ -123,7 +118,6 @@ export async function getAracMaxRelatedKm(aracId: string, tx: TxClient = prisma)
         yakitKm,
         bakimKm,
         muayeneKm,
-        hgsKm,
         cezaKm,
         zimmetBaslangicKm,
         zimmetBitisKm
@@ -176,17 +170,27 @@ export async function assertKmWriteConsistency(params: {
 }
 
 export async function syncAracGuncelKm(aracId: string, tx: TxClient = prisma) {
-    const maxKnownKm = await getAracMaxKnownKm(aracId, tx);
+    const latestFuelRow = await tx.yakit
+        .findFirst({
+            where: { aracId },
+            select: { km: true },
+            orderBy: [{ tarih: "desc" }, { id: "desc" }],
+        })
+        .catch((error: unknown) => {
+            if (isLegacySchemaError(error)) {
+                return null;
+            }
+            throw error;
+        });
+    const latestFuelKm = Number(latestFuelRow?.km || 0);
+    const nextKm = Number.isFinite(latestFuelKm) && latestFuelKm > 0 ? Math.trunc(latestFuelKm) : 0;
 
     await tx.arac.updateMany({
-        where: {
-            id: aracId,
-            guncelKm: { lt: maxKnownKm },
-        },
-        data: { guncelKm: maxKnownKm },
+        where: { id: aracId },
+        data: { guncelKm: nextKm },
     });
 
-    return maxKnownKm;
+    return nextKm;
 }
 
 export async function resolveAracGuncelKmForUpdate(

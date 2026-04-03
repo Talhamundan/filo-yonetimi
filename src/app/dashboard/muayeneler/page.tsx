@@ -7,6 +7,66 @@ import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { ensureMuayeneColumns } from "@/lib/muayene-schema-compat";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
+type CompanyAwareUser = {
+    deletedAt?: Date | string | null;
+    calistigiKurum?: string | null;
+    sirket?: { ad?: string | null } | null;
+} | null | undefined;
+
+type CompanyAwareVehicle = {
+    calistigiKurum?: string | null;
+    kullanici?: CompanyAwareUser;
+    kullaniciGecmisi?: Array<{ kullanici?: CompanyAwareUser } | null> | null;
+} | null | undefined;
+
+const ARAC_COMPANY_SELECT = {
+    id: true,
+    plaka: true,
+    marka: true,
+    model: true,
+    calistigiKurum: true,
+    sirket: { select: { ad: true } },
+    kullanici: {
+        select: {
+            deletedAt: true,
+            calistigiKurum: true,
+            sirket: { select: { ad: true } },
+        },
+    },
+    kullaniciGecmisi: {
+        where: { bitis: null },
+        orderBy: { baslangic: "desc" },
+        take: 1,
+        select: {
+            kullanici: {
+                select: {
+                    deletedAt: true,
+                    calistigiKurum: true,
+                    sirket: { select: { ad: true } },
+                },
+            },
+        },
+    },
+} as const;
+
+function normalizeText(value: string | null | undefined) {
+    return typeof value === "string" ? value.trim() : "";
+}
+
+function resolveKullaniciFirmaAd(arac: CompanyAwareVehicle) {
+    const manualFirma = normalizeText(arac?.calistigiKurum);
+    if (manualFirma) return manualFirma;
+
+    const aktifZimmetKullanici = arac?.kullaniciGecmisi?.[0]?.kullanici;
+    const aktifKullanici = aktifZimmetKullanici || arac?.kullanici || null;
+    const gecerliKullanici = aktifKullanici?.deletedAt ? null : aktifKullanici;
+    const kullaniciKurum = normalizeText(gecerliKullanici?.calistigiKurum);
+    if (kullaniciKurum) return kullaniciKurum;
+
+    const kullaniciSirket = normalizeText(gecerliKullanici?.sirket?.ad);
+    return kullaniciSirket || null;
+}
+
 export default async function MuayenelerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
@@ -37,19 +97,10 @@ export default async function MuayenelerPage(props: { searchParams?: Promise<Das
         AND: [
             companyCompatibleWhere,
             {
-                OR: [
-                    { muayeneTarihi: { gte: yilBasi, lte: yilSonu } },
-                    { gecerlilikTarihi: { gte: yilBasi, lte: yilSonu } },
-                ],
+                gecerlilikTarihi: { gte: yilBasi, lte: yilSonu },
             },
         ],
     };
-    const now = new Date();
-    now.setHours(0, 0, 0, 0);
-    const criticalDate = new Date(now);
-    criticalDate.setDate(criticalDate.getDate() + 15);
-    const upcomingDate = new Date(now);
-    upcomingDate.setDate(upcomingDate.getDate() + 30);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [muayeneWhere as Record<string, unknown>];
 
@@ -61,34 +112,6 @@ export default async function MuayenelerPage(props: { searchParams?: Promise<Das
     if (qFilter) {
         whereParts.push(qFilter);
     }
-    if (commonFilters.status) {
-        switch (commonFilters.status) {
-            case "PASIF":
-                whereParts.push({ aktifMi: false });
-                break;
-            case "GECMEDI":
-                whereParts.push({ gectiMi: false });
-                break;
-            case "GECTI":
-                whereParts.push({ gectiMi: true });
-                break;
-            case "GECIKTI":
-                whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { lt: now } });
-                break;
-            case "YUKSEK":
-            case "KRITIK":
-                whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { gte: now, lte: criticalDate } });
-                break;
-            case "YAKLASIYOR":
-                whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { gte: criticalDate, lte: upcomingDate } });
-                break;
-            case "GECERLI":
-                whereParts.push({ aktifMi: true, gectiMi: true, gecerlilikTarihi: { gt: upcomingDate } });
-                break;
-            default:
-                break;
-        }
-    }
     if (dateRange) {
         whereParts.push({ gecerlilikTarihi: dateRange });
     }
@@ -98,20 +121,20 @@ export default async function MuayenelerPage(props: { searchParams?: Promise<Das
     const [muayenelerRaw, araclar] = await Promise.all([
         (prisma as any).muayene.findMany({
             where: scopedMuayeneWhere as any,
-            orderBy: [{ gecerlilikTarihi: 'desc' }, { muayeneTarihi: 'desc' }],
-            include: { arac: { include: { sirket: { select: { ad: true } } } } }
+            orderBy: [{ gecerlilikTarihi: "asc" }],
+            include: { arac: { select: ARAC_COMPANY_SELECT } }
         }).catch(async (error: any) => {
             console.warn("Muayene yeni alanlari okunamadi. Geriye donuk sorgu ile devam ediliyor.", error);
             const legacyRows = await (prisma as any).muayene.findMany({
                 where: scopedMuayeneWhere as any,
-                orderBy: [{ gecerlilikTarihi: "desc" }, { muayeneTarihi: "desc" }],
+                orderBy: [{ gecerlilikTarihi: "asc" }],
                 select: {
                     id: true,
                     muayeneTarihi: true,
                     gecerlilikTarihi: true,
                     km: true,
                     aktifMi: true,
-                    arac: { include: { sirket: { select: { ad: true } } } }
+                    arac: { select: ARAC_COMPANY_SELECT }
                 }
             });
             return legacyRows.map((row: any) => ({ ...row, tutar: null, gectiMi: true }));
@@ -122,5 +145,19 @@ export default async function MuayenelerPage(props: { searchParams?: Promise<Das
             orderBy: { plaka: 'asc' }
         })
     ]);
-    return <MuayenelerClient initialMuayeneler={muayenelerRaw as unknown as MuayeneRow[]} araclar={araclar} />;
+
+    const muayeneler = (muayenelerRaw as any[]).map((row) => {
+        const kullaniciFirmaAd = resolveKullaniciFirmaAd(row?.arac);
+        return {
+            ...row,
+            arac: row?.arac
+                ? {
+                    ...row.arac,
+                    kullaniciFirmaAd,
+                }
+                : row?.arac,
+        };
+    });
+
+    return <MuayenelerClient initialMuayeneler={muayeneler as unknown as MuayeneRow[]} araclar={araclar} />;
 }

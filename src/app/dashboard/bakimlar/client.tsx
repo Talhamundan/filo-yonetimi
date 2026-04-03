@@ -15,17 +15,21 @@ import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 
 const EMPTY = {
     aracId: "",
+    plaka: "",
     soforId: "",
-    kategori: "PERIYODIK_BAKIM" as "PERIYODIK_BAKIM" | "ARIZA",
     bakimTarihi: nowDateTimeLocal(),
-    yapilanKm: "",
-    servisAdi: "",
+    arizaSikayet: "",
     yapilanIslemler: "",
+    degisenParca: "",
+    islemYapanFirma: "",
     tutar: ""
 };
+
+const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 type AracOption = {
     id: string;
@@ -46,6 +50,8 @@ type PersonelOption = {
     ad: string;
     soyad: string;
     rol?: string | null;
+    sirketAd?: string | null;
+    calistigiKurum?: string | null;
 };
 
 export default function BakimlarClient({
@@ -73,7 +79,7 @@ export default function BakimlarClient({
             const params = new URLSearchParams(searchParams.toString());
             params.delete("add");
             const query = params.toString();
-            router.replace(`/dashboard/bakimlar${query ? `?${query}` : ""}`, { scroll: false });
+            router.replace(`/dashboard/servis-kayitlari${query ? `?${query}` : ""}`, { scroll: false });
         }
     }, [shouldOpenCreate, router, searchParams]);
     const selectedArac = activeAraclar.find((arac) => arac.id === formData.aracId);
@@ -85,25 +91,42 @@ export default function BakimlarClient({
         setFormData((prev) => ({
             ...prev,
             aracId,
+            plaka: seciliArac?.plaka ? forceUppercase(seciliArac.plaka) : prev.plaka,
             soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
         }));
     };
 
+    const handlePlakaChange = (value: string) => {
+        const nextPlaka = forceUppercase(value);
+        const normalizedNextPlaka = nextPlaka.replace(/\s+/g, "");
+        const matchedArac = activeAraclar.find((arac) => (arac.plaka || "").replace(/\s+/g, "").toLocaleUpperCase("tr-TR") === normalizedNextPlaka);
+
+        setFormData((prev) => ({
+            ...prev,
+            plaka: nextPlaka,
+            aracId: matchedArac?.id || "",
+            soforId: matchedArac
+                ? normalizeSoforId(matchedArac.aktifSoforId || matchedArac.kullaniciId)
+                : prev.soforId,
+        }));
+    };
+
     const handleCreate = async () => {
-        if (!formData.aracId || !formData.bakimTarihi || !formData.yapilanKm || !formData.tutar) {
+        if ((!formData.aracId && !formData.plaka.trim()) || !formData.bakimTarihi || !formData.tutar) {
             toast.warning("Eksik Bilgi", { description: "Lütfen zorunlu yıldızlı (*) alanları doldurun." });
             return;
         }
 
         setLoading(true);
         const res = await addBakim({
-            aracId: formData.aracId,
+            aracId: formData.aracId || null,
+            plaka: formData.plaka || null,
             soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
-            yapilanKm: parseInt(formData.yapilanKm),
-            kategori: formData.kategori,
-            servisAdi: formData.servisAdi || undefined,
+            arizaSikayet: formData.arizaSikayet || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
+            degisenParca: formData.degisenParca || undefined,
+            islemYapanFirma: formData.islemYapanFirma || undefined,
             tutar: parseFloat(formData.tutar)
         });
 
@@ -119,16 +142,21 @@ export default function BakimlarClient({
     };
 
     const handleUpdate = async () => {
-        if (!editRow || !formData.aracId) return;
+        if (!editRow) return;
+        if ((!formData.aracId && !formData.plaka.trim()) || !formData.bakimTarihi || !formData.tutar) {
+            toast.warning("Eksik Bilgi", { description: "Lütfen zorunlu yıldızlı (*) alanları doldurun." });
+            return;
+        }
         setLoading(true);
         const res = await updateBakim(editRow.id, {
-            aracId: formData.aracId,
+            aracId: formData.aracId || null,
+            plaka: formData.plaka || null,
             soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
-            yapilanKm: parseInt(formData.yapilanKm),
-            kategori: formData.kategori,
-            servisAdi: formData.servisAdi || undefined,
+            arizaSikayet: formData.arizaSikayet || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
+            degisenParca: formData.degisenParca || undefined,
+            islemYapanFirma: formData.islemYapanFirma || undefined,
             tutar: parseFloat(formData.tutar)
         });
 
@@ -143,7 +171,7 @@ export default function BakimlarClient({
     };
 
     const handleDelete = async (id: string, plaka: string) => {
-        const confirmed = await openConfirm({ title: "Kaydı Sil", message: `${plaka} plakalı aracın bu servis kaydını silmek istediğinizden emin misiniz?`, confirmText: "Evet, Sil", variant: "danger" });
+        const confirmed = await openConfirm({ title: "Kaydı Sil", message: `${plaka} için bu servis kaydını silmek istediğinizden emin misiniz?`, confirmText: "Evet, Sil", variant: "danger" });
         if (!confirmed) return;
         const res = await deleteBakim(id);
         if (res.success) {
@@ -156,13 +184,14 @@ export default function BakimlarClient({
 
     const openEdit = (row: BakimRow) => {
         setFormData({
-            aracId: row.arac.id,
-            soforId: normalizeSoforId(row.soforId || row.sofor?.id || row.arac.kullanici?.id),
-            kategori: (row.kategori as any) || (row.tur === "ARIZA" ? "ARIZA" : "PERIYODIK_BAKIM"),
+            aracId: row.arac?.id || "",
+            plaka: row.arac?.plaka || row.plaka || "",
+            soforId: normalizeSoforId(row.soforId || row.sofor?.id || row.arac?.kullanici?.id),
             bakimTarihi: toDateTimeLocalInput(row.bakimTarihi),
-            yapilanKm: String(row.yapilanKm),
-            servisAdi: row.servisAdi || "",
+            arizaSikayet: row.arizaSikayet || "",
             yapilanIslemler: row.yapilanIslemler || "",
+            degisenParca: row.degisenParca || "",
+            islemYapanFirma: row.islemYapanFirma || row.servisAdi || "",
             tutar: String(row.tutar)
         });
         setEditRow(row);
@@ -178,7 +207,7 @@ export default function BakimlarClient({
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
                     <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
-                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id, row.original.arac?.plaka || row.original.plaka || "Araçsız kayıt")} />
                 </div>
             )
         }
@@ -201,23 +230,23 @@ export default function BakimlarClient({
                             Yeni Servis Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Yeni Servis Kaydı</DialogTitle>
                             <DialogDescription>
-                                Araç plakası üzerinden yeni bir periyodik bakım veya arıza kaydı işleyebilirsiniz.
+                                Servis kaydı için temel bilgileri girin.
                             </DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium">Araç</label>
                                 <SearchableSelect
                                     value={formData.aracId}
                                     onValueChange={handleAracSelection}
-                                    placeholder="Araç Seçiniz"
+                                    placeholder="Araç Seçiniz (Opsiyonel)"
                                     searchPlaceholder="Plaka / araç ara..."
                                     options={[
-                                        { value: "", label: "Araç Seçiniz" },
+                                        { value: "", label: "Seçilmedi" },
                                         ...activeAraclar.map((arac) => ({
                                             value: arac.id,
                                             label: formatAracOptionLabel(arac),
@@ -226,6 +255,16 @@ export default function BakimlarClient({
                                     ]}
                                 />
                                 <SelectedAracInfo arac={selectedArac} />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
+                                <Input
+                                    value={formData.plaka}
+                                    onChange={(event) => handlePlakaChange(event.target.value)}
+                                    placeholder="34 ABC 123"
+                                    className="h-9 uppercase font-mono"
+                                />
+                                <p className="text-[11px] text-slate-500">Plaka araç listesinde varsa kayıt otomatik olarak araca bağlanır.</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Servise Götüren Personel</label>
@@ -238,45 +277,51 @@ export default function BakimlarClient({
                                         { value: "", label: "Seçilmedi" },
                                         ...personeller.map((personel) => ({
                                             value: personel.id,
-                                            label: `${personel.ad} ${personel.soyad}`,
-                                            searchText: `${personel.ad} ${personel.soyad}`,
+                                            label: getPersonelOptionLabel(personel),
+                                            searchText: getPersonelOptionSearchText(personel),
                                         })),
                                     ]}
                                 />
                                 <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
-                                <select
-                                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    value={formData.kategori}
-                                    onChange={(e) => setFormData({...formData, kategori: e.target.value as "PERIYODIK_BAKIM" | "ARIZA"})}
-                                >
-                                    <option value="PERIYODIK_BAKIM">Periyodik Bakım</option>
-                                    <option value="ARIZA">Arıza</option>
-                                </select>
-                            </div>
-                            <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                                    <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
-                                    <Input type="number" value={formData.yapilanKm} onChange={e => setFormData({...formData, yapilanKm: e.target.value})} className="h-9" placeholder="Mevcut KM" />
-                                </div>
+                                <label className="text-sm font-medium">Arıza Şikayet</label>
+                                <textarea
+                                    value={formData.arizaSikayet}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, arizaSikayet: e.target.value })}
+                                    placeholder="Aracın bildirilen şikayeti..."
+                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                                />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Servis Adı</label>
-                                <Input value={formData.servisAdi} onChange={e => setFormData({...formData, servisAdi: e.target.value})} placeholder="Örn: Renault Bahaş" className="h-9" />
+                                <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
+                                <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">İşlemler</label>
-                                <textarea 
-                                    value={formData.yapilanIslemler} 
-                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({...formData, yapilanIslemler: e.target.value})} 
-                                    placeholder="Yapılan işlemler..." 
-                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none" 
+                                <label className="text-sm font-medium">Yapılan İşlem</label>
+                                <textarea
+                                    value={formData.yapilanIslemler}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, yapilanIslemler: e.target.value })}
+                                    placeholder="Yapılan işlemler..."
+                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Değişen Parça</label>
+                                <Input
+                                    value={formData.degisenParca}
+                                    onChange={(e) => setFormData({ ...formData, degisenParca: e.target.value })}
+                                    placeholder="Örn: Yağ filtresi, fren balatası"
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">İşlem Yapan Firma</label>
+                                <Input
+                                    value={formData.islemYapanFirma}
+                                    onChange={(e) => setFormData({ ...formData, islemYapanFirma: e.target.value })}
+                                    placeholder="Örn: Renault Bahaş Servis"
+                                    className="h-9"
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -295,21 +340,21 @@ export default function BakimlarClient({
 
             {/* Edit Dialog */}
             <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Servis Kaydını Düzenle</DialogTitle>
-                        <DialogDescription>{editRow?.arac.plaka} plakalı aracın servis bilgilerini güncelleyin.</DialogDescription>
+                        <DialogDescription>{editRow?.arac?.plaka || editRow?.plaka || "Araçsız kayıt"} için servis bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Araç <span className="text-red-500">*</span></label>
+                            <label className="text-sm font-medium">Araç</label>
                             <SearchableSelect
                                 value={formData.aracId}
                                 onValueChange={handleAracSelection}
-                                placeholder="Araç Seçiniz"
+                                placeholder="Araç Seçiniz (Opsiyonel)"
                                 searchPlaceholder="Plaka / araç ara..."
                                 options={[
-                                    { value: "", label: "Araç Seçiniz" },
+                                    { value: "", label: "Seçilmedi" },
                                     ...activeAraclar.map((arac) => ({
                                         value: arac.id,
                                         label: formatAracOptionLabel(arac),
@@ -318,6 +363,16 @@ export default function BakimlarClient({
                                 ]}
                             />
                             <SelectedAracInfo arac={selectedArac} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
+                            <Input
+                                value={formData.plaka}
+                                onChange={(event) => handlePlakaChange(event.target.value)}
+                                placeholder="34 ABC 123"
+                                className="h-9 uppercase font-mono"
+                            />
+                            <p className="text-[11px] text-slate-500">Plaka araç listesinde varsa kayıt otomatik olarak araca bağlanır.</p>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Servise Götüren Personel</label>
@@ -330,45 +385,51 @@ export default function BakimlarClient({
                                     { value: "", label: "Seçilmedi" },
                                     ...personeller.map((personel) => ({
                                         value: personel.id,
-                                        label: `${personel.ad} ${personel.soyad}`,
-                                        searchText: `${personel.ad} ${personel.soyad}`,
+                                        label: getPersonelOptionLabel(personel),
+                                        searchText: getPersonelOptionSearchText(personel),
                                     })),
                                 ]}
                             />
                             <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Kategori <span className="text-red-500">*</span></label>
-                            <select
-                                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                value={formData.kategori}
-                                onChange={(e) => setFormData({...formData, kategori: e.target.value as "PERIYODIK_BAKIM" | "ARIZA"})}
-                            >
-                                <option value="PERIYODIK_BAKIM">Periyodik Bakım</option>
-                                <option value="ARIZA">Arıza</option>
-                            </select>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                                <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({...formData, bakimTarihi: e.target.value})} className="h-9" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">KM <span className="text-red-500">*</span></label>
-                                <Input type="number" value={formData.yapilanKm} onChange={e => setFormData({...formData, yapilanKm: e.target.value})} className="h-9" placeholder="Mevcut KM" />
-                            </div>
+                            <label className="text-sm font-medium">Arıza Şikayet</label>
+                            <textarea
+                                value={formData.arizaSikayet}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, arizaSikayet: e.target.value })}
+                                placeholder="Aracın bildirilen şikayeti..."
+                                className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                            />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Servis Adı</label>
-                            <Input value={formData.servisAdi} onChange={e => setFormData({...formData, servisAdi: e.target.value})} placeholder="Örn: Renault Bahaş" className="h-9" />
+                            <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
+                            <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">İşlemler</label>
-                            <textarea 
-                                value={formData.yapilanIslemler} 
-                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({...formData, yapilanIslemler: e.target.value})} 
-                                placeholder="Yapılan işlemler..." 
-                                className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none" 
+                            <label className="text-sm font-medium">Yapılan İşlem</label>
+                            <textarea
+                                value={formData.yapilanIslemler}
+                                onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, yapilanIslemler: e.target.value })}
+                                placeholder="Yapılan işlemler..."
+                                className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Değişen Parça</label>
+                            <Input
+                                value={formData.degisenParca}
+                                onChange={(e) => setFormData({ ...formData, degisenParca: e.target.value })}
+                                placeholder="Örn: Yağ filtresi, fren balatası"
+                                className="h-9"
+                            />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">İşlem Yapan Firma</label>
+                            <Input
+                                value={formData.islemYapanFirma}
+                                onChange={(e) => setFormData({ ...formData, islemYapanFirma: e.target.value })}
+                                placeholder="Örn: Renault Bahaş Servis"
+                                className="h-9"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -391,10 +452,6 @@ export default function BakimlarClient({
                 searchPlaceholder="Gösterilecek servis kaydı için plaka arayın..."
                 toolbarArrangement="report-right-scroll"
                 serverFiltering={{
-                    typeOptions: [
-                        { value: "PERIYODIK_BAKIM", label: "Periyodik Bakım" },
-                        { value: "ARIZA", label: "Arıza" },
-                    ],
                     showDateRange: true,
                 }}
                 excelEntity="bakim"

@@ -10,7 +10,6 @@ import { deleteZimmet } from "@/app/dashboard/zimmetler/actions";
 import { deleteArizaKaydi } from "@/app/dashboard/arizalar/actions";
 import { deleteBakim } from "@/app/dashboard/bakimlar/actions";
 import { deleteYakit } from "@/app/dashboard/yakitlar/actions";
-import { deleteHgs } from "@/app/dashboard/hgs/actions";
 import { deleteMuayene } from "@/app/dashboard/muayeneler/actions";
 import { deleteKasko } from "@/app/dashboard/kasko/actions";
 import { deleteSigorta } from "@/app/dashboard/trafik-sigortasi/actions";
@@ -36,8 +35,6 @@ async function deleteByEntity(entity: ExcelEntityKey, id: string): Promise<Delet
             return deleteBakim(id);
         case "yakit":
             return deleteYakit(id);
-        case "hgs":
-            return deleteHgs(id);
         case "muayene":
             return deleteMuayene(id);
         case "kasko":

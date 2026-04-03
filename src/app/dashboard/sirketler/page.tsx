@@ -7,6 +7,7 @@ import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, typ
 import { redirect } from "next/navigation";
 import { getCezaScopeWhere } from "@/lib/dashboard-helpers";
 import { getCompanyCostReportForPeriod } from "@/lib/dashboard-cost.service";
+import { isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 export default async function SirketlerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [role, hasGlobalCompanyAccess] = await Promise.all([getCurrentUserRole(), canAccessAllCompanies()]);
@@ -48,33 +49,35 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
         }
     });
 
-    const formattedData = sirketler.map((s) => {
-        const costDetail = companyCostMap.get(s.id);
-        const maliyetKalemleri = costDetail
-            ? [
-                  { key: "bakim", label: "Bakım", tutar: costDetail.bakim },
-                  { key: "yakit", label: "Yakıt", tutar: costDetail.yakit },
-                  { key: "muayene", label: "Muayene", tutar: costDetail.muayene },
-                  { key: "hgs", label: "HGS", tutar: costDetail.hgs },
-                  { key: "ceza", label: "Ceza", tutar: costDetail.ceza },
-                  { key: "kasko", label: "Kasko", tutar: costDetail.kasko },
-                  { key: "trafik", label: "Trafik", tutar: costDetail.trafik },
-                  { key: "diger", label: "Diğer", tutar: costDetail.diger },
-              ].filter((item) => item.tutar > 0)
-            : [];
+    const formattedData = sirketler
+        .filter((sirket) => !isKiralikSirketName(sirket.ad))
+        .map((s) => {
+            const costDetail = companyCostMap.get(s.id);
+            const maliyetKalemleri = costDetail
+                ? [
+                      { key: "bakim", label: "Bakım", tutar: costDetail.bakim },
+                      { key: "yakit", label: "Yakıt", tutar: costDetail.yakit },
+                      { key: "muayene", label: "Muayene", tutar: costDetail.muayene },
+                      { key: "ceza", label: "Ceza", tutar: costDetail.ceza },
+                      { key: "kasko", label: "Kasko", tutar: costDetail.kasko },
+                      { key: "trafik", label: "Trafik", tutar: costDetail.trafik },
+                      { key: "diger", label: "Diğer", tutar: costDetail.diger },
+                  ].filter((item) => item.tutar > 0)
+                : [];
 
-        return {
-            id: s.id,
-            ad: s.ad,
-            bulunduguIl: s.bulunduguIl,
-            vergiNo: s.vergiNo || "Belirtilmedi",
-            aracSayisi: s._count.araclar,
-            personelSayisi: s._count.kullanicilar,
-            toplamMaliyet: costDetail?.toplam || 0,
-            maliyetKalemleri,
-            olusturmaTarihi: s.olusturmaTarihi.toISOString()
-        };
-    }).sort((a, b) => b.toplamMaliyet - a.toplamMaliyet);
+            return {
+                id: s.id,
+                ad: s.ad,
+                bulunduguIl: s.bulunduguIl,
+                vergiNo: s.vergiNo || "Belirtilmedi",
+                aracSayisi: s._count.araclar,
+                personelSayisi: s._count.kullanicilar,
+                toplamMaliyet: costDetail?.toplam || 0,
+                maliyetKalemleri,
+                olusturmaTarihi: s.olusturmaTarihi.toISOString()
+            };
+        })
+        .sort((a, b) => b.toplamMaliyet - a.toplamMaliyet);
 
     return <SirketlerClient initialData={formattedData} />;
 }

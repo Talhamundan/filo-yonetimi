@@ -2,9 +2,11 @@
 
 import * as React from "react"
 import {
+    Column as TanstackColumn,
     ColumnDef,
     ColumnFiltersState,
     FilterFn,
+    PaginationState,
     Row as TanstackRow,
     SortingState,
     Table as TanstackTable,
@@ -16,8 +18,8 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown, Download, Filter, FilterX, Loader2, Trash2, Upload } from "lucide-react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Download, Filter, FilterX, Loader2, Trash2, Upload } from "lucide-react"
+import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { bulkDeleteByExcelEntity } from "@/app/dashboard/_actions/bulk-delete"
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext"
@@ -32,6 +34,15 @@ import {
 } from "./table"
 import { Button } from "./button"
 import { Input } from "./input"
+import {
+    DropdownMenu,
+    DropdownMenuCheckboxItem,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuLabel,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "./dropdown-menu"
 import type { ExcelEntityKey } from "@/lib/excel-entities"
 import { cn } from "@/lib/utils"
 import { matchesTokenizedSearch } from "@/lib/search-query"
@@ -113,6 +124,12 @@ function getFilterPlaceholder(header: unknown) {
     return "Filtrele..."
 }
 
+function parsePageIndexFromSearchParam(value: string | null) {
+    const pageNumber = Number(value)
+    if (!Number.isInteger(pageNumber) || pageNumber < 1) return 0
+    return pageNumber - 1
+}
+
 function normalizeColumnId(value: string) {
     return value
         .trim()
@@ -136,6 +153,28 @@ function isActionsColumnId(value: string) {
         normalized.endsWith("_actions") ||
         normalized.endsWith("_islemler")
     );
+}
+
+function humanizeColumnId(value: string) {
+    return value
+        .replace(/^_+|_+$/g, "")
+        .replace(/[_-]+/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function getColumnDisplayName<TData>(column: TanstackColumn<TData, unknown>) {
+    const header = column.columnDef.header;
+    if (typeof header === "string" && header.trim().length > 0) {
+        return header.trim();
+    }
+
+    const accessorKey = (column.columnDef as { accessorKey?: unknown }).accessorKey;
+    if (typeof accessorKey === "string" && accessorKey.trim().length > 0) {
+        return humanizeColumnId(accessorKey);
+    }
+
+    return humanizeColumnId(column.id || "sütun");
 }
 
 function SelectionCheckbox({
@@ -184,22 +223,37 @@ export function DataTable<TData, TValue>({
     toolbarArrangement = "default",
 }: DataTableProps<TData, TValue>) {
     const { isAdmin } = useDashboardScope()
+    const pathname = usePathname()
     const router = useRouter()
     const searchParams = useSearchParams()
+    const pageParamKey = React.useMemo(() => (excelEntity ? `${excelEntity}Page` : "tablePage"), [excelEntity])
+    const urlPageIndex = React.useMemo(
+        () => parsePageIndexFromSearchParam(searchParams.get(pageParamKey)),
+        [pageParamKey, searchParams]
+    )
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
     const [rowSelection, setRowSelection] = React.useState({})
+    const [pagination, setPagination] = React.useState<PaginationState>({
+        pageIndex: urlPageIndex,
+        pageSize: 10,
+    })
     const [showColumnFilters, setShowColumnFilters] = React.useState(false)
     const [isExporting, setIsExporting] = React.useState(false)
     const [isImporting, setIsImporting] = React.useState(false)
     const [isBulkDeleting, setIsBulkDeleting] = React.useState(false)
     const [isDesktop, setIsDesktop] = React.useState(false)
+    const loadedVisibilityKeyRef = React.useRef<string | null>(null)
     const [firstStickyColWidth, setFirstStickyColWidth] = React.useState(0)
     const firstHeaderCellRef = React.useRef<HTMLTableCellElement | null>(null)
     const canBulkDelete = Boolean(excelEntity) && isAdmin
     const canSelectRows = canBulkDelete
+    const visibilityStorageKey = React.useMemo(
+        () => `datatable:visibility:${excelEntity || "default"}:${pathname}`,
+        [excelEntity, pathname]
+    )
     const tableColumns = React.useMemo(() => {
         if (!canSelectRows) return columns
 
@@ -278,11 +332,14 @@ export function DataTable<TData, TValue>({
         },
         onColumnVisibilityChange: setColumnVisibility,
         onRowSelectionChange: setRowSelection,
+        onPaginationChange: setPagination,
+        autoResetPageIndex: false,
         state: {
             sorting,
             columnFilters,
             columnVisibility,
             rowSelection,
+            pagination,
         },
     })
 
@@ -294,7 +351,21 @@ export function DataTable<TData, TValue>({
     const pageEnd = Math.min((pageIndex + 1) * pageSize, filteredCount)
     const hasActiveFilter = columnFilters.some((filter) => String(filter.value ?? "").trim().length > 0)
     const hasAnyFilterableColumn = table.getAllLeafColumns().some((column) => column.getCanFilter())
-    const hasToolbar = Boolean(toolbarRight || excelEntity || hasAnyFilterableColumn)
+    const hideableColumns = React.useMemo(
+        () =>
+            table
+                .getAllLeafColumns()
+                .filter(
+                    (column) =>
+                        column.getCanHide() &&
+                        column.id !== "__select__" &&
+                        !isActionsColumnId(column.id)
+                ),
+        [table]
+    )
+    const hasAnyHideableColumn = hideableColumns.length > 0
+    const visibleHideableColumnCount = hideableColumns.filter((column) => column.getIsVisible()).length
+    const hasToolbar = Boolean(toolbarRight || excelEntity || hasAnyFilterableColumn || hasAnyHideableColumn)
     const isCompactToolbar = toolbarLayout === "compact"
     const isReportRightScroll = isCompactToolbar && toolbarArrangement === "report-right-scroll"
     const visibleLeafColumns = table.getVisibleLeafColumns()
@@ -313,6 +384,60 @@ export function DataTable<TData, TValue>({
             return typeof original?.id === "string" ? original.id : null
         })
         .filter((id): id is string => Boolean(id))
+
+    React.useEffect(() => {
+        setPagination((prev) => {
+            if (prev.pageIndex === urlPageIndex) return prev
+            return { ...prev, pageIndex: urlPageIndex }
+        })
+    }, [urlPageIndex])
+
+    React.useEffect(() => {
+        const nextPageNumber = pagination.pageIndex + 1
+        const currentPageNumber = Number(searchParams.get(pageParamKey) || "1")
+        if (currentPageNumber === nextPageNumber) return
+
+        const params = new URLSearchParams(searchParams.toString())
+        if (nextPageNumber <= 1) {
+            params.delete(pageParamKey)
+        } else {
+            params.set(pageParamKey, String(nextPageNumber))
+        }
+
+        const query = params.toString()
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
+    }, [pageParamKey, pagination.pageIndex, pathname, router, searchParams])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        if (loadedVisibilityKeyRef.current === visibilityStorageKey) return
+        loadedVisibilityKeyRef.current = visibilityStorageKey
+
+        const raw = window.localStorage.getItem(visibilityStorageKey)
+        if (!raw) return
+
+        try {
+            const parsed = JSON.parse(raw) as Record<string, unknown>
+            if (!parsed || typeof parsed !== "object") return
+            const allowed = new Set(table.getAllLeafColumns().map((column) => column.id))
+            const nextState: VisibilityState = {}
+
+            Object.entries(parsed).forEach(([key, value]) => {
+                if (!allowed.has(key)) return
+                if (typeof value !== "boolean") return
+                nextState[key] = value
+            })
+
+            setColumnVisibility(nextState)
+        } catch {
+            // noop
+        }
+    }, [table, visibilityStorageKey])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        window.localStorage.setItem(visibilityStorageKey, JSON.stringify(columnVisibility))
+    }, [columnVisibility, visibilityStorageKey])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -567,6 +692,56 @@ export function DataTable<TData, TValue>({
                                 <Filter className="h-4 w-4" />
                                 Detaylı Filtre
                             </Button>
+                        ) : null}
+
+                        {hasAnyHideableColumn ? (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className={
+                                            isReportRightScroll
+                                                ? "h-10 min-w-[140px] shrink-0 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                                                : isCompactToolbar
+                                                    ? "h-10 w-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100 sm:w-auto"
+                                                    : "h-10 w-full border-slate-200 bg-white text-slate-700 hover:bg-slate-100 sm:w-auto"
+                                        }
+                                    >
+                                        <Columns3 className="h-4 w-4" />
+                                        Sütun Seç
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="start" className="w-60">
+                                    <DropdownMenuLabel>Görünecek Sütunlar</DropdownMenuLabel>
+                                    <DropdownMenuSeparator />
+                                    {hideableColumns.map((column) => {
+                                        const checked = column.getIsVisible()
+                                        const disableHide = checked && visibleHideableColumnCount <= 1
+                                        return (
+                                            <DropdownMenuCheckboxItem
+                                                key={column.id}
+                                                checked={checked}
+                                                disabled={disableHide}
+                                                onCheckedChange={(nextChecked) => column.toggleVisibility(Boolean(nextChecked))}
+                                                onSelect={(event) => event.preventDefault()}
+                                            >
+                                                {getColumnDisplayName(column)}
+                                            </DropdownMenuCheckboxItem>
+                                        )
+                                    })}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault()
+                                            table.resetColumnVisibility()
+                                        }}
+                                    >
+                                        Varsayılan Sütunlar
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
                         ) : null}
 
                         {hasAnyFilterableColumn && hasActiveFilter ? (

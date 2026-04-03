@@ -76,3 +76,38 @@ export function getCezaScopeWhere(scope: GenericWhere): GenericWhere {
         ],
     };
 }
+
+function getVehicleUsageCompanyFilter(sirketId: string): GenericWhere {
+    return {
+        OR: [
+            { kullanici: { sirketId, deletedAt: null } },
+            {
+                kullaniciGecmisi: {
+                    some: {
+                        bitis: null,
+                        kullanici: { sirketId, deletedAt: null },
+                    },
+                },
+            },
+        ],
+    };
+}
+
+export function getVehicleUsageScopeWhere(scope: GenericWhere): GenericWhere {
+    const rawScope = (scope || {}) as Record<string, unknown>;
+    const normalizedSirketId = typeof rawScope.sirketId === "string" ? rawScope.sirketId.trim() : "";
+    if (!normalizedSirketId) {
+        return scope;
+    }
+
+    const restScope = { ...rawScope };
+    delete restScope.sirketId;
+
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys(restScope).length > 0) {
+        scopeParts.push(restScope);
+    }
+    scopeParts.push(getVehicleUsageCompanyFilter(normalizedSirketId));
+
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}

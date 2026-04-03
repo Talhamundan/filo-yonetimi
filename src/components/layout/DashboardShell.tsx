@@ -2,7 +2,6 @@
 
 import React from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, History, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
@@ -29,8 +28,6 @@ type DashboardShellProps = {
 };
 
 const STORAGE_KEY = "dashboard-sidebar-collapsed";
-const YEAR_STORAGE_KEY = "dashboard-scope-year";
-const MONTH_STORAGE_KEY = "dashboard-scope-month";
 const ROLE_LABELS: Record<string, string> = {
     ADMIN: "Admin",
     YETKILI: "Yetkili",
@@ -46,14 +43,13 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const [isAdminMenuOpen, setIsAdminMenuOpen] = React.useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
     const [isMobileHeaderToolsOpen, setIsMobileHeaderToolsOpen] = React.useState(true);
+    const didNormalizeDateQueryRef = React.useRef(false);
     const desktopAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const mobileAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const headerIconButtonClass =
         "inline-flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg md:rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900";
     const sidebarToggleButtonClass =
         "inline-flex h-11 w-11 items-center justify-center rounded-md text-slate-500 transition-colors duration-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30";
-    const logoSquareClass =
-        "relative flex h-[52px] w-[52px] items-center justify-center overflow-hidden rounded-[22px] border border-slate-200 bg-white shadow-sm";
 
     React.useEffect(() => {
         const storedValue = window.localStorage.getItem(STORAGE_KEY);
@@ -94,34 +90,24 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     }, [pathname]);
 
     React.useEffect(() => {
+        if (didNormalizeDateQueryRef.current) return;
+        didNormalizeDateQueryRef.current = true;
+
         const nextParams = new URLSearchParams(searchParams.toString());
         let changed = false;
 
-        const selectedYil = searchParams.get("yil");
-        if (selectedYil) {
-            window.localStorage.setItem(YEAR_STORAGE_KEY, selectedYil);
-        } else {
-            const storedYear = Number(window.localStorage.getItem(YEAR_STORAGE_KEY));
-            const fallbackYear =
-                Number.isInteger(storedYear) && storedYear >= 2000 && storedYear <= 2100
-                    ? storedYear
-                    : new Date().getFullYear();
-            nextParams.set("yil", String(fallbackYear));
+        if (searchParams.has("yil")) {
+            nextParams.delete("yil");
             changed = true;
         }
 
-        const selectedAy = searchParams.get("ay");
-        if (selectedAy) {
-            window.localStorage.setItem(MONTH_STORAGE_KEY, selectedAy);
-        } else {
-            const storedMonth = Number(window.localStorage.getItem(MONTH_STORAGE_KEY));
-            const fallbackMonth =
-                Number.isInteger(storedMonth) && storedMonth >= 1 && storedMonth <= 12
-                    ? storedMonth
-                    : new Date().getMonth() + 1;
-            nextParams.set("ay", String(fallbackMonth));
+        if (searchParams.has("ay")) {
+            nextParams.delete("ay");
             changed = true;
         }
+
+        window.localStorage.removeItem("dashboard-scope-year");
+        window.localStorage.removeItem("dashboard-scope-month");
 
         if (!changed) return;
 
@@ -204,15 +190,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                 </div>
                             </div>
 
-                            <Link href={dashboardHref} className="mx-auto flex items-center gap-3.5 shrink-0">
-                                <div className={logoSquareClass}>
-                                    <Image
-                                        src="/logo-bera.png"
-                                        alt="Bera Filo Logo"
-                                        fill
-                                        className="object-contain p-1.5"
-                                    />
-                                </div>
+                            <Link href={dashboardHref} className="mx-auto flex items-center shrink-0">
                                 <h1 className="text-[2rem] font-bold tracking-tight text-slate-900 md:text-[2.15rem]">
                                     Bera <span className="text-[#6366F1]">Filo</span>
                                 </h1>
@@ -315,15 +293,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                         <PanelLeftOpen size={18} />
                                     </button>
 
-                                    <Link href={dashboardHref} className="flex min-w-0 items-center gap-2">
-                                        <div className="relative flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-                                            <Image
-                                                src="/logo-bera.png"
-                                                alt="Bera Filo Logo"
-                                                fill
-                                                className="object-contain p-1"
-                                            />
-                                        </div>
+                                    <Link href={dashboardHref} className="flex min-w-0 items-center">
                                         <h1 className="truncate text-[1.35rem] font-bold tracking-tight text-slate-900">
                                             Bera <span className="text-[#6366F1]">Filo</span>
                                         </h1>

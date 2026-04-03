@@ -18,9 +18,9 @@ export type AracRow = {
     aciklama?: string | null;
     durum: string;
     kategori: string;
-    hgsNo?: string | null;
     saseNo?: string | null;
     calistigiKurum?: string | null;
+    calistigiKurumSirketId?: string | null;
     kullanici?: { id: string; ad: string, soyad: string; sirket?: { id: string; ad: string } | null } | null;
     kullaniciId?: string | null;
     sirket?: { id: string; ad: string } | null;
@@ -31,17 +31,23 @@ export type AracRow = {
         yakit: number;
         bakim: number;
         muayene: number;
-        hgs: number;
         ceza: number;
         kasko: number;
         trafik: number;
         diger: number;
     };
+    yakitToplamLitre?: number;
+    ortalamaYakit100Km?: number | null;
+    ortalamaYakitIntervalSayisi?: number;
     toplamMaliyet?: number;
 }
 
 function formatCurrency(value: number) {
     return `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
+}
+
+function formatDecimal(value: number, fractionDigits = 2) {
+    return value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 }
 
 function renderGecerlilikDurumu(tarih: Date) {
@@ -55,7 +61,7 @@ function renderGecerlilikDurumu(tarih: Date) {
     return <Badge className={`${badge.className} border-0 shadow-sm px-2 py-0.5 text-[10px] ${badge.status === "GECERLI" ? "font-semibold" : "font-bold"}`}>{badge.label}</Badge>;
 }
 
-export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef<AracRow>[] => {
+export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = false): ColumnDef<AracRow>[] => {
     const formatBulunduguIl = (value?: string | null) => {
         if (!value) return "-";
         return value.toString().replaceAll("_", " ");
@@ -121,16 +127,17 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
                   {
                       accessorKey: "kullaniciFirma",
                       header: "Kullanıcı Firma",
-                      accessorFn: (row: AracRow) => row.calistigiKurum?.trim() || row.kullanici?.sirket?.ad || "-",
+                      accessorFn: (row: AracRow) => row.kullanici?.sirket?.ad || row.calistigiKurum?.trim() || "-",
                       cell: ({ row }) => {
                           const manualFirma = row.original.calistigiKurum?.trim();
-                          const sirketId = row.original.kullanici?.sirket?.id;
-                          const sirketAd = manualFirma || row.original.kullanici?.sirket?.ad || "-";
-                          if (manualFirma) {
-                              return <span className="text-sm font-medium text-slate-700">{manualFirma}</span>;
-                          }
+                          const sirketId = row.original.kullanici?.sirket?.id || row.original.calistigiKurumSirketId;
+                          const sirketAd = row.original.kullanici?.sirket?.ad || manualFirma || "-";
                           if (!sirketId) {
-                              return <span className="text-sm text-slate-500">{sirketAd}</span>;
+                              return (
+                                  <span className={manualFirma ? "text-sm font-medium text-slate-700" : "text-sm text-slate-500"}>
+                                      {sirketAd}
+                                  </span>
+                              );
                           }
                           return (
                               <SirketLink
@@ -200,17 +207,21 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
                 );
             },
         },
-        {
-            accessorKey: "bedel",
-            header: "BEDEL",
-            cell: ({ row }) => {
-                const bedel = Number(row.original.bedel ?? 0);
-                if (!row.original.bedel && row.original.bedel !== 0) {
-                    return <span className="text-slate-400 text-xs italic">-</span>;
-                }
-                return <div className="font-semibold text-slate-700">{formatCurrency(bedel)}</div>;
-            },
-        },
+        ...(isAdmin
+            ? ([
+                  {
+                      accessorKey: "bedel",
+                      header: "BEDEL",
+                      cell: ({ row }) => {
+                          const bedel = Number(row.original.bedel ?? 0);
+                          if (!row.original.bedel && row.original.bedel !== 0) {
+                              return <span className="text-slate-400 text-xs italic">-</span>;
+                          }
+                          return <div className="font-semibold text-slate-700">{formatCurrency(bedel)}</div>;
+                      },
+                  },
+              ] as ColumnDef<AracRow>[])
+            : []),
         {
             accessorKey: "guncelKm",
             header: "KM",
@@ -235,13 +246,6 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
                 ) : (
                     <span className="text-slate-400 italic text-xs">Atanmamış</span>
                 )
-            },
-        },
-        {
-            accessorKey: "hgsNo",
-            header: "HGS No",
-            cell: ({ row }) => {
-                return <div className="font-mono text-xs text-slate-600">{row.getValue("hgsNo") || '-'}</div>
             },
         },
         {
@@ -275,7 +279,29 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
 
                 return renderGecerlilikDurumu(sigortaList[0].bitisTarihi);
             },
-        }
+        },
+        {
+            accessorKey: "ortalamaYakit100Km",
+            header: "Ortalama Yakıt",
+            cell: ({ row }) => {
+                const litre100 = row.original.ortalamaYakit100Km;
+                const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
+                const toplamLitre = row.original.yakitToplamLitre || 0;
+
+                if (litre100 == null || intervalSayisi <= 0) {
+                    return toplamLitre > 0
+                        ? <span className="text-slate-400 italic text-xs">Yetersiz veri</span>
+                        : <span className="text-slate-400 italic text-xs">-</span>;
+                }
+
+                return (
+                    <div className="min-w-[140px]">
+                        <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} L/100 km</div>
+                        <div className="text-[11px] text-slate-400">{intervalSayisi} dolum aralığı</div>
+                    </div>
+                );
+            },
+        },
     ];
 
     if (!isTeknik) {
@@ -285,13 +311,12 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false): ColumnDef
             cell: ({ row }) => {
                 const toplam = row.original.toplamMaliyet || 0;
                 const kalemler = row.original.maliyetKalemleri || {
-                    yakit: 0, bakim: 0, muayene: 0, hgs: 0, ceza: 0, kasko: 0, trafik: 0, diger: 0,
+                    yakit: 0, bakim: 0, muayene: 0, ceza: 0, kasko: 0, trafik: 0, diger: 0,
                 };
                 const nonZero = [
                     { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
                     { key: "Bakım", value: kalemler.bakim, className: "bg-amber-50 text-amber-700 border-amber-200" },
                     { key: "Muayene", value: kalemler.muayene, className: "bg-sky-50 text-sky-700 border-sky-200" },
-                    { key: "HGS", value: kalemler.hgs, className: "bg-violet-50 text-violet-700 border-violet-200" },
                     { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
                     { key: "Kasko", value: kalemler.kasko, className: "bg-indigo-50 text-indigo-700 border-indigo-200" },
                     { key: "Trafik", value: kalemler.trafik, className: "bg-cyan-50 text-cyan-700 border-cyan-200" },

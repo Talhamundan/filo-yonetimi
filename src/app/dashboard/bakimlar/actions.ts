@@ -3,12 +3,22 @@
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { ActivityActionType, ActivityEntityType } from "@prisma/client";
-import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
+import {
+    assertAuthenticatedUser,
+    getScopedAracOrThrow,
+    getScopedKullaniciOrThrow,
+    getScopedRecordOrThrow,
+    resolveActionSirketId,
+} from "@/lib/action-scope";
+import { getModelFilter } from "@/lib/auth-utils";
 import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { normalizePlate } from "@/lib/validation";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
-const PATH = "/dashboard/bakimlar";
+const PATH = "/dashboard/servis-kayitlari";
+const LEGACY_PATH = "/dashboard/bakimlar";
 const ARACLAR_PATH = "/dashboard/araclar";
 const PERSONEL_PATH = "/dashboard/personel";
 const BAKIM_HAS_SOFOR_ID = Boolean(
@@ -17,10 +27,52 @@ const BAKIM_HAS_SOFOR_ID = Boolean(
 
 function revalidateBakimPages(aracId?: string, soforId?: string | null) {
     revalidatePath(PATH);
+    revalidatePath(LEGACY_PATH);
     revalidatePath(ARACLAR_PATH);
     revalidatePath(PERSONEL_PATH);
     if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
     if (soforId) revalidatePath(`${PERSONEL_PATH}/${soforId}`);
+}
+
+function normalizeOptionalText(value: string | null | undefined) {
+    if (typeof value !== "string") return null;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+}
+
+function normalizeOptionalPlate(value: string | null | undefined) {
+    const normalized = normalizeOptionalText(value);
+    if (!normalized) return null;
+    return normalizePlate(normalized);
+}
+
+function normalizeOptionalKm(value: number | null | undefined, fallback: number) {
+    if (typeof value === "number" && Number.isFinite(value)) {
+        return value;
+    }
+    return fallback;
+}
+
+function ensureNonNegativeKm(value: number) {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.round(value));
+}
+
+async function findScopedAracByPlaka(plaka: string) {
+    const aracFilter = await getModelFilter("arac");
+    return (prisma as any).arac.findFirst({
+        where: {
+            ...(aracFilter as any),
+            plaka,
+        },
+        select: {
+            id: true,
+            plaka: true,
+            sirketId: true,
+            kullaniciId: true,
+            guncelKm: true,
+        },
+    });
 }
 
 type ServisKategoriInput = "PERIYODIK_BAKIM" | "ARIZA";
@@ -72,71 +124,115 @@ async function resolveBakimSoforId(inputSoforId: string | null | undefined, fall
 }
 
 export async function addBakim(data: {
-    aracId: string;
+    aracId?: string | null;
+    plaka?: string | null;
     soforId?: string | null;
     bakimTarihi: Date;
-    yapilanKm: number;
+    yapilanKm?: number | null;
     kategori?: ServisKategoriInput;
     tur?: LegacyBakimTuruInput;
     servisAdi?: string;
+    arizaSikayet?: string | null;
+    degisenParca?: string | null;
+    islemYapanFirma?: string | null;
     yapilanIslemler?: string;
     tutar: number;
 }) {
     try {
         const actor = await assertAuthenticatedUser();
-        const arac = await getScopedAracOrThrow(data.aracId, {
-            id: true,
-            plaka: true,
-            sirketId: true,
-            kullaniciId: true,
-        });
-        const yapilanKm = await assertKmWriteConsistency({
-            aracId: arac.id,
-            km: data.yapilanKm,
-            fieldLabel: "Bakim KM",
-            enforceMaxKnownKm: false,
-        });
+        const requestedAracId = normalizeOptionalText(data.aracId);
+        const normalizedPlaka = normalizeOptionalPlate(data.plaka);
+        const arac = requestedAracId
+            ? await getScopedAracOrThrow(requestedAracId, {
+                id: true,
+                plaka: true,
+                sirketId: true,
+                kullaniciId: true,
+                guncelKm: true,
+            })
+            : (normalizedPlaka ? await findScopedAracByPlaka(normalizedPlaka) : null);
+
+        if (!arac && !normalizedPlaka) {
+            throw new Error("Araç seçimi veya plaka bilgisi zorunludur.");
+        }
+
+        const rawYapilanKm = normalizeOptionalKm(
+            data.yapilanKm,
+            Number(arac?.guncelKm || 0)
+        );
+        const yapilanKm = arac
+            ? await assertKmWriteConsistency({
+                aracId: arac.id,
+                km: rawYapilanKm,
+                fieldLabel: "Bakim KM",
+                enforceMaxKnownKm: false,
+            })
+            : ensureNonNegativeKm(rawYapilanKm);
+        const arizaSikayet = normalizeOptionalText(data.arizaSikayet);
+        const islemYapanFirma = normalizeOptionalText(data.islemYapanFirma) || normalizeOptionalText(data.servisAdi);
+        const degisenParca = normalizeOptionalText(data.degisenParca);
+        const yapilanIslemler = normalizeOptionalText(data.yapilanIslemler);
+        const plaka = normalizeOptionalPlate(arac?.plaka) || normalizedPlaka;
         const kategori = resolveServisKategori(data.kategori, data.tur);
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
-        const fallbackSoforId = await getAracActiveSoforId(arac.id, arac.kullaniciId || null);
+        const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
+        const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
+        const fallbackSoforId = arac
+            ? await getAracActiveSoforId(arac.id, arac.kullaniciId || null)
+            : null;
         const resolvedSoforId = await resolveBakimSoforId(data.soforId, fallbackSoforId);
+        const resolvedSirketId = arac
+            ? await resolveVehicleUsageCompanyId({ aracId: arac.id, fallbackSirketId: arac.sirketId })
+            : (await resolveActionSirketId());
+        const summaryPlaka = plaka || "araçsız kayıt";
 
-        const created = await prisma.bakim.create({
+        const created = await (prisma as any).bakim.create({
             data: {
-                aracId: arac.id,
-                sirketId: arac.sirketId,
+                aracId: arac?.id || null,
+                plaka,
+                sirketId: resolvedSirketId,
                 ...(BAKIM_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                 bakimTarihi: data.bakimTarihi,
                 yapilanKm: Number(yapilanKm),
-                kategori,
-                tur,
-                servisAdi: data.servisAdi,
-                yapilanIslemler: data.yapilanIslemler,
+                kategori: effectiveKategori,
+                tur: effectiveTur,
+                arizaSikayet,
+                degisenParca,
+                islemYapanFirma,
+                servisAdi: islemYapanFirma,
+                yapilanIslemler,
                 tutar: data.tutar,
             }
         });
 
-        await syncAracGuncelKm(arac.id);
+        if (arac?.id) {
+            await syncAracGuncelKm(arac.id);
+        }
 
         await logEntityActivity({
             actionType: ActivityActionType.CREATE,
             entityType: ActivityEntityType.BAKIM,
             entityId: created.id,
-            summary: `${arac.plaka} için bakım kaydı eklendi.`,
+            summary: `${summaryPlaka} için bakım kaydı eklendi.`,
             actor,
             companyId: created.sirketId || actor.sirketId || null,
             metadata: {
-                kategori: created.kategori,
-                tur: created.tur,
+                kategori: (created as any).kategori,
+                tur: (created as any).tur,
                 bakimTarihi: created.bakimTarihi,
                 yapilanKm: created.yapilanKm,
                 tutar: created.tutar,
                 aracId: created.aracId,
+                plaka: (created as any).plaka || plaka || null,
+                arizaSikayet,
+                degisenParca,
+                islemYapanFirma,
+                yapilanIslemler,
                 soforId: BAKIM_HAS_SOFOR_ID ? (created as any).soforId || null : null,
             },
         });
 
-        revalidateBakimPages(arac.id, resolvedSoforId);
+        revalidateBakimPages(arac?.id, resolvedSoforId);
         return { success: true };
     } catch (error) {
         console.error("Bakım eklenirken hata:", error);
@@ -145,13 +241,17 @@ export async function addBakim(data: {
 }
 
 export async function updateBakim(id: string, data: {
-    aracId: string;
+    aracId?: string | null;
+    plaka?: string | null;
     soforId?: string | null;
     bakimTarihi: Date;
-    yapilanKm: number;
+    yapilanKm?: number | null;
     kategori?: ServisKategoriInput;
     tur?: LegacyBakimTuruInput;
     servisAdi?: string;
+    arizaSikayet?: string | null;
+    degisenParca?: string | null;
+    islemYapanFirma?: string | null;
     yapilanIslemler?: string;
     tutar: number;
 }) {
@@ -161,64 +261,122 @@ export async function updateBakim(id: string, data: {
             prismaModel: "bakim",
             filterModel: "bakim",
             id,
-            select: { aracId: true, sirketId: true, yapilanKm: true, ...(BAKIM_HAS_SOFOR_ID ? { soforId: true } : {}) },
+            select: {
+                aracId: true,
+                plaka: true,
+                sirketId: true,
+                yapilanKm: true,
+                ...(BAKIM_HAS_SOFOR_ID ? { soforId: true } : {}),
+            },
             errorMessage: "Bakim kaydi bulunamadi veya yetkiniz yok.",
         });
-        const arac = data.aracId
-            ? await getScopedAracOrThrow(data.aracId, { id: true, plaka: true, sirketId: true, kullaniciId: true })
-            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, plaka: true, sirketId: true, kullaniciId: true });
-        const yapilanKm = await assertKmWriteConsistency({
-            aracId: arac.id,
-            km: data.yapilanKm,
-            fieldLabel: "Bakim KM",
-            currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.yapilanKm },
-            enforceMaxKnownKm: false,
-        });
+        const oldAracId = normalizeOptionalText((mevcutKayit as any).aracId);
+        const requestedAracId = normalizeOptionalText(data.aracId);
+        const normalizedPlaka = normalizeOptionalPlate(data.plaka);
+
+        let arac = requestedAracId
+            ? await getScopedAracOrThrow(requestedAracId, { id: true, plaka: true, sirketId: true, kullaniciId: true, guncelKm: true })
+            : (normalizedPlaka ? await findScopedAracByPlaka(normalizedPlaka) : null);
+
+        if (!arac && !requestedAracId && !normalizedPlaka && oldAracId) {
+            arac = await getScopedAracOrThrow(oldAracId, { id: true, plaka: true, sirketId: true, kullaniciId: true, guncelKm: true });
+        }
+        if (!arac && !normalizedPlaka) {
+            throw new Error("Araç seçimi veya plaka bilgisi zorunludur.");
+        }
+
+        const nextAracId = arac?.id || null;
+        const plaka = normalizeOptionalPlate(arac?.plaka) || normalizedPlaka;
+        const rawYapilanKm = normalizeOptionalKm(
+            data.yapilanKm,
+            Number((mevcutKayit as any).yapilanKm || arac?.guncelKm || 0)
+        );
+        const yapilanKm = nextAracId && arac
+            ? await assertKmWriteConsistency({
+                aracId: nextAracId,
+                km: rawYapilanKm,
+                fieldLabel: "Bakim KM",
+                currentRecord: oldAracId ? { aracId: oldAracId, km: (mevcutKayit as any).yapilanKm } : undefined,
+                enforceMaxKnownKm: false,
+            })
+            : ensureNonNegativeKm(rawYapilanKm);
+        const arizaSikayet = normalizeOptionalText(data.arizaSikayet);
+        const islemYapanFirma = normalizeOptionalText(data.islemYapanFirma) || normalizeOptionalText(data.servisAdi);
+        const degisenParca = normalizeOptionalText(data.degisenParca);
+        const yapilanIslemler = normalizeOptionalText(data.yapilanIslemler);
         const kategori = resolveServisKategori(data.kategori, data.tur);
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
-        const vehicleChanged = Boolean(data.aracId && data.aracId !== mevcutKayit.aracId);
-        const fallbackSoforId = vehicleChanged
-            ? await getAracActiveSoforId(arac.id, arac.kullaniciId || null)
-            : ((mevcutKayit as any).soforId ?? null);
+        const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
+        const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
+        const vehicleChanged = oldAracId !== nextAracId;
+        const fallbackSoforId = nextAracId && arac
+            ? (vehicleChanged
+                ? await getAracActiveSoforId(arac.id, arac.kullaniciId || null)
+                : ((mevcutKayit as any).soforId ?? null))
+            : null;
         const resolvedSoforId = await resolveBakimSoforId(data.soforId, fallbackSoforId);
+        const resolvedSirketId = arac
+            ? await resolveVehicleUsageCompanyId({
+                aracId: arac.id,
+                fallbackSirketId: arac.sirketId || normalizeOptionalText((mevcutKayit as any).sirketId),
+            })
+            : normalizeOptionalText((mevcutKayit as any).sirketId) || (await resolveActionSirketId());
+        const summaryPlaka = plaka || "araçsız kayıt";
 
-        const updated = await prisma.bakim.update({
+        const updated = await (prisma as any).bakim.update({
             where: { id },
             data: {
-                aracId: arac.id,
-                sirketId: arac.sirketId || mevcutKayit.sirketId,
+                aracId: nextAracId,
+                plaka,
+                sirketId: resolvedSirketId,
                 ...(BAKIM_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                 bakimTarihi: data.bakimTarihi,
                 yapilanKm: Number(yapilanKm),
-                kategori,
-                tur,
-                servisAdi: data.servisAdi,
-                yapilanIslemler: data.yapilanIslemler,
+                kategori: effectiveKategori,
+                tur: effectiveTur,
+                arizaSikayet,
+                degisenParca,
+                islemYapanFirma,
+                servisAdi: islemYapanFirma,
+                yapilanIslemler,
                 tutar: data.tutar,
             }
         });
 
-        await syncAracGuncelKm(arac.id);
+        if (oldAracId && oldAracId !== nextAracId) {
+            await syncAracGuncelKm(oldAracId);
+        }
+        if (nextAracId) {
+            await syncAracGuncelKm(nextAracId);
+        }
 
         await logEntityActivity({
             actionType: ActivityActionType.UPDATE,
             entityType: ActivityEntityType.BAKIM,
             entityId: updated.id,
-            summary: `${arac.plaka} için bakım kaydı güncellendi.`,
+            summary: `${summaryPlaka} için bakım kaydı güncellendi.`,
             actor,
             companyId: updated.sirketId || actor.sirketId || null,
             metadata: {
-                kategori: updated.kategori,
-                tur: updated.tur,
+                kategori: (updated as any).kategori,
+                tur: (updated as any).tur,
                 bakimTarihi: updated.bakimTarihi,
                 yapilanKm: updated.yapilanKm,
                 tutar: updated.tutar,
                 aracId: updated.aracId,
+                plaka: (updated as any).plaka || plaka || null,
+                arizaSikayet,
+                degisenParca,
+                islemYapanFirma,
+                yapilanIslemler,
                 soforId: BAKIM_HAS_SOFOR_ID ? (updated as any).soforId || null : null,
             },
         });
 
-        revalidateBakimPages(arac.id, resolvedSoforId);
+        revalidateBakimPages(nextAracId || undefined, resolvedSoforId);
+        if (oldAracId && oldAracId !== nextAracId) {
+            revalidateBakimPages(oldAracId);
+        }
         if ((mevcutKayit as any).soforId && (mevcutKayit as any).soforId !== resolvedSoforId) {
             revalidateBakimPages(undefined, (mevcutKayit as any).soforId);
         }

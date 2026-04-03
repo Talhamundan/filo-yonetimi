@@ -10,6 +10,18 @@ import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-disp
 const BAKIM_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.Bakim?.fields?.some((field: any) => field?.name === "soforId")
 );
+const BAKIM_KATEGORI_FILTER_MAP = {
+    PERIYODIK_BAKIM: "PERIYODIK_BAKIM",
+    PERIYODIK: "PERIYODIK_BAKIM",
+    ARIZA: "ARIZA",
+} as const;
+
+function resolveBakimKategoriFilter(typeFilter: string | null, statusFilter: string | null) {
+    const rawValue = (typeFilter || statusFilter || "").trim();
+    if (!rawValue) return null;
+    const normalized = rawValue.toLocaleUpperCase("tr-TR");
+    return BAKIM_KATEGORI_FILTER_MAP[normalized as keyof typeof BAKIM_KATEGORI_FILTER_MAP] || null;
+}
 
 export default async function BakimlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
@@ -18,30 +30,31 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         getCommonListFilters(props.searchParams),
     ]);
     const [filter, aracFilter, personelFilter] = await Promise.all([
-        getModelFilter('bakim', selectedSirketId),
-        getModelFilter('arac', selectedSirketId),
-        getPersonnelSelectFilter(),
+        getModelFilter('bakim', selectedSirketId).catch((error) => {
+            console.warn("Servis kaydı filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
+            return {};
+        }),
+        getModelFilter('arac', selectedSirketId).catch((error) => {
+            console.warn("Araç filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
+            return {};
+        }),
+        getPersonnelSelectFilter().catch((error) => {
+            console.warn("Personel filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
+            return {};
+        }),
     ]);
-    const rawFilter = filter as any;
-    const scopedSirketId = typeof rawFilter?.sirketId === "string" ? rawFilter.sirketId : null;
-
-    // Legacy kayitlarda bakim.sirketId bos olabiliyor.
-    // Sirket kapsaminda, arac.sirketId eslesmesiyle de kayitlari yakala.
-    const bakimWhere = scopedSirketId
-        ? {
-            OR: [
-                rawFilter,
-                { ...rawFilter, sirketId: null, arac: { sirketId: scopedSirketId } },
-            ],
-        }
-        : rawFilter;
+    const bakimWhere = filter as any;
     const bakimYearWhere = withYilDateFilter((bakimWhere || {}) as Record<string, unknown>, "bakimTarihi", selectedYil);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [bakimYearWhere as Record<string, unknown>];
 
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
+        { arizaSikayet: { contains: token, mode: "insensitive" } },
+        { degisenParca: { contains: token, mode: "insensitive" } },
+        { islemYapanFirma: { contains: token, mode: "insensitive" } },
         { servisAdi: { contains: token, mode: "insensitive" } },
         { yapilanIslemler: { contains: token, mode: "insensitive" } },
+        { plaka: { contains: token, mode: "insensitive" } },
         { arac: { plaka: { contains: token, mode: "insensitive" } } },
         { arac: { marka: { contains: token, mode: "insensitive" } } },
         { arac: { model: { contains: token, mode: "insensitive" } } },
@@ -55,10 +68,9 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
     if (qFilter) {
         whereParts.push(qFilter);
     }
-    if (commonFilters.type) {
-        whereParts.push({ kategori: commonFilters.type });
-    } else if (commonFilters.status) {
-        whereParts.push({ kategori: commonFilters.status });
+    const kategoriFilter = resolveBakimKategoriFilter(commonFilters.type, commonFilters.status);
+    if (kategoriFilter) {
+        whereParts.push({ kategori: kategoriFilter });
     }
     if (dateRange) {
         whereParts.push({ bakimTarihi: dateRange });
@@ -97,6 +109,9 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                     }
                 }
             }
+        }).catch((error: unknown) => {
+            console.error("Servis kayıtları yüklenemedi, boş liste gösterilecek.", error);
+            return [];
         }),
         (prisma as any).arac.findMany({
             where: aracFilter as any,
@@ -120,6 +135,9 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                 },
             },
             orderBy: { plaka: 'asc' }
+        }).catch((error: unknown) => {
+            console.error("Araç listesi yüklenemedi, servis formunda boş liste gösterilecek.", error);
+            return [];
         }),
         (prisma as any).kullanici.findMany({
             where: {
@@ -131,9 +149,14 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                 ad: true,
                 soyad: true,
                 rol: true,
+                calistigiKurum: true,
+                sirket: { select: { ad: true } },
             },
             orderBy: [{ ad: "asc" }, { soyad: "asc" }],
-        }).catch(() => [])
+        }).catch((error: unknown) => {
+            console.error("Personel listesi yüklenemedi, servis formunda boş liste gösterilecek.", error);
+            return [];
+        })
     ]);
 
     return (
@@ -142,6 +165,7 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                 const aracAktifSofor = row.arac?.kullaniciGecmisi?.[0]?.kullanici || row.arac?.kullanici || null;
                 return {
                     ...row,
+                    plaka: row.arac?.plaka || row.plaka || null,
                     arac: row.arac
                         ? {
                             ...row.arac,
@@ -167,7 +191,11 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                     kullanici: a.kullanici || null,
                 };
             })}
-            personeller={personeller as any[]}
+            personeller={(personeller as any[]).map((p) => ({
+                ...p,
+                sirketAd: p.sirket?.ad || null,
+                calistigiKurum: p.calistigiKurum || null,
+            }))}
         />
     );
 }

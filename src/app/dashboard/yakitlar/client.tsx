@@ -4,7 +4,7 @@ import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, Fuel } from "lucide-react";
+import { Plus, Fuel, Gauge, Wallet, Droplets } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, YakitRow } from "./columns";
@@ -15,17 +15,72 @@ import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 
 const EMPTY = {
     aracId: '',
     soforId: '',
     tarih: new Date().toISOString().slice(0, 16),
     litre: '',
-    litreFiyati: '',
     km: '',
     istasyon: '',
     odemeYontemi: 'NAKIT'
 };
+
+const YAKIT_CIKISI_OPTIONS = ["Mithra", "Binlik Bidon"] as const;
+
+const TANK_DEPO_KAPASITE = 40000;
+const TANK_GOSTERGE_TASLAK = [
+    {
+        id: "tank1",
+        ad: "Ana Tank 1",
+        kapasiteLitre: TANK_DEPO_KAPASITE,
+        mevcutLitre: 30250,
+        birimMaliyet: 38.42,
+        dagitimHatti: "Mithra / Binlik beslemesi",
+    },
+    {
+        id: "tank2",
+        ad: "Ana Tank 2",
+        kapasiteLitre: TANK_DEPO_KAPASITE,
+        mevcutLitre: 18600,
+        birimMaliyet: 38.42,
+        dagitimHatti: "Mithra / Binlik beslemesi",
+    },
+] as const;
+
+function formatLitre(value: number) {
+    return `${Math.round(value).toLocaleString("tr-TR")} L`;
+}
+
+function formatPara(value: number) {
+    return `₺${Math.round(value).toLocaleString("tr-TR")}`;
+}
+
+function getTankSeviye(dolulukOrani: number) {
+    if (dolulukOrani < 20) {
+        return {
+            etiket: "Kritik Seviye",
+            badgeClass: "border-rose-200 bg-rose-50 text-rose-700",
+            topBorderClass: "border-t-2 border-t-rose-300",
+            barClass: "bg-[#0B6E4F]",
+        };
+    }
+    if (dolulukOrani < 40) {
+        return {
+            etiket: "Düşük Seviye",
+            badgeClass: "border-amber-200 bg-amber-50 text-amber-700",
+            topBorderClass: "border-t-2 border-t-amber-300",
+            barClass: "bg-[#0B6E4F]",
+        };
+    }
+    return {
+        etiket: "Normal Seviye",
+        badgeClass: "border-emerald-200 bg-emerald-50 text-emerald-700",
+        topBorderClass: "border-t-2 border-t-emerald-300",
+        barClass: "bg-[#0B6E4F]",
+    };
+}
 
 function parseDecimal(value: string) {
     const normalized = value.trim().replace(/\s/g, "").replace(",", ".");
@@ -34,8 +89,10 @@ function parseDecimal(value: string) {
 }
 
 function parseKm(value: string) {
-    const numeric = value.trim().replace(/[^\d]/g, "");
-    const parsed = Number(numeric);
+    const trimmed = value.trim();
+    if (!trimmed) return null;
+    const numeric = trimmed.replace(/[^\d]/g, "");
+    const parsed = Number(numeric || trimmed);
     return Number.isFinite(parsed) ? Math.trunc(parsed) : NaN;
 }
 
@@ -46,6 +103,8 @@ type AracOption = {
     model?: string;
     durum?: string | null;
     bulunduguIl?: string | null;
+    calistigiKurum?: string | null;
+    sirketAd?: string | null;
     kullaniciId?: string | null;
     kullanici?: { id: string; ad: string; soyad: string } | null;
     aktifSoforId?: string | null;
@@ -58,6 +117,8 @@ type PersonelOption = {
     ad: string;
     soyad: string;
     rol?: string | null;
+    sirketAd?: string | null;
+    calistigiKurum?: string | null;
 };
 
 const FormFields = ({
@@ -73,10 +134,20 @@ const FormFields = ({
     personeller: PersonelOption[],
     onAracChange: (aracId: string) => void,
 }) => {
-    const litre = parseDecimal(formData.litre);
-    const litreFiyati = parseDecimal(formData.litreFiyati);
-    const toplamTutar = litre * litreFiyati;
     const seciliArac = araclar.find((a) => a.id === formData.aracId);
+    const seciliPersonel = personeller.find((personel) => personel.id === formData.soforId);
+    const bagliSirket = seciliArac?.sirketAd?.trim() || "-";
+    const calistigiKurum =
+        seciliArac?.calistigiKurum?.trim() ||
+        seciliPersonel?.calistigiKurum?.trim() ||
+        seciliPersonel?.sirketAd?.trim() ||
+        "-";
+    const alindigiYerOptions = React.useMemo(() => {
+        const current = typeof formData.istasyon === "string" ? formData.istasyon.trim() : "";
+        if (!current) return [...YAKIT_CIKISI_OPTIONS];
+        const exists = YAKIT_CIKISI_OPTIONS.some((item) => item.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0);
+        return exists ? [...YAKIT_CIKISI_OPTIONS] : [...YAKIT_CIKISI_OPTIONS, current];
+    }, [formData.istasyon]);
 
     return (
         <div className="grid gap-4 py-4">
@@ -109,8 +180,8 @@ const FormFields = ({
                         { value: "", label: "Seçilmedi" },
                         ...personeller.map((personel) => ({
                             value: personel.id,
-                            label: `${personel.ad} ${personel.soyad}`,
-                            searchText: `${personel.ad} ${personel.soyad}`,
+                            label: getPersonelOptionLabel(personel),
+                            searchText: getPersonelOptionSearchText(personel),
                         })),
                     ]}
                 />
@@ -118,46 +189,48 @@ const FormFields = ({
                     Şoför harici personel de seçilebilir. Admin seçimi yapılamaz.
                 </p>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Bağlı Şirket</label>
+                    <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
+                        {bagliSirket}
+                    </div>
+                </div>
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Çalıştığı Kurum</label>
+                    <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
+                        {calistigiKurum}
+                    </div>
+                </div>
+            </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Alım Tarihi & Saati</label>
                 <Input type="datetime-local" value={formData.tarih} onChange={e => setFormData({...formData, tarih: e.target.value})} className="h-9" />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Litre</label>
-                    <Input type="number" step="0.01" value={formData.litre} onChange={e => setFormData({...formData, litre: e.target.value})} placeholder="0.00" className="h-9" />
-                </div>
-                <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Litre Fiyatı (₺)</label>
-                    <Input type="number" step="0.01" value={formData.litreFiyati} onChange={e => setFormData({...formData, litreFiyati: e.target.value})} placeholder="0.00" className="h-9" />
-                </div>
-            </div>
             <div className="space-y-1.5">
-                <label className="text-sm font-medium text-slate-500">Toplam Tutar (₺)</label>
-                <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-semibold text-slate-700">
-                    {Number.isFinite(toplamTutar) && toplamTutar > 0 ? toplamTutar.toFixed(2) : '—'}
-                </div>
+                <label className="text-sm font-medium">Alınan Litre</label>
+                <Input type="number" step="0.01" value={formData.litre} onChange={e => setFormData({...formData, litre: e.target.value})} placeholder="0.00" className="h-9" />
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Alım km/saat</label>
+                    <label className="text-sm font-medium">KM/Saat (Opsiyonel)</label>
                     <Input type="number" value={formData.km} onChange={e => setFormData({...formData, km: e.target.value})} placeholder="123456" className="h-9" />
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-sm font-medium">İstasyon</label>
-                    <Input value={formData.istasyon} onChange={e => setFormData({...formData, istasyon: e.target.value})} placeholder="Örn: Shell, BP" className="h-9" />
+                    <label className="text-sm font-medium">Yakıt Çıkışı</label>
+                    <select
+                        value={formData.istasyon}
+                        onChange={(e) => setFormData({ ...formData, istasyon: e.target.value })}
+                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                    >
+                        <option value="">Seçiniz...</option>
+                        {alindigiYerOptions.map((item) => (
+                            <option key={item} value={item}>
+                                {item}
+                            </option>
+                        ))}
+                    </select>
                 </div>
-            </div>
-            <div className="space-y-1.5">
-                <label className="text-sm font-medium">Ödeme Şekli</label>
-                <select
-                    value={formData.odemeYontemi}
-                    onChange={e => setFormData({...formData, odemeYontemi: e.target.value})}
-                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                >
-                    <option value="NAKIT">💵 Nakit</option>
-                    <option value="TASIT_TANIMA">🚗 Taşıt Tanıma</option>
-                </select>
             </div>
         </div>
     );
@@ -183,6 +256,91 @@ export default function YakitlarClient({
     const shouldOpenCreate = searchParams.get("add") === "true";
     const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
     const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
+    const tankGosterge = React.useMemo(() => {
+        const tanklar = TANK_GOSTERGE_TASLAK.map((tank) => {
+            const dolulukOrani = tank.kapasiteLitre > 0 ? (tank.mevcutLitre / tank.kapasiteLitre) * 100 : 0;
+            return {
+                ...tank,
+                dolulukOrani,
+                stokDegeri: tank.mevcutLitre * tank.birimMaliyet,
+            };
+        });
+        const toplamKapasite = tanklar.reduce((sum, tank) => sum + tank.kapasiteLitre, 0);
+        const toplamStok = tanklar.reduce((sum, tank) => sum + tank.mevcutLitre, 0);
+        const toplamDeger = tanklar.reduce((sum, tank) => sum + tank.stokDegeri, 0);
+        const agirlikliMaliyet = toplamStok > 0 ? toplamDeger / toplamStok : 0;
+
+        let kademeliBaslangic = 0;
+        const yerlesim = tanklar.map((tank) => {
+            const baslangicOrani = toplamKapasite > 0 ? (kademeliBaslangic / toplamKapasite) * 100 : 0;
+            const genislikOrani = toplamKapasite > 0 ? (tank.mevcutLitre / toplamKapasite) * 100 : 0;
+            kademeliBaslangic += tank.kapasiteLitre;
+            return {
+                ...tank,
+                baslangicOrani,
+                genislikOrani,
+            };
+        });
+
+        return {
+            tanklar: yerlesim,
+            toplamKapasite,
+            toplamStok,
+            toplamDeger,
+            agirlikliMaliyet,
+            genelDolulukOrani: toplamKapasite > 0 ? (toplamStok / toplamKapasite) * 100 : 0,
+        };
+    }, []);
+    const son30GunYakitCikisi = React.useMemo(
+        () => initialYakitlar.reduce((sum, row) => sum + Number(row?.litre || 0), 0),
+        [initialYakitlar]
+    );
+    const son7GunYakitCikisi = React.useMemo(() => {
+        const now = Date.now();
+        const yediGunOncesi = now - 7 * 24 * 60 * 60 * 1000;
+        return initialYakitlar.reduce((sum, row) => {
+            const tarih = new Date(row?.tarih as any).getTime();
+            if (!Number.isFinite(tarih) || tarih < yediGunOncesi) return sum;
+            return sum + Number(row?.litre || 0);
+        }, 0);
+    }, [initialYakitlar]);
+    const mithraCikisLitre = React.useMemo(
+        () =>
+            initialYakitlar.reduce((sum, row) => {
+                const istasyon = String(row?.istasyon || "").trim().toLocaleLowerCase("tr-TR");
+                if (istasyon !== "mithra") return sum;
+                return sum + Number(row?.litre || 0);
+            }, 0),
+        [initialYakitlar]
+    );
+    const binlikCikisLitre = React.useMemo(
+        () =>
+            initialYakitlar.reduce((sum, row) => {
+                const istasyon = String(row?.istasyon || "").trim().toLocaleLowerCase("tr-TR");
+                if (istasyon !== "binlik bidon") return sum;
+                return sum + Number(row?.litre || 0);
+            }, 0),
+        [initialYakitlar]
+    );
+    const sonGuncelleme = React.useMemo(() => {
+        const latest = initialYakitlar[0];
+        if (!latest?.tarih) return "-";
+        const d = new Date(latest.tarih as any);
+        if (Number.isNaN(d.getTime())) return "-";
+        return d.toLocaleString("tr-TR", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+        });
+    }, [initialYakitlar]);
+    const tahminiKalanGun = React.useMemo(() => {
+        if (son30GunYakitCikisi <= 0) return null;
+        const gunlukOrtalama = son30GunYakitCikisi / 30;
+        if (gunlukOrtalama <= 0) return null;
+        return Math.max(1, Math.round(tankGosterge.toplamStok / gunlukOrtalama));
+    }, [son30GunYakitCikisi, tankGosterge.toplamStok]);
 
     useEffect(() => {
         if (shouldOpenCreate) {
@@ -210,13 +368,13 @@ export default function YakitlarClient({
         }
         setLoading(true);
         const litre = parseDecimal(formData.litre);
-        const litreFiyati = parseDecimal(formData.litreFiyati);
         const km = parseKm(formData.km);
-        if (!Number.isFinite(litre) || !Number.isFinite(litreFiyati) || !Number.isFinite(km)) {
+        const isKmInvalid = km !== null && !Number.isFinite(km);
+        if (!Number.isFinite(litre) || isKmInvalid) {
             setLoading(false);
-            return toast.error("Geçersiz değer", { description: "Litre, litre fiyatı veya KM alanını kontrol edin." });
+            return toast.error("Geçersiz değer", { description: "Litre veya KM alanını kontrol edin." });
         }
-        const tutar = litre * litreFiyati;
+        const tutar = 0;
         const res = await createYakit({
             ...formData,
             litre,
@@ -243,13 +401,13 @@ export default function YakitlarClient({
         }
         setLoading(true);
         const litre = parseDecimal(formData.litre);
-        const litreFiyati = parseDecimal(formData.litreFiyati);
         const km = parseKm(formData.km);
-        if (!Number.isFinite(litre) || !Number.isFinite(litreFiyati) || !Number.isFinite(km)) {
+        const isKmInvalid = km !== null && !Number.isFinite(km);
+        if (!Number.isFinite(litre) || isKmInvalid) {
             setLoading(false);
-            return toast.error("Geçersiz değer", { description: "Litre, litre fiyatı veya KM alanını kontrol edin." });
+            return toast.error("Geçersiz değer", { description: "Litre veya KM alanını kontrol edin." });
         }
-        const tutar = litre * litreFiyati;
+        const tutar = 0;
         const res = await updateYakit(editRow.id, {
             ...formData,
             litre,
@@ -282,15 +440,11 @@ export default function YakitlarClient({
 
     const openEdit = (row: YakitRow) => {
         const litre = row.litre || 0;
-        const tutar = row.tutar || 0;
-        // Litre fiyatını geriye doğru hesapla: tutar / litre
-        const litreFiyati = litre > 0 ? (tutar / litre) : 0;
         setFormData({
             aracId: row.arac.id,
             soforId: normalizeSoforId(row.soforId || row.kullanici?.id || row.arac.kullanici?.id),
             tarih: new Date(row.tarih).toISOString().slice(0, 16),
             litre: String(litre),
-            litreFiyati: litreFiyati > 0 ? litreFiyati.toFixed(4) : '',
             km: String(row.km),
             istasyon: row.istasyon || '',
             odemeYontemi: row.odemeYontemi || 'NAKIT'
@@ -321,7 +475,7 @@ export default function YakitlarClient({
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
                          <Fuel className="text-rose-600" /> Yakıt Alım Kayıtları
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Filo genelindeki yakıt harcamalarını, litre ve maliyet bazlı takip edin.</p>
+                    <p className="text-slate-500 text-sm mt-1">Yakıt hareketlerini araç, personel ve kurum bazlı takip edin.</p>
                 </div>
                 <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                     <DialogTrigger asChild>
@@ -334,7 +488,7 @@ export default function YakitlarClient({
                         <DialogHeader>
                             <DialogTitle>Yakıt Alım Bilgisi</DialogTitle>
                             <DialogDescription>
-                                Araç, tarih, litre ve litre fiyatını girin. Toplam tutar otomatik hesaplanır.
+                                Yeni yakıt kaydını tablo alanlarıyla uyumlu şekilde girin.
                             </DialogDescription>
                         </DialogHeader>
                         <FormFields
@@ -353,6 +507,102 @@ export default function YakitlarClient({
                 </Dialog>
             </header>
 
+            <section className="mb-4">
+                <div className="relative rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:p-5">
+                    <span className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-amber-800 shadow-sm">
+                        Demo Görsel
+                    </span>
+                    <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
+                        <div>
+                            <h3 className="text-sm md:text-base font-semibold text-slate-900">Yakıt Stok Özeti</h3>
+                            <p className="text-[11px] text-slate-500 mt-0.5">Son güncelleme: {sonGuncelleme}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 mb-3">
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] text-slate-500">Toplam Stok</p>
+                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">{formatLitre(tankGosterge.toplamStok)}</p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Gauge size={12} /> Genel Doluluk</p>
+                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
+                                %{tankGosterge.genelDolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Wallet size={12} /> Ortalama Maliyet</p>
+                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
+                                ₺{tankGosterge.agirlikliMaliyet.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
+                            </p>
+                        </div>
+                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
+                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Droplets size={12} /> Tahmini Yeterlilik</p>
+                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">{tahminiKalanGun ? `${tahminiKalanGun} gün` : "-"}</p>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
+                        {tankGosterge.tanklar.map((tank) => {
+                            const seviye = getTankSeviye(tank.dolulukOrani);
+                            return (
+                                <div key={tank.id} className={`rounded-lg border border-slate-200 bg-white px-3 py-3 ${seviye.topBorderClass}`}>
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                        <p className="text-sm font-semibold text-slate-900">{tank.ad}</p>
+                                        <span className="text-xs font-bold text-slate-900 tabular-nums">
+                                            %{tank.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
+                                        </span>
+                                    </div>
+                                    <div className="h-3.5 rounded-full bg-slate-200 border border-slate-300 overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${seviye.barClass} shadow-[inset_0_-1px_0_rgba(255,255,255,0.25)]`}
+                                            style={{ width: `${Math.max(0, Math.min(100, tank.dolulukOrani))}%` }}
+                                        />
+                                    </div>
+                                    <p className="mt-2 text-sm font-semibold text-slate-900 tabular-nums">
+                                        {formatLitre(tank.mevcutLitre)}
+                                        <span className="text-slate-500 font-medium"> / {formatLitre(tank.kapasiteLitre)}</span>
+                                    </p>
+                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 tabular-nums">
+                                            ₺{tank.birimMaliyet.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
+                                        </span>
+                                        <span>Son dolum: {sonGuncelleme}</span>
+                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${seviye.badgeClass}`}>
+                                            {seviye.etiket}
+                                        </span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <details className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
+                        <summary className="cursor-pointer select-none text-[12px] font-semibold text-slate-700">
+                            Detayı Göster
+                        </summary>
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 text-[11px]">
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                <p className="text-slate-500">Stok Değeri</p>
+                                <p className="font-semibold text-slate-900 tabular-nums">{formatPara(tankGosterge.toplamDeger)}</p>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                <p className="text-slate-500">Son 7 Gün Tüketim</p>
+                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(son7GunYakitCikisi)}</p>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                <p className="text-slate-500">Mithra Çıkışı</p>
+                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(mithraCikisLitre)}</p>
+                            </div>
+                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
+                                <p className="text-slate-500">Binlik Çıkışı</p>
+                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(binlikCikisLitre)}</p>
+                            </div>
+                        </div>
+                    </details>
+                </div>
+            </section>
+
             <DataTable
                 columns={columnsWithActions as any}
                 data={initialYakitlar}
@@ -360,10 +610,6 @@ export default function YakitlarClient({
                 searchPlaceholder="Yakıt kaydı için araç plakası ara..."
                 toolbarArrangement="report-right-scroll"
                 serverFiltering={{
-                    statusOptions: [
-                        { value: "NAKIT", label: "Nakit" },
-                        { value: "TASIT_TANIMA", label: "Taşıt Tanıma" },
-                    ],
                     showDateRange: true,
                 }}
                 excelEntity="yakit"

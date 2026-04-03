@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import { getModelFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import { ensureMuayeneColumns } from "@/lib/muayene-schema-compat";
+import { syncAracGuncelKm } from "@/lib/km-consistency";
+import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 
 async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
     const baseArac = await (prisma as any).arac.findFirst({
@@ -29,7 +31,6 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
                 bulunduguIl: true,
                 guncelKm: true,
                 aciklama: true,
-                hgsNo: true,
                 durum: true,
                 ruhsatSeriNo: true,
                 kullaniciId: true,
@@ -70,7 +71,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         }).then((rows: any[]) => rows.map((row: any) => ({ ...row, tutar: null, gectiMi: true })));
     });
 
-    const [bakimlar, arizalar, kasko, trafikSigortasi, yakitlar, masraflar, cezalar, dokumanlar, hgsYuklemeler] = await Promise.all([
+    const [bakimlar, arizalar, kasko, trafikSigortasi, yakitlar, masraflar, cezalar, dokumanlar] = await Promise.all([
         (prisma as any).bakim.findMany({
             where: { aracId },
             orderBy: { bakimTarihi: "desc" },
@@ -121,9 +122,31 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         (prisma as any).yakit.findMany({
             where: { aracId },
             orderBy: { tarih: "desc" },
-        }).catch((error: unknown) => {
-            console.warn("Arac detay yakit sorgusu basarisiz.", error);
-            return [];
+            include: {
+                sofor: {
+                    select: {
+                        id: true,
+                        ad: true,
+                        soyad: true,
+                        calistigiKurum: true,
+                        sirket: {
+                            select: {
+                                id: true,
+                                ad: true,
+                            },
+                        },
+                    },
+                },
+            },
+        }).catch(async (error: unknown) => {
+            console.warn("Arac detay yakit sorgusu (sofor include) basarisiz, fallback deneniyor.", error);
+            return (prisma as any).yakit.findMany({
+                where: { aracId },
+                orderBy: { tarih: "desc" },
+            }).catch((fallbackError: unknown) => {
+                console.warn("Arac detay yakit fallback sorgusu da basarisiz.", fallbackError);
+                return [];
+            });
         }),
         (prisma as any).masraf.findMany({
             where: { aracId },
@@ -155,17 +178,16 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
             console.warn("Arac detay dokuman sorgusu basarisiz.", error);
             return [];
         }),
-        (prisma as any).hgsYukleme.findMany({
-            where: { aracId },
-            orderBy: { tarih: "desc" },
-        }).catch((error: unknown) => {
-            console.warn("Arac detay hgs yukleme sorgusu basarisiz.", error);
-            return [];
-        }),
     ]);
+
+    const syncedGuncelKm = await syncAracGuncelKm(aracId).catch((error: unknown) => {
+        console.warn("Arac detay guncel km senkronizasyonu basarisiz, mevcut deger korunuyor.", error);
+        return Number((baseArac as any)?.guncelKm || 0);
+    });
 
     return {
         ...baseArac,
+        guncelKm: Number.isFinite(syncedGuncelKm) ? syncedGuncelKm : Number((baseArac as any)?.guncelKm || 0),
         muayene,
         bakimlar,
         arizalar,
@@ -175,7 +197,6 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         masraflar,
         cezalar,
         dokumanlar,
-        hgsYuklemeler,
     };
 }
 
@@ -191,7 +212,6 @@ async function getSafeAracDetailLegacy(queryFilter: Record<string, unknown>) {
             bulunduguIl: true,
             guncelKm: true,
             aciklama: true,
-            hgsNo: true,
             durum: true,
             ruhsatSeriNo: true,
             kullaniciId: true,
@@ -256,6 +276,17 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
 
     const activeZimmet = ((aracRaw as any).kullaniciGecmisi || []).find((z: any) => !z.bitis) || null;
     const inferredKullanici = (aracRaw as any).kullanici || activeZimmet?.kullanici || null;
+    const yakitMetric = buildFuelIntervalMetrics(
+        ((aracRaw as any).yakitlar || []).map((yakit: any) => ({
+            id: yakit.id,
+            aracId: yakit.aracId,
+            tarih: yakit.tarih,
+            km: Number(yakit.km || 0),
+            litre: Number(yakit.litre || 0),
+            tutar: Number(yakit.tutar || 0),
+            soforId: yakit.soforId || yakit.sofor?.id || null,
+        }))
+    ).byVehicleId.get((aracRaw as any).id);
     const arac = {
         ...aracRaw,
         sirket: (aracRaw as any).sirket || null,
@@ -271,7 +302,8 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
         masraflar: (aracRaw as any).masraflar || [],
         cezalar: (aracRaw as any).cezalar || [],
         dokumanlar: (aracRaw as any).dokumanlar || [],
-        hgsYuklemeler: (aracRaw as any).hgsYuklemeler || [],
+        ortalamaYakit100Km: yakitMetric?.averageLitresPer100Km ?? null,
+        ortalamaYakitIntervalSayisi: yakitMetric?.intervalCount ?? 0,
     };
 
     return (

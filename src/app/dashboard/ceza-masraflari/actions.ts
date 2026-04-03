@@ -13,6 +13,7 @@ import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency
 import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = "/dashboard/ceza-masraflari";
 
@@ -54,6 +55,10 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
 
         const sofor = data.soforId
             ? await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true })
@@ -78,7 +83,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
             cezaMaddesi: data.cezaMaddesi?.trim() || "Belirtilmedi",
             tutar: Number(data.tutar) || 0,
             aciklama: data.aciklama?.trim() || null,
-            sirketId: arac.sirketId,
+            sirketId: usageSirketId,
         };
         let created: { id: string; plaka: string | null; sirketId: string | null; cezaMaddesi: string; tutar: number; tarih: Date; aracId: string; soforId?: string | null } | null = null;
 
@@ -151,6 +156,10 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
 
         const sofor = data.soforId
             ? await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true })
@@ -182,7 +191,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
             cezaMaddesi: data.cezaMaddesi?.trim() || "Belirtilmedi",
             tutar: Number(data.tutar) || 0,
             aciklama: data.aciklama?.trim() || null,
-            sirketId: arac.sirketId,
+            sirketId: usageSirketId,
         };
         let updated: { id: string; plaka: string | null; sirketId: string | null; cezaMaddesi: string; tutar: number; tarih: Date; aracId: string; soforId?: string | null } | null = null;
 

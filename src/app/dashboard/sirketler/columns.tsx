@@ -19,7 +19,6 @@ const KALEM_RENKLERI: Record<string, string> = {
     yakit: "bg-emerald-50 text-emerald-700 border-emerald-200",
     bakim: "bg-amber-50 text-amber-700 border-amber-200",
     muayene: "bg-sky-50 text-sky-700 border-sky-200",
-    hgs: "bg-violet-50 text-violet-700 border-violet-200",
     ceza: "bg-rose-50 text-rose-700 border-rose-200",
     kasko: "bg-indigo-50 text-indigo-700 border-indigo-200",
     trafik: "bg-cyan-50 text-cyan-700 border-cyan-200",

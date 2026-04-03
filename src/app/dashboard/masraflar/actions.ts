@@ -6,6 +6,7 @@ import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/masraflar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -31,11 +32,15 @@ export async function createMasraf(data: {
             plaka: true,
             sirketId: true,
         });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
 
         const created = await prisma.masraf.create({
             data: {
                 aracId: arac.id,
-                sirketId: arac.sirketId,
+                sirketId: usageSirketId,
                 tarih: new Date(data.tarih),
                 tur: data.tur as any,
                 tutar: Number(data.tutar),
@@ -80,12 +85,16 @@ export async function updateMasraf(id: string, data: any) {
         const arac = data.aracId
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId || mevcutKayit.sirketId,
+        });
 
         const updated = await prisma.masraf.update({
             where: { id },
             data: {
                 aracId: arac.id,
-                sirketId: arac.sirketId || mevcutKayit.sirketId,
+                sirketId: usageSirketId || mevcutKayit.sirketId,
                 tur: data.tur !== undefined ? (data.tur as any) : undefined,
                 tarih: data.tarih !== undefined ? new Date(data.tarih) : undefined,
                 tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,

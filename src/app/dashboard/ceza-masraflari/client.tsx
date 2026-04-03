@@ -18,6 +18,7 @@ import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 
 const todayDate = () => nowDateTimeLocal();
 const oneMonthAfter = () => {
@@ -46,7 +47,12 @@ type AracOption = {
     durum?: string | null;
     bulunduguIl?: string | null;
 };
-type SoforOption = { id: string; adSoyad: string };
+type SoforOption = {
+    id: string;
+    adSoyad: string;
+    sirketAd?: string | null;
+    calistigiKurum?: string | null;
+};
 
 function FormFields({
     formData,
@@ -105,8 +111,8 @@ function FormFields({
                         { value: "", label: "Atanmamis" },
                         ...soforler.map((s) => ({
                             value: s.id,
-                            label: s.adSoyad,
-                            searchText: s.adSoyad,
+                            label: getPersonelOptionLabel(s),
+                            searchText: getPersonelOptionSearchText(s),
                         })),
                     ]}
                 />
@@ -328,7 +334,7 @@ export default function CezaMasraflariClient({
                             <ShieldAlert className="text-rose-600" /> Ceza Masraflari
                         </h2>
                         <p className="text-slate-500 text-sm mt-1">
-                            Yakit ve HGS gibi, ceza odemelerini de finans kalemi olarak takip edin.
+                            Araçlara ait ceza ödemelerini finans kalemi olarak takip edin.
                         </p>
                     </div>
                     <Dialog open={createOpen} onOpenChange={setCreateOpen}>

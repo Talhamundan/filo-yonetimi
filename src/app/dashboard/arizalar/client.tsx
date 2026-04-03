@@ -15,6 +15,7 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { ArizaRow, getColumns } from "./columns";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import {
     createArizaKaydi,
     deleteArizaKaydi,
@@ -51,6 +52,8 @@ type PersonelOption = {
     ad: string;
     soyad: string;
     rol?: string | null;
+    sirketAd?: string | null;
+    calistigiKurum?: string | null;
 };
 
 const EMPTY_FORM = {
@@ -394,8 +397,8 @@ export default function ArizalarClient({
                                             { value: "", label: "Seçilmedi" },
                                             ...personeller.map((personel) => ({
                                                 value: personel.id,
-                                                label: `${personel.ad} ${personel.soyad}`,
-                                                searchText: `${personel.ad} ${personel.soyad}`,
+                                                label: getPersonelOptionLabel(personel),
+                                                searchText: getPersonelOptionSearchText(personel),
                                             })),
                                         ]}
                                     />
@@ -526,8 +529,8 @@ export default function ArizalarClient({
                                         { value: "", label: "Seçilmedi" },
                                         ...personeller.map((personel) => ({
                                             value: personel.id,
-                                            label: `${personel.ad} ${personel.soyad}`,
-                                            searchText: `${personel.ad} ${personel.soyad}`,
+                                            label: getPersonelOptionLabel(personel),
+                                            searchText: getPersonelOptionSearchText(personel),
                                         })),
                                     ]}
                                 />

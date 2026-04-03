@@ -89,10 +89,14 @@ function normalizeDate(date: Date) {
 
 function getDefaultSelectedDate(monthDate: Date) {
   const today = normalizeDate(new Date())
-  if (today.getFullYear() === monthDate.getFullYear() && today.getMonth() === monthDate.getMonth()) {
+  const monthStart = startOfMonth(monthDate)
+  const monthGridStart = startOfWeek(monthStart, { weekStartsOn: 1 })
+  const monthGridEnd = endOfWeek(endOfMonth(monthStart), { weekStartsOn: 1 })
+
+  if (today >= monthGridStart && today <= monthGridEnd) {
     return today
   }
-  return normalizeDate(monthDate)
+  return normalizeDate(monthStart)
 }
 
 interface DeadlineCalendarProps {
@@ -104,15 +108,28 @@ export default function DeadlineCalendar({ events, compact = false }: DeadlineCa
   const router = useRouter()
   const searchParams = useSearchParams()
   const { canAccessAllCompanies } = useDashboardScope()
-  const selectedYil = Number(searchParams.get("yil"))
-  const selectedAy = Number(searchParams.get("ay"))
-  const initialMonthDate =
-    Number.isInteger(selectedYil) &&
-    Number.isInteger(selectedAy) &&
-    selectedAy >= 1 &&
-    selectedAy <= 12
-      ? new Date(selectedYil, selectedAy - 1, 1)
-      : new Date()
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonthNumber = now.getMonth() + 1
+  const rawSelectedYil = searchParams.get("yil")
+  const rawSelectedAy = searchParams.get("ay")
+  const parsedSelectedYil = Number(rawSelectedYil)
+  const parsedSelectedAy = Number(rawSelectedAy)
+  const normalizedSelectedAy = rawSelectedAy?.trim().toLowerCase()
+  const normalizedYil =
+    Number.isInteger(parsedSelectedYil) && parsedSelectedYil >= 2000 && parsedSelectedYil <= currentYear
+      ? parsedSelectedYil
+      : currentYear
+  const maxSelectableAy = normalizedYil < currentYear ? 12 : currentMonthNumber
+  const hasValidSelectedAy =
+    normalizedSelectedAy !== "all" &&
+    normalizedSelectedAy !== "__all__" &&
+    Number.isInteger(parsedSelectedAy) &&
+    parsedSelectedAy >= 1 &&
+    parsedSelectedAy <= maxSelectableAy
+  const initialMonthDate = hasValidSelectedAy
+    ? new Date(normalizedYil, parsedSelectedAy - 1, 1)
+    : new Date()
   const [currentMonth, setCurrentMonth] = useState(() => startOfMonth(initialMonthDate))
   const [selectedDate, setSelectedDate] = useState(() => getDefaultSelectedDate(startOfMonth(initialMonthDate)))
   const [activeFilter, setActiveFilter] = useState<FilterType>("ALL")
@@ -199,13 +216,17 @@ export default function DeadlineCalendar({ events, compact = false }: DeadlineCa
   }, [])
 
   useEffect(() => {
-    if (!Number.isInteger(selectedYil) || !Number.isInteger(selectedAy) || selectedAy < 1 || selectedAy > 12) {
+    if (!hasValidSelectedAy) {
+      const thisMonth = startOfMonth(new Date())
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- URL kapsamı güncellendiğinde takvim ayı senkronlanmalı.
+      setCurrentMonth(thisMonth)
+      setSelectedDate(getDefaultSelectedDate(thisMonth))
       return
     }
-    const nextMonth = startOfMonth(new Date(selectedYil, selectedAy - 1, 1))
+    const nextMonth = startOfMonth(new Date(normalizedYil, parsedSelectedAy - 1, 1))
     setCurrentMonth(nextMonth)
     setSelectedDate(getDefaultSelectedDate(nextMonth))
-  }, [selectedYil, selectedAy])
+  }, [hasValidSelectedAy, normalizedYil, parsedSelectedAy])
 
   const navigateToEvent = (href: string) => {
     const selectedSirketId = searchParams.get("sirket")

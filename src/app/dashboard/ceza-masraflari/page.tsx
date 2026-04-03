@@ -152,7 +152,13 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
         (prisma as any).kullanici
             .findMany({
                 where: { ...(kullaniciFilter as any), rol: { not: "ADMIN" } },
-                select: { id: true, ad: true, soyad: true },
+                select: {
+                    id: true,
+                    ad: true,
+                    soyad: true,
+                    calistigiKurum: true,
+                    sirket: { select: { ad: true } },
+                },
                 orderBy: [{ ad: "asc" }, { soyad: "asc" }],
             })
             .catch((error: unknown) => {
@@ -213,7 +219,12 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
                 aktifSoforAdSoyad: aktifSofor ? getPersonelDisplayName(aktifSofor) : null,
             };
             })}
-            soforler={(soforlerRaw as any[]).map((s: any) => ({ id: s.id, adSoyad: `${s.ad} ${s.soyad}` }))}
+            soforler={(soforlerRaw as any[]).map((s: any) => ({
+                id: s.id,
+                adSoyad: `${s.ad} ${s.soyad}`.trim(),
+                sirketAd: s.sirket?.ad || s.calistigiKurum || null,
+                calistigiKurum: s.calistigiKurum || null,
+            }))}
         />
     );
 }

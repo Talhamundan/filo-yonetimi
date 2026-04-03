@@ -4,7 +4,7 @@ import { OdemeYontemi } from "@prisma/client";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
-import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
+import { assertKmWriteConsistency, getAracMaxKnownKm, syncAracGuncelKm } from "@/lib/km-consistency";
 import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
 
 const PATH = '/dashboard/yakitlar';
@@ -48,7 +48,7 @@ type CreateYakitInput = {
     tarih: string;
     litre: number;
     tutar: number;
-    km: number;
+    km?: number | null;
     soforId?: string | null;
     istasyon?: string;
     odemeYontemi?: OdemeYontemi | string;
@@ -75,6 +75,9 @@ function parseDecimalInput(value: unknown, fieldLabel: string) {
 
 function parseKmInput(value: unknown) {
     const raw = String(value ?? "").trim();
+    if (!raw) {
+        return null;
+    }
     const numeric = raw.replace(/[^\d]/g, "");
     const parsed = Number(numeric || raw);
     if (!Number.isFinite(parsed) || parsed < 0) {
@@ -243,13 +246,15 @@ export async function createYakit(data: CreateYakitInput) {
         const parsedLitre = parseDecimalInput(data.litre, "Litre");
         const parsedTutar = parseDecimalInput(data.tutar, "Toplam tutar");
         const parsedKm = parseKmInput(data.km);
-
-        const km = await assertKmWriteConsistency({
-            aracId: arac.id,
-            km: parsedKm,
-            fieldLabel: "Yakit KM",
-            enforceMaxKnownKm: false,
-        });
+        const km =
+            parsedKm === null
+                ? await getAracMaxKnownKm(arac.id)
+                : await assertKmWriteConsistency({
+                    aracId: arac.id,
+                    km: parsedKm,
+                    fieldLabel: "Yakit KM",
+                    enforceMaxKnownKm: false,
+                });
 
         await prisma.yakit.create({
             data: {
@@ -308,18 +313,27 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                     ? mevcutKayit.km
                     : undefined;
         const normalizedKmInput = kmInput !== undefined ? parseKmInput(kmInput) : undefined;
-
-        const normalizedKm =
-            normalizedKmInput !== undefined
-                ? await assertKmWriteConsistency({
-                    aracId: arac.id,
-                    km: normalizedKmInput,
-                    fieldLabel: "Yakit KM",
-                    currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
-                    enforceMaxKnownKm: false,
-                })
-                : null;
         const vehicleChanged = Boolean(data.aracId && data.aracId !== mevcutKayit.aracId);
+
+        let normalizedKm: number | undefined;
+        if (normalizedKmInput === undefined) {
+            normalizedKm = undefined;
+        } else if (normalizedKmInput === null) {
+            normalizedKm = vehicleChanged
+                ? await getAracMaxKnownKm(arac.id)
+                : Number.isFinite(Number(mevcutKayit.km))
+                    ? Math.trunc(Number(mevcutKayit.km))
+                    : await getAracMaxKnownKm(arac.id);
+        } else {
+            const checkedKm = await assertKmWriteConsistency({
+                aracId: arac.id,
+                km: normalizedKmInput,
+                fieldLabel: "Yakit KM",
+                currentRecord: { aracId: mevcutKayit.aracId, km: mevcutKayit.km },
+                enforceMaxKnownKm: false,
+            });
+            normalizedKm = checkedKm === null ? undefined : Number(checkedKm);
+        }
         const fallbackUsageContext = {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
             kullanimSirketId: normalizeSirketId((arac as any)?.kullanici?.sirketId),
@@ -341,7 +355,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                 tarih: parsedTarih,
                 litre: parsedLitre,
                 tutar: parsedTutar,
-                km: data.km !== undefined ? Number(normalizedKm) : undefined,
+                km: normalizedKm !== undefined ? Number(normalizedKm) : undefined,
                 ...(YAKIT_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                 istasyon: data.istasyon !== undefined ? data.istasyon || null : undefined,
                 odemeYontemi: data.odemeYontemi ? resolveOdemeYontemi(data.odemeYontemi) : undefined,
@@ -353,6 +367,10 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
         revalidateYakitPages(arac.id, resolvedSoforId);
         if ((mevcutKayit as any).soforId && (mevcutKayit as any).soforId !== resolvedSoforId) {
             revalidateYakitPages(undefined, (mevcutKayit as any).soforId);
+        }
+        if (vehicleChanged && mevcutKayit.aracId !== arac.id) {
+            await syncAracGuncelKm(mevcutKayit.aracId);
+            revalidateYakitPages(mevcutKayit.aracId, null);
         }
         return { success: true };
     } catch (e) {
@@ -370,7 +388,11 @@ export async function deleteYakit(id: string) {
         const kayit = await getYakitScopedRecordOrThrow(id, { aracId: true });
 
         await prisma.yakit.delete({ where: { id } });
-        revalidateYakitPages((kayit as { aracId?: string } | null)?.aracId);
+        const aracId = (kayit as { aracId?: string } | null)?.aracId;
+        if (aracId) {
+            await syncAracGuncelKm(aracId);
+        }
+        revalidateYakitPages(aracId);
         return { success: true };
     } catch (e) {
         console.error(e);
