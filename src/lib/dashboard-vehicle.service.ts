@@ -89,7 +89,7 @@ async function groupYakit(where: Prisma.YakitWhereInput) {
 }
 
 async function groupBakim(where: Prisma.BakimWhereInput) {
-    return (prisma as any).bakim.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
+    return (prisma as any).bakim.groupBy({ by: ["aracId"], where: { ...where, deletedAt: null }, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupMuayene(where: Prisma.MuayeneWhereInput) {
@@ -97,7 +97,7 @@ async function groupMuayene(where: Prisma.MuayeneWhereInput) {
 }
 
 async function groupCeza(where: Prisma.CezaWhereInput) {
-    return (prisma as any).ceza.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
+    return (prisma as any).ceza.groupBy({ by: ["aracId"], where: { ...where, deletedAt: null }, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 async function groupKasko(where: Prisma.KaskoWhereInput) {
@@ -109,7 +109,7 @@ async function groupTrafik(where: Prisma.TrafikSigortasiWhereInput) {
 }
 
 async function groupMasraf(where: Prisma.MasrafWhereInput) {
-    return (prisma as any).masraf.groupBy({ by: ["aracId"], where, _sum: { tutar: true } }) as Promise<GroupRow[]>;
+    return (prisma as any).masraf.groupBy({ by: ["aracId"], where: { ...where, deletedAt: null }, _sum: { tutar: true } }) as Promise<GroupRow[]>;
 }
 
 function addVehicleFuel(map: Record<string, VehicleAccumulator>, rows: YakitGroupRow[]) {

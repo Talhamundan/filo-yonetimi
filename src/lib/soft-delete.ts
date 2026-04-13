@@ -48,7 +48,7 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
                 ? {
                       id: row.id,
                       companyId: row.sirketId,
-                      summary: formatVehicleSummary(row),
+                      summary: formatVehicleSummary({ ...row, plaka: row.plaka || '-' }),
                   }
                 : null;
         }

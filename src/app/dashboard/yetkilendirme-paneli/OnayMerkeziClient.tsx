@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff } from "lucide-react";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { DataTable } from "@/components/ui/data-table";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -304,12 +304,21 @@ export default function OnayMerkeziClient({
                 />
             </section>
 
-            <Dialog open={!!editRow} onOpenChange={(open) => !open && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[480px]">
+            <Dialog
+                open={!!editRow}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setEditRow(null);
+                        setEditForm({ kullaniciAdi: "", sifre: "", rol: "SOFOR" });
+                        setShowEditPassword(false);
+                    }
+                }}
+            >
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Personel Hesabını Düzenle</DialogTitle>
                         <DialogDescription>
-                            {editRow?.adSoyad} için giriş adı, şifre ve yetki bilgilerini güncelleyin.
+                            {editRow?.adSoyad} için giriş adı, şifre and yetki bilgilerini güncelleyin.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-3 py-2">

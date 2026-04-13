@@ -3,7 +3,7 @@
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -85,7 +85,7 @@ const FormFields = ({
     return (
     <div className="grid grid-cols-2 gap-3 py-2">
         <div className="col-span-2">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Temel Bilgiler</p>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
@@ -95,76 +95,33 @@ const FormFields = ({
             <Input value={formData.plaka} onChange={e => setFormData({...formData, plaka: forceUppercase(e.target.value)})} placeholder="34 ABC 123" className="h-9 font-mono uppercase" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-                Marka <span className="text-rose-500">*</span>
-            </label>
+            <label className="text-sm font-medium">Marka <span className="text-rose-500">*</span></label>
             <Input value={formData.marka} onChange={e => setFormData({...formData, marka: forceUppercase(e.target.value)})} placeholder="RENAULT" className="h-9 uppercase" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-                Model <span className="text-rose-500">*</span>
-            </label>
+            <label className="text-sm font-medium">Model <span className="text-rose-500">*</span></label>
             <Input value={formData.model} onChange={e => setFormData({...formData, model: forceUppercase(e.target.value)})} placeholder="MEGANE" className="h-9 uppercase" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-                Model Yılı <span className="text-rose-500">*</span>
-            </label>
+            <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
             <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
         </div>
-        <div className="space-y-1.5 col-span-2">
-            <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
-            <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" />
-        </div>
-        {showInitialMuayeneField ? (
-            <div className="space-y-1.5">
-                <label className="text-sm font-medium">Muayene Geçerlilik Tarihi (Opsiyonel)</label>
-                <Input
-                    type="datetime-local"
-                    value={formData.muayeneGecerlilikTarihi}
-                    onChange={e => setFormData({ ...formData, muayeneGecerlilikTarihi: e.target.value })}
-                    className="h-9"
-                />
-            </div>
-        ) : null}
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">
-                Güncel KM <span className="text-rose-500">*</span>
-            </label>
+            <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
             <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">BEDEL</label>
-            <Input
-                type="number"
-                value={formData.bedel}
-                onChange={e => setFormData({ ...formData, bedel: e.target.value })}
-                className="h-9"
-                placeholder="₺"
-            />
+        {showInitialMuayeneField && (
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Muayene Geçerlilik</label>
+                <Input type="datetime-local" value={formData.muayeneGecerlilikTarihi} onChange={e => setFormData({ ...formData, muayeneGecerlilikTarihi: e.target.value })} className="h-9" />
+            </div>
+        )}
+        <div className="space-y-1.5 col-span-2">
+            <label className="text-sm font-medium">Şase No</label>
+            <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" placeholder="Opsiyonel" />
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-            <select 
-                value={formData.bulunduguIl} 
-                onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-            </select>
-        </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Araç Kategorisi</label>
-            <select 
-                value={formData.kategori} 
-                onChange={e => setFormData({...formData, kategori: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="BINEK">Binek Araç</option>
-                <option value="SANTIYE">Şantiye Aracı</option>
-            </select>
-        </div>
-        <div className="col-span-2 pt-1">
+
+        <div className="col-span-2 pt-2">
             <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
         </div>
         <div className="space-y-1.5">
@@ -185,22 +142,14 @@ const FormFields = ({
                 }}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
-                {allowIndependentOption ? (
-                    <option value="">Şirket Seçiniz (Bağımsız)</option>
-                ) : (
-                    <option value="" disabled>
-                        Şirket Seçiniz
-                    </option>
-                )}
-                {allowIndependentOption && !hasKiralikSirket ? (
-                    <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>
-                ) : null}
+                {allowIndependentOption ? <option value="">Şirket Seçiniz (Bağımsız)</option> : <option value="" disabled>Şirket Seçiniz</option>}
+                {allowIndependentOption && !hasKiralikSirket && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
-                <User size={14} className="text-slate-400" />
+                <Building2 size={14} className="text-slate-400" />
                 Kullanıcı Firma
             </label>
             <select
@@ -209,17 +158,13 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="">Kullanıcı Firma Seçiniz</option>
-                {firmaOptions.map((firma) => (
-                    <option key={firma} value={firma}>
-                        {firma}
-                    </option>
-                ))}
+                {firmaOptions.map((firma) => <option key={firma} value={firma}>{firma}</option>)}
             </select>
         </div>
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 col-span-2">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <User size={14} className="text-slate-400" />
-                Kullanıcı
+                Zimmetli Kullanıcı (Atama)
             </label>
             <SearchableSelect
                 value={formData.kullaniciId} 
@@ -243,20 +188,47 @@ const FormFields = ({
                 ]}
             />
         </div>
-        <div className="col-span-2 pt-1">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
+
+        <div className="col-span-2 pt-2">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Operasyonel Detaylar</p>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Bulunduğu Şantiye</label>
+            <select 
+                value={formData.bulunduguIl} 
+                onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
+                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
+            </select>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Araç Kategorisi</label>
+            <select 
+                value={formData.kategori} 
+                onChange={e => setFormData({...formData, kategori: e.target.value})}
+                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+                <option value="BINEK">Binek Araç</option>
+                <option value="SANTIYE">Şantiye Aracı</option>
+            </select>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Bedel (Kasko/Sigorta)</label>
+            <Input type="number" value={formData.bedel} onChange={e => setFormData({ ...formData, bedel: e.target.value })} className="h-9" placeholder="₺" />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Ruhsat Seri No</label>
-            <Input value={formData.ruhsatSeriNo} onChange={e => setFormData({...formData, ruhsatSeriNo: e.target.value})} className="h-9" />
+            <Input value={formData.ruhsatSeriNo} onChange={e => setFormData({...formData, ruhsatSeriNo: e.target.value})} className="h-9" placeholder="Örn: AA 123456" />
         </div>
         <div className="space-y-1.5 col-span-2">
-            <label className="text-sm font-medium">Açıklama (Opsiyonel)</label>
+            <label className="text-sm font-medium">Açıklama</label>
             <textarea
                 value={formData.aciklama}
                 onChange={e => setFormData({ ...formData, aciklama: e.target.value })}
+                placeholder="Araç hakkında ek bilgiler..."
                 rows={2}
-                className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm"
+                className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 h-20 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400"
             />
         </div>
     </div>
@@ -457,7 +429,7 @@ export default function AraclarClient({
                         open={createOpen}
                         onOpenChange={(open) => {
                             setCreateOpen(open);
-                            if (open) {
+                            if (!open) {
                                 setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
                             }
                         }}
@@ -468,7 +440,7 @@ export default function AraclarClient({
                                 Yeni Araç Ekle
                             </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[540px] max-h-[88vh] overflow-y-auto">
+                        <DialogContent className="max-h-[88vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Araç Kaydı Oluştur</DialogTitle>
                                 <DialogDescription>
@@ -498,9 +470,14 @@ export default function AraclarClient({
                     </Dialog>
                 </div>
             </header>
-
-            <Dialog open={!!editRow} onOpenChange={(o) => { if(!o) setEditRow(null); }}>
-                <DialogContent className="sm:max-w-[540px] max-h-[88vh] overflow-y-auto">
+ 
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                }
+            }}>
+                <DialogContent className="max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Araç Bilgilerini Güncelle</DialogTitle>
                         <DialogDescription>

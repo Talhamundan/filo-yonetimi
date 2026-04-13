@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { CheckCircle2, Plus, TriangleAlert, Wrench, XCircle } from "lucide-react";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { DataTable } from "@/components/ui/data-table";
 import { SearchableSelect } from "@/components/ui/searchable-select";
@@ -320,14 +320,17 @@ export default function ArizalarClient({
                         Servise gitmeden bekleyen arızaları takip edin, servise sevk edin ve tamamlandığında bakım kaydına bağlayın.
                     </p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) resetForm();
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
                             Yeni Arıza Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[520px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Yeni Arıza Kaydı</DialogTitle>
                             <DialogDescription>Araçta tespit edilen arızayı sisteme kaydedin.</DialogDescription>
@@ -457,8 +460,13 @@ export default function ArizalarClient({
                 </Dialog>
             </header>
 
-            <Dialog open={!!editRow} onOpenChange={(open) => !open && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[520px]">
+            <Dialog open={!!editRow} onOpenChange={(open) => {
+                if (!open) {
+                    setEditRow(null);
+                    resetForm();
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.arac.plaka} için kayıt bilgilerini güncelleyin.</DialogDescription>
@@ -585,8 +593,13 @@ export default function ArizalarClient({
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!completeRow} onOpenChange={(open) => !open && setCompleteRow(null)}>
-                <DialogContent className="sm:max-w-[520px]">
+            <Dialog open={!!completeRow} onOpenChange={(open) => {
+                if (!open) {
+                    setCompleteRow(null);
+                    setCompleteForm({ ...EMPTY_COMPLETE_FORM });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Arızayı Tamamla</DialogTitle>
                         <DialogDescription>

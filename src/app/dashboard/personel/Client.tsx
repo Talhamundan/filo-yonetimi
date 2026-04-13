@@ -3,7 +3,7 @@
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Users } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
@@ -131,7 +131,7 @@ export default function PersonelClient({
                     open={createOpen}
                     onOpenChange={(open) => {
                         setCreateOpen(open);
-                        if (open) {
+                        if (!open) {
                             setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
                         }
                     }}
@@ -141,7 +141,7 @@ export default function PersonelClient({
                             <Plus size={16} /> Personel Ekle
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[450px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Yeni Personel Kaydı</DialogTitle>
                             <DialogDescription>Filo yönetim sistemine yeni bir personel ekleyin.</DialogDescription>
@@ -162,8 +162,13 @@ export default function PersonelClient({
                 </Dialog>
             </header>
 
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[450px]">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Personeli Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.adSoyad} kişisinin bilgilerini güncelleyin.</DialogDescription>

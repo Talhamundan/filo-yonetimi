@@ -229,6 +229,50 @@ const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             gecerlilikTarihi: ["Tarih", "Geçerlilik Bitiş", "Gecerlilik Bitis", "Bitiş Tarihi", "Bitis Tarihi"],
         },
     },
+    kasko: {
+        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            sirket: "Sigorta Şirketi",
+            policeNo: "Poliçe No",
+            acente: "Acente",
+            baslangicTarihi: "Başlangıç Tarihi",
+            bitisTarihi: "Bitiş Tarihi",
+            tutar: "Poliçe Tutarı",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Kasko Firması", "Kasko Firmasi"],
+            policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
+            acente: ["Acente", "Aracı Kurum"],
+            baslangicTarihi: ["Başlangıç Tarihi", "Baslangic Tarihi", "Başlangıç", "Baslangic", "Tarih"],
+            bitisTarihi: ["Bitiş Tarihi", "Bitis Tarihi", "Bitiş", "Bitis", "Geçerlilik Bitiş", "Gecerlilik Bitis"],
+            tutar: ["Poliçe Tutarı", "Police Tutari", "Tutar", "Maliyet"],
+        },
+    },
+    trafikSigortasi: {
+        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            sirket: "Sigorta Şirketi",
+            policeNo: "Poliçe No",
+            acente: "Acente",
+            baslangicTarihi: "Başlangıç Tarihi",
+            bitisTarihi: "Bitiş Tarihi",
+            tutar: "Poliçe Tutarı",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Sigorta Firması", "Sigorta Firmasi"],
+            policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
+            acente: ["Acente", "Aracı Kurum"],
+            baslangicTarihi: ["Başlangıç Tarihi", "Baslangic Tarihi", "Başlangıç", "Baslangic", "Tarih"],
+            bitisTarihi: ["Bitiş Tarihi", "Bitis Tarihi", "Bitiş", "Bitis", "Geçerlilik Bitiş", "Gecerlilik Bitis"],
+            tutar: ["Poliçe Tutarı", "Police Tutari", "Tutar", "Maliyet"],
+        },
+    },
 };
 
 function lowerFirst(value: string) {

@@ -16,6 +16,7 @@ export type {
     DashboardEventStatus,
     DashboardEventType,
     DashboardDailyTrendItem,
+    DashboardWeeklyTrendItem,
     DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
     DashboardVehicleFuelAverageItem,
@@ -26,6 +27,7 @@ function getEmptyDashboardData(): DashboardData {
     return {
         metrics: {
             aylikToplamGider: 0,
+            oncekiDonemToplamGider: 0,
             ortalamaAracMaliyeti: 0,
             ortalamaSoforMaliyeti: 0,
             kritikUyariSayisi: 0,
@@ -60,6 +62,7 @@ function getEmptyDashboardData(): DashboardData {
         calendarEvents: [],
         monthlyExpenseTrend: [],
         dailyExpenseTrend: [],
+        weeklyExpenseTrend: [],
         vehicleCostReport: [],
         driverCostReport: [],
         companyCostReport: [],
@@ -101,6 +104,7 @@ async function getDashboardDataUnsafe(
     return {
         metrics: {
             aylikToplamGider,
+            oncekiDonemToplamGider,
             ortalamaAracMaliyeti: vehicleData.ortalamaAracMaliyeti,
             ortalamaSoforMaliyeti: driverData.ortalamaSoforMaliyeti,
             kritikUyariSayisi: calendarData.kritikUyariSayisi,
@@ -134,6 +138,7 @@ async function getDashboardDataUnsafe(
         calendarEvents: calendarData.calendarEvents,
         monthlyExpenseTrend: costData.monthlyExpenseTrend,
         dailyExpenseTrend: costData.dailyExpenseTrend,
+        weeklyExpenseTrend: costData.weeklyExpenseTrend,
         vehicleCostReport: vehicleData.vehicleCostReport,
         driverCostReport: driverData.driverCostReport,
         companyCostReport: costData.companyCostReport,

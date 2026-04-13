@@ -83,7 +83,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
     }
     const scopedYakitWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
 
-    const [yakitlar, araclar, personeller] = await Promise.all([
+    const [yakitlar, araclar, personeller, yakitTanklari, tankHareketleri] = await Promise.all([
         (prisma as any).yakit.findMany({ 
             where: scopedYakitWhere as any,
             orderBy: { tarih: 'desc' }, 
@@ -184,7 +184,21 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 sirket: { select: { ad: true } },
             },
             orderBy: [{ ad: "asc" }, { soyad: "asc" }],
-        }).catch(() => [])
+        }).catch(() => []),
+        (prisma as any).yakitTank.findMany({
+            where: { aktifMi: true },
+            orderBy: { olusturmaTarihi: 'asc' }
+        }),
+        (prisma as any).yakitTankHareket.findMany({
+            where: {
+                tip: { in: ['ALIM', 'TRANSFER'] }
+            },
+            orderBy: { tarih: 'desc' },
+            include: {
+                tank: { select: { ad: true } },
+                hedefTank: { select: { ad: true } }
+            }
+        })
     ]);
     
     const rawYakitlar = yakitlar as any[];
@@ -218,9 +232,39 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         };
     });
 
+    const normalizedHareketler: YakitRow[] = (tankHareketleri as any[]).map((h) => {
+        const isTransfer = h.tip === 'TRANSFER';
+        const plaka = isTransfer ? "BİDON DOLUMU" : "STOK ALIMI";
+        const istasyon = isTransfer 
+            ? `${h.tank?.ad} ➔ ${h.hedefTank?.ad}`
+            : `${h.tank?.ad}`;
+            
+        return {
+            id: h.id,
+            tarih: h.tarih,
+            litre: h.litre,
+            tutar: h.toplamTutar,
+            km: 0,
+            istasyon: istasyon,
+            odemeYontemi: 'NAKIT' as any,
+            arac: {
+                id: h.tankId,
+                plaka: plaka,
+                marka: "Tanker",
+                model: "Sistem",
+                sirket: { ad: "BERA" }
+            } as any,
+            isStokHareketi: true // Custom flag for UI
+        } as any;
+    });
+
+    const allRecords = [...yakitlarWithMetrics, ...normalizedHareketler].sort(
+        (a, b) => new Date(b.tarih).getTime() - new Date(a.tarih).getTime()
+    );
+
     return (
         <YakitlarClient
-            initialYakitlar={yakitlarWithMetrics}
+            initialYakitlar={allRecords}
             araclar={(araclar as any[]).map((a) => {
                 const aktifSofor = a.kullaniciGecmisi?.[0]?.kullanici || a.kullanici || null;
                 const kullanimSirketAd = aktifSofor?.sirket?.ad || a.sirket?.ad || null;
@@ -246,6 +290,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 sirketAd: p.sirket?.ad || null,
                 calistigiKurum: p.calistigiKurum || null,
             }))}
+            yakitTanklari={yakitTanklari as any[]}
         />
     );
 }

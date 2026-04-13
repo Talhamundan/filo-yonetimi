@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Wrench } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
@@ -223,22 +223,25 @@ export default function BakimlarClient({
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Filodaki tüm araçların güncel ve geçmiş servis operasyonlarının takibi.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
                             Yeni Servis Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+                    <DialogContent className="max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle>Yeni Servis Kaydı</DialogTitle>
                             <DialogDescription>
                                 Servis kaydı için temel bilgileri girin.
                             </DialogDescription>
                         </DialogHeader>
-                        <div className="grid gap-4 py-4">
-                            <div className="space-y-1.5">
+                        <div className="grid grid-cols-2 gap-4 py-4">
+                            <div className="space-y-1.5 col-span-2">
                                 <label className="text-sm font-medium">Araç</label>
                                 <SearchableSelect
                                     value={formData.aracId}
@@ -264,7 +267,6 @@ export default function BakimlarClient({
                                     placeholder="34 ABC 123"
                                     className="h-9 uppercase font-mono"
                                 />
-                                <p className="text-[11px] text-slate-500">Plaka araç listesinde varsa kayıt otomatik olarak araca bağlanır.</p>
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Servise Götüren Personel</label>
@@ -282,10 +284,17 @@ export default function BakimlarClient({
                                         })),
                                     ]}
                                 />
-                                <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Arıza Şikayet</label>
+                                <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
+                                <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
+                                <Input type="number" step="0.01" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
+                            </div>
+                            <div className="space-y-1.5 col-span-2">
+                                <label className="text-sm font-medium">Arıza / Şikayet Özeti</label>
                                 <textarea
                                     value={formData.arizaSikayet}
                                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, arizaSikayet: e.target.value })}
@@ -293,17 +302,13 @@ export default function BakimlarClient({
                                     className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
                                 />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                                <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Yapılan İşlem</label>
+                            <div className="space-y-1.5 col-span-2">
+                                <label className="text-sm font-medium">Yapılan İşlem Detayı</label>
                                 <textarea
                                     value={formData.yapilanIslemler}
                                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, yapilanIslemler: e.target.value })}
                                     placeholder="Yapılan işlemler..."
-                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-24 resize-none"
                                 />
                             </div>
                             <div className="space-y-1.5">
@@ -311,7 +316,7 @@ export default function BakimlarClient({
                                 <Input
                                     value={formData.degisenParca}
                                     onChange={(e) => setFormData({ ...formData, degisenParca: e.target.value })}
-                                    placeholder="Örn: Yağ filtresi, fren balatası"
+                                    placeholder="Örn: Yağ filtresi"
                                     className="h-9"
                                 />
                             </div>
@@ -320,13 +325,9 @@ export default function BakimlarClient({
                                 <Input
                                     value={formData.islemYapanFirma}
                                     onChange={(e) => setFormData({ ...formData, islemYapanFirma: e.target.value })}
-                                    placeholder="Örn: Renault Bahaş Servis"
+                                    placeholder="Örn: Bahaş Servis"
                                     className="h-9"
                                 />
-                            </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
-                                <Input type="number" step="0.01" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
                             </div>
                         </div>
                         <DialogFooter>
@@ -339,14 +340,19 @@ export default function BakimlarClient({
             </header>
 
             {/* Edit Dialog */}
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[520px] max-h-[90vh] overflow-y-auto">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY });
+                }
+            }}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Servis Kaydını Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.arac?.plaka || editRow?.plaka || "Araçsız kayıt"} için servis bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                        <div className="space-y-1.5">
+                    <div className="grid grid-cols-2 gap-4 py-4">
+                        <div className="space-y-1.5 col-span-2">
                             <label className="text-sm font-medium">Araç</label>
                             <SearchableSelect
                                 value={formData.aracId}
@@ -372,7 +378,6 @@ export default function BakimlarClient({
                                 placeholder="34 ABC 123"
                                 className="h-9 uppercase font-mono"
                             />
-                            <p className="text-[11px] text-slate-500">Plaka araç listesinde varsa kayıt otomatik olarak araca bağlanır.</p>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Servise Götüren Personel</label>
@@ -390,10 +395,17 @@ export default function BakimlarClient({
                                     })),
                                 ]}
                             />
-                            <p className="text-[11px] text-slate-500">Şoför dışı personel de seçilebilir. Admin seçimi yapılamaz.</p>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Arıza Şikayet</label>
+                            <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
+                            <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
+                            <Input type="number" step="0.01" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
+                        </div>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-sm font-medium">Arıza / Şikayet Özeti</label>
                             <textarea
                                 value={formData.arizaSikayet}
                                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, arizaSikayet: e.target.value })}
@@ -401,17 +413,13 @@ export default function BakimlarClient({
                                 className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
                             />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
-                            <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Yapılan İşlem</label>
+                        <div className="space-y-1.5 col-span-2">
+                            <label className="text-sm font-medium">Yapılan İşlem Detayı</label>
                             <textarea
                                 value={formData.yapilanIslemler}
                                 onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({ ...formData, yapilanIslemler: e.target.value })}
                                 placeholder="Yapılan işlemler..."
-                                className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
+                                className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-24 resize-none"
                             />
                         </div>
                         <div className="space-y-1.5">
@@ -419,7 +427,7 @@ export default function BakimlarClient({
                             <Input
                                 value={formData.degisenParca}
                                 onChange={(e) => setFormData({ ...formData, degisenParca: e.target.value })}
-                                placeholder="Örn: Yağ filtresi, fren balatası"
+                                placeholder="Örn: Yağ filtresi"
                                 className="h-9"
                             />
                         </div>
@@ -428,13 +436,9 @@ export default function BakimlarClient({
                             <Input
                                 value={formData.islemYapanFirma}
                                 onChange={(e) => setFormData({ ...formData, islemYapanFirma: e.target.value })}
-                                placeholder="Örn: Renault Bahaş Servis"
+                                placeholder="Örn: Bahaş Servis"
                                 className="h-9"
                             />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
-                            <Input type="number" step="0.01" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
                         </div>
                     </div>
                     <DialogFooter>

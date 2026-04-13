@@ -26,11 +26,13 @@ function revalidateCezaRelatedPaths(aracIds?: Array<string | null | undefined>) 
 
 type CezaPayload = {
     aracId: string;
-    soforId: string;
+    soforId?: string | null;
     tarih: string | Date;
     tutar: number;
     cezaMaddesi: string;
     aciklama?: string;
+    sonOdemeTarihi?: string | Date | null;
+    odendiMi?: boolean;
 }
 
 export async function createCeza(data: CezaPayload) {
@@ -45,7 +47,13 @@ export async function createCeza(data: CezaPayload) {
             aracId: arac.id,
             fallbackSirketId: arac.sirketId,
         });
-        const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
+
+        let soforId: string | null = null;
+        if (data.soforId && data.soforId !== "NON_SELECTABLE") {
+            const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true });
+            soforId = sofor.id;
+        }
+
         let created: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
 
         try {
@@ -53,11 +61,13 @@ export async function createCeza(data: CezaPayload) {
                 data: {
                     plaka: arac.plaka,
                     aracId: arac.id,
-                    soforId: sofor.id,
+                    soforId: soforId,
                     tarih: new Date(data.tarih),
                     tutar: Number(data.tutar),
                     cezaMaddesi: data.cezaMaddesi,
                     aciklama: data.aciklama || null,
+                    sonOdemeTarihi: data.sonOdemeTarihi ? new Date(data.sonOdemeTarihi) : null,
+                    odendiMi: data.odendiMi ?? false,
                     sirketId: usageSirketId,
                 }
             });
@@ -68,11 +78,13 @@ export async function createCeza(data: CezaPayload) {
                     data: {
                         plaka: arac.plaka,
                         aracId: arac.id,
-                        soforId: sofor.id,
+                        soforId: soforId,
                         tarih: new Date(data.tarih),
                         tutar: Number(data.tutar),
                         cezaMaddesi: data.cezaMaddesi,
                         aciklama: data.aciklama || null,
+                        sonOdemeTarihi: data.sonOdemeTarihi ? new Date(data.sonOdemeTarihi) : null,
+                        odendiMi: data.odendiMi ?? false,
                         sirketId: usageSirketId,
                     }
                 });
@@ -107,58 +119,62 @@ export async function createCeza(data: CezaPayload) {
     }
 }
 
-export async function updateCeza(id: string, data: CezaPayload) {
+export async function updateCeza(id: string, data: Partial<CezaPayload>) {
     try {
         const actor = await assertAuthenticatedUser();
-        const mevcutKayit = await getScopedRecordOrThrow({
+        const ceza = await getScopedRecordOrThrow({
             prismaModel: "ceza",
             filterModel: "ceza",
             id,
-            select: { aracId: true },
+            select: { id: true, aracId: true, soforId: true },
             errorMessage: "Ceza kaydı bulunamadı veya yetkiniz yok.",
         });
 
-        const arac = await getScopedAracOrThrow(data.aracId, {
-            id: true,
-            plaka: true,
-            sirketId: true,
-        });
+        // Always resolve arac if it's changing or if we need plaka/usageCompany
+        const targetAracId = data.aracId || ceza.aracId;
+        const arac = await getScopedAracOrThrow(targetAracId, { id: true, plaka: true, sirketId: true });
+
         const usageSirketId = await resolveVehicleUsageCompanyId({
             aracId: arac.id,
             fallbackSirketId: arac.sirketId,
         });
-        const sofor = await getScopedKullaniciOrThrow(data.soforId, { id: true, sirketId: true });
-        let updated: { id: string; sirketId: string | null; plaka: string | null; tarih: Date; tutar: number; cezaMaddesi: string; aracId: string; soforId: string | null } | null = null;
+
+        let soforId = ceza.soforId;
+        if (data.soforId !== undefined) {
+             if (data.soforId && data.soforId !== "NON_SELECTABLE") {
+                 const sId = data.soforId;
+                 const sofor = await getScopedKullaniciOrThrow(sId, { id: true });
+                 soforId = sofor.id;
+             } else {
+                 soforId = null;
+             }
+        }
+
+        let updated;
+        const updateData = {
+            plaka: arac.plaka,
+            aracId: arac.id,
+            soforId: soforId,
+            tarih: data.tarih ? new Date(data.tarih) : undefined,
+            tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
+            cezaMaddesi: data.cezaMaddesi || undefined,
+            aciklama: data.aciklama !== undefined ? data.aciklama : undefined,
+            sonOdemeTarihi: data.sonOdemeTarihi !== undefined ? (data.sonOdemeTarihi ? new Date(data.sonOdemeTarihi) : null) : undefined,
+            odendiMi: data.odendiMi !== undefined ? data.odendiMi : undefined,
+            sirketId: usageSirketId,
+        };
 
         try {
             updated = await prisma.ceza.update({
-                where: { id },
-                data: {
-                    plaka: arac.plaka,
-                    aracId: arac.id,
-                    soforId: sofor.id,
-                    tarih: new Date(data.tarih),
-                    tutar: Number(data.tutar),
-                    cezaMaddesi: data.cezaMaddesi,
-                    aciklama: data.aciklama || null,
-                    sirketId: usageSirketId,
-                }
+                where: { id: ceza.id },
+                data: updateData
             });
         } catch (error) {
             if (isCezaSchemaCompatibilityError(error)) {
                 await ensureCezaFineTrackingColumns();
                 updated = await prisma.ceza.update({
-                    where: { id },
-                    data: {
-                        plaka: arac.plaka,
-                        aracId: arac.id,
-                        soforId: sofor.id,
-                        tarih: new Date(data.tarih),
-                        tutar: Number(data.tutar),
-                        cezaMaddesi: data.cezaMaddesi,
-                        aciklama: data.aciklama || null,
-                        sirketId: usageSirketId,
-                    }
+                    where: { id: ceza.id },
+                    data: updateData
                 });
             } else {
                 throw error;
@@ -183,7 +199,7 @@ export async function updateCeza(id: string, data: CezaPayload) {
             });
         }
 
-        revalidateCezaRelatedPaths([(mevcutKayit as { aracId?: string } | null)?.aracId, arac.id]);
+        revalidateCezaRelatedPaths([ceza.aracId, arac.id]);
         return { success: true };
     } catch (e) {
         console.error(e);

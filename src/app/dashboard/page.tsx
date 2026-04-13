@@ -1,30 +1,41 @@
 import DashboardClient from "../../components/dashboard/DashboardClient";
 import { getAracUsageFilter, getSirketFilter, getCurrentUserRole, getCurrentUserId } from "@/lib/auth-utils";
 import { getDashboardData } from "@/lib/dashboard-data";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, getSelectedKategori, type DashboardSearchParams } from "@/lib/company-scope";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardOverview(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
 
-    const [selectedSirketId, selectedYil, selectedAy, role, userId] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, selectedKategori, role, userId] = await Promise.all([
         getSelectedSirketId(resolvedSearchParams),
         getSelectedYil(resolvedSearchParams),
         getSelectedAy(resolvedSearchParams),
+        getSelectedKategori(resolvedSearchParams),
         getCurrentUserRole(),
         getCurrentUserId(),
     ]);
     const comparisonGranularity = selectedAy == null ? "YIL" : "AY";
-    const [sirketFilter, aracFilter] = await Promise.all([
+    const [sirketFilter, baseAracFilter] = await Promise.all([
         getSirketFilter(selectedSirketId),
         getAracUsageFilter(selectedSirketId),
     ]);
     
+    const rawAracFilter = (baseAracFilter as Record<string, unknown>) || {};
+    const initialAracFilterArgs = Object.keys(rawAracFilter).length > 0 ? [rawAracFilter] : [];
+    const finalAracFilterArgs = selectedKategori 
+        ? [...initialAracFilterArgs, { kategori: selectedKategori }]
+        : initialAracFilterArgs;
+        
+    const aracFilter = finalAracFilterArgs.length > 1 
+        ? { AND: finalAracFilterArgs } 
+        : finalAracFilterArgs.length === 1 ? finalAracFilterArgs[0] : null;
+
     const isTechnicalPersonnel = role === "TEKNIK";
 
     const data = await getDashboardData(
         sirketFilter || null,
-        (aracFilter as Record<string, unknown>) || null,
+        aracFilter,
         selectedYil,
         selectedAy ?? new Date().getMonth() + 1,
         comparisonGranularity

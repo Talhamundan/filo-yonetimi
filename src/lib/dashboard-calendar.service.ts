@@ -18,6 +18,31 @@ type EvrakLatestRecord = {
     gecerlilikTarihi: Date;
 };
 
+type ArizaKaydiRow = {
+    id: string;
+    aracId: string;
+    oncelik: DashboardArizaOncelik | null;
+    durum: "ACIK" | "SERVISTE" | null;
+    aciklama: string | null;
+    bildirimTarihi: Date | null;
+    arac: { plaka: string | null } | null;
+};
+
+type ArizaKaydiDelegate = {
+    findMany?: (args: {
+        where: Prisma.ArizaKaydiWhereInput;
+        select: {
+            id: true;
+            aracId: true;
+            oncelik: true;
+            durum: true;
+            aciklama: true;
+            bildirimTarihi: true;
+            arac: { select: { plaka: true } };
+        };
+    }) => Promise<ArizaKaydiRow[]>;
+};
+
 const ARIZA_PRIORITY_ORDER: Record<DashboardArizaOncelik, number> = {
     KRITIK: 0,
     YUKSEK: 0,
@@ -136,7 +161,7 @@ export async function getDashboardCalendarData(params: {
         };
     }
 
-    const arizaModel = (prisma as any).arizaKaydi;
+    const arizaModel = (prisma as unknown as { arizaKaydi?: ArizaKaydiDelegate }).arizaKaydi;
     const [muayeneRows, kaskoRows, trafikRows, unpaidCezalar, arizaRows] = await Promise.all([
         prisma.muayene.findMany({
             where: { ...(expenseScope as Prisma.MuayeneWhereInput), aracId: { in: aracIds } },
@@ -164,6 +189,7 @@ export async function getDashboardCalendarData(params: {
                             { tarih: { gte: seciliYilBasi, lte: seciliYilSonu } },
                         ],
                     },
+                    { deletedAt: null },
                 ],
             },
             select: {
@@ -230,7 +256,7 @@ export async function getDashboardCalendarData(params: {
                 alerts.push({
                     id: `m-${sonMuayene.id}`,
                     aracId: arac.id,
-                    plaka: arac.plaka,
+                    plaka: arac.plaka || '-',
                     message: daysLeft < 0 ? "Muayene Gecikti" : "Muayene Yaklaştı",
                     tarih: sonMuayene.gecerlilikTarihi.toISOString(),
                 });
@@ -254,7 +280,7 @@ export async function getDashboardCalendarData(params: {
                 alerts.push({
                     id: `k-${sonKasko.id}`,
                     aracId: arac.id,
-                    plaka: arac.plaka,
+                    plaka: arac.plaka || '-',
                     message: daysLeft < 0 ? "Kasko Gecikti" : "Kasko Bitiyor",
                     tarih: sonKasko.gecerlilikTarihi.toISOString(),
                 });
@@ -278,7 +304,7 @@ export async function getDashboardCalendarData(params: {
                 alerts.push({
                     id: `ts-${sonTrafik.id}`,
                     aracId: arac.id,
-                    plaka: arac.plaka,
+                    plaka: arac.plaka || '-',
                     message: daysLeft < 0 ? "Trafik Poliçesi Gecikti" : "Trafik Poliçesi Bitiyor",
                     tarih: sonTrafik.gecerlilikTarihi.toISOString(),
                 });
@@ -322,7 +348,7 @@ export async function getDashboardCalendarData(params: {
     alerts.sort((a, b) => new Date(a.tarih).getTime() - new Date(b.tarih).getTime());
     calendarEvents.sort((a, b) => a.date.localeCompare(b.date));
 
-    const operationArizalar: DashboardOperationArizaItem[] = (arizaRows as Array<any>)
+    const operationArizalar: DashboardOperationArizaItem[] = (arizaRows as ArizaKaydiRow[])
         .map((row) => ({
             id: row.id,
             aracId: row.aracId,

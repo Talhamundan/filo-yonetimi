@@ -10,6 +10,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import CompanyScopeSwitcher from "@/components/layout/CompanyScopeSwitcher";
 import YearScopeSwitcher from "@/components/layout/YearScopeSwitcher";
 import MonthScopeSwitcher from "@/components/layout/MonthScopeSwitcher";
+import CategoryScopeSwitcher from "@/components/layout/CategoryScopeSwitcher";
 import { DashboardScopeProvider } from "@/components/layout/DashboardScopeContext";
 import { cn } from "@/lib/utils";
 
@@ -197,6 +198,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                             </Link>
 
                             <div className="flex items-center justify-end gap-3">
+                                <CategoryScopeSwitcher />
                                 <YearScopeSwitcher />
                                 <MonthScopeSwitcher />
                                 {shouldShowCompanySwitcher ? (
@@ -340,6 +342,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                     !isMobileHeaderToolsOpen && "hidden"
                                 )}
                             >
+                                <CategoryScopeSwitcher />
                                 <YearScopeSwitcher />
                                 <MonthScopeSwitcher />
                                 {shouldShowCompanySwitcher ? (

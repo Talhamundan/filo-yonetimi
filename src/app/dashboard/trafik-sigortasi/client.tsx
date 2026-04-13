@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, ShieldAlert, RefreshCw } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
@@ -17,6 +17,11 @@ import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
+
+const ACENTE_OPTIONS = [
+    "Hisar Sigorta Aracılık Hizmetleri",
+    "Erçal Sigorta"
+];
 
 const oneYearAfter = (dateStr: string) => {
     const date = new Date(dateStr);
@@ -79,7 +84,16 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Acente</label>
-                <Input value={formData.acente} onChange={e => setFormData({...formData, acente: e.target.value})} placeholder="Örn: ABC Acente" className="h-9" />
+                <select 
+                    value={formData.acente} 
+                    onChange={e => setFormData({...formData, acente: e.target.value})}
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                    <option value="">Seçiniz...</option>
+                    {ACENTE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                </select>
             </div>
         </div>
         <div className="space-y-1.5">
@@ -122,12 +136,16 @@ const RenewFields = ({ renewData, setRenewData }: { renewData: any, setRenewData
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Acente</label>
-                <Input
-                    value={renewData.acente}
+                <select 
+                    value={renewData.acente} 
                     onChange={e => setRenewData({ ...renewData, acente: e.target.value })}
-                    placeholder="Örn: ABC Acente"
-                    className="h-9"
-                />
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                    <option value="">Seçiniz...</option>
+                    {ACENTE_OPTIONS.map(opt => (
+                        <option key={opt} value={opt}>{opt}</option>
+                    ))}
+                </select>
             </div>
         </div>
         <div className="space-y-1.5">
@@ -346,14 +364,17 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Araçlara ait trafik poliçelerinin yenileme dönemlerini ve aktiflik durumlarını yönetin.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
                             Yeni Poliçe Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Trafik Sigortası İşle</DialogTitle>
                             <DialogDescription>
@@ -370,8 +391,13 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
                 </Dialog>
             </header>
 
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Trafik Sigortasını Düzenle</DialogTitle>
                         <DialogDescription>"{editRow?.arac.plaka}" plakalı aracın poliçe bilgilerini güncelleyin.</DialogDescription>
@@ -385,8 +411,20 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!renewRow} onOpenChange={(o) => !o && setRenewRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={!!renewRow} onOpenChange={(o) => {
+                if (!o) {
+                    setRenewRow(null);
+                    setRenewData({
+                        sirket: '',
+                        acente: '',
+                        policeNo: '',
+                        yenilemeTarihi: renewDefaultStart,
+                        bitisTarihi: oneYearAfter(renewDefaultStart),
+                        tutar: ''
+                    });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Trafik Sigortası Yenile</DialogTitle>
                         <DialogDescription>{renewRow?.arac.plaka} plakalı araç için yeni dönem poliçe bilgilerini girin.</DialogDescription>

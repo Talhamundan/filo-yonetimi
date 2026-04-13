@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Plus, ShieldAlert } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { useConfirm } from "@/components/ui/confirm-modal";
@@ -337,14 +337,17 @@ export default function CezaMasraflariClient({
                             Araçlara ait ceza ödemelerini finans kalemi olarak takip edin.
                         </p>
                     </div>
-                    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                    <Dialog open={createOpen} onOpenChange={(v) => {
+                        setCreateOpen(v);
+                        if (!v) setFormData({ ...EMPTY });
+                    }}>
                         <DialogTrigger asChild>
                             <button className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                                 <Plus size={16} />
                                 Ceza Masrafi Ekle
                             </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[460px]">
+                        <DialogContent >
                             <DialogHeader>
                                 <DialogTitle>Yeni Ceza Masraf Kaydi</DialogTitle>
                                 <DialogDescription>Arac, ceza ve odeme bilgilerini girerek kaydi olusturun.</DialogDescription>
@@ -387,8 +390,13 @@ export default function CezaMasraflariClient({
                     excelEntity="ceza"
                 />
 
-                <Dialog open={!!editRow} onOpenChange={(open) => !open && setEditRow(null)}>
-                    <DialogContent className="sm:max-w-[460px]">
+                <Dialog open={!!editRow} onOpenChange={(open) => {
+                    if (!open) {
+                        setEditRow(null);
+                        setFormData({ ...EMPTY });
+                    }
+                }}>
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Ceza Masraf Kaydini Duzenle</DialogTitle>
                             <DialogDescription>Kaydi guncelleyip tekrar kaydedin.</DialogDescription>

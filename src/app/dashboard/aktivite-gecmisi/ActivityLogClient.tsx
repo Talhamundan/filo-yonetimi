@@ -26,6 +26,7 @@ const ENTITY_LABELS: Record<ActivityEntityType, string> = {
     DOKUMAN: "Doküman",
     CEZA: "Ceza",
     KULLANICI: "Kullanıcı",
+    TEDARKICI: "Tedarikçi",
     OTURUM: "Oturum",
     DIGER: "Diğer",
 };

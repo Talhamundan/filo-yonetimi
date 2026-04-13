@@ -5,7 +5,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../../../components
 import { Badge } from "../../../../components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "../../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
@@ -16,14 +16,15 @@ import { format } from "date-fns";
 import { tr } from "date-fns/locale";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { createZimmet, finalizeZimmet } from "../../zimmetler/actions";
-import { addBakim } from "../../bakimlar/actions";
-import { createYakit } from "../../yakitlar/actions";
-import { createMasraf } from "../../masraflar/actions";
-import { createSigorta } from "../../trafik-sigortasi/actions";
-import { createKasko } from "../../kasko/actions";
-import { createMuayene } from "../../muayeneler/actions";
-import { createDokuman } from "../../dokumanlar/actions";
+import { createZimmet, finalizeZimmet, deleteZimmet } from "../../zimmetler/actions";
+import { addBakim, updateBakim, deleteBakim } from "../../bakimlar/actions";
+import { createYakit, updateYakit, deleteYakit } from "../../yakitlar/actions";
+import { createMasraf, updateMasraf, deleteMasraf } from "../../masraflar/actions";
+import { createSigorta, updateSigorta, deleteSigorta } from "../../trafik-sigortasi/actions";
+import { createKasko, updateKasko, deleteKasko } from "../../kasko/actions";
+import { createMuayene, updateMuayene, deleteMuayene } from "../../muayeneler/actions";
+import { createDokuman, updateDokuman, deleteDokuman } from "../../dokumanlar/actions";
+import { createCeza, updateCeza, deleteCeza } from "../../cezalar/actions";
 import { deleteArizaKaydi, seviseGonderArizaKaydi, updateArizaKaydi } from "../../arizalar/actions";
 import { deleteArac, updateArac } from "../actions";
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status";
@@ -76,6 +77,7 @@ const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; descript
     bakim: { button: "Servis Kaydı Ekle", title: "Servis Kaydı Ekle", description: "Periyodik bakım veya arıza kaydını bu sekmeden oluşturun." },
     yakit: { button: "Yakıt Kaydı Ekle", title: "Yakıt Alım Bilgisi", description: "Yeni yakıt kaydını tablo alanlarıyla uyumlu şekilde girin." },
     masraflar: { button: "Masraf Ekle", title: "Ek Masraf Kaydı", description: "Araç için kategori bazlı gider kaydı oluşturun." },
+    ceza: { button: "Ceza Ekle", title: "Yeni Ceza Kaydı", description: "Araç için trafik cezası kaydı oluşturun." },
     sigorta: { button: "Poliçe Ekle", title: "Sigorta / Kasko Kaydı", description: "Trafik sigortası veya kasko kaydı ekleyin." },
     muayene: { button: "Muayene Ekle", title: "Muayene Kaydı", description: "Muayene tarih, sonuç ve ücret bilgilerini kaydedin." },
     dokuman: { button: "Evrak Ekle", title: "Yeni Evrak", description: "Araça ait dijital evrağı sisteme kaydedin." },
@@ -137,6 +139,14 @@ export default function AracDetailClient({
         tutar: "",
         aciklama: "",
     });
+    const [cezaForm, setCezaForm] = React.useState({
+        tarih: todayDate(),
+        sonOdemeTarihi: todayDate(),
+        soforId: "",
+        cezaMaddesi: "",
+        tutar: "",
+        odendiMi: false,
+    });
     const [sigortaTipi, setSigortaTipi] = React.useState<"TRAFIK" | "KASKO">("TRAFIK");
     const [sigortaForm, setSigortaForm] = React.useState({
         sirket: "",
@@ -185,6 +195,74 @@ export default function AracDetailClient({
         tutar: "",
         bildirimTarihi: nowDateTimeLocal(),
     });
+
+    const [actionLoading, setActionLoading] = React.useState(false);
+
+    const [editBakimRow, setEditBakimRow] = React.useState<AracDetaySaaS | null>(null);
+    const [bakimEditForm, setBakimEditForm] = React.useState({
+        bakimTarihi: todayDate(),
+        arizaSikayet: "",
+        yapilanIslemler: "",
+        degisenParca: "",
+        islemYapanFirma: "",
+        tutar: "",
+    });
+
+    const [editYakitRow, setEditYakitRow] = React.useState<AracDetaySaaS | null>(null);
+    const [yakitEditForm, setYakitEditForm] = React.useState({
+        tarih: nowDateTimeLocal(),
+        litre: "",
+        km: "",
+        istasyon: "",
+    });
+
+    const [editMasrafRow, setEditMasrafRow] = React.useState<AracDetaySaaS | null>(null);
+    const [masrafEditForm, setMasrafEditForm] = React.useState({
+        tarih: todayDate(),
+        tur: "BAKIM_ONARIM",
+        tutar: "",
+        aciklama: "",
+    });
+
+    const [editCezaRow, setEditCezaRow] = React.useState<AracDetaySaaS | null>(null);
+    const [cezaEditForm, setCezaEditForm] = React.useState({
+        tarih: todayDate(),
+        sonOdemeTarihi: todayDate(),
+        soforId: "",
+        cezaMaddesi: "",
+        tutar: "",
+        odendiMi: false,
+    });
+
+    const [editSigortaRow, setEditSigortaRow] = React.useState<AracDetaySaaS | null>(null);
+    const [sigortaEditTipi, setSigortaEditTipi] = React.useState<"TRAFIK" | "KASKO">("TRAFIK");
+    const [sigortaEditForm, setSigortaEditForm] = React.useState({
+        sirket: "",
+        acente: "",
+        policeNo: "",
+        baslangicTarihi: todayDate(),
+        bitisTarihi: oneYearAfter(todayDate()),
+        tutar: "",
+        aktifMi: true,
+    });
+
+    const [editMuayeneRow, setEditMuayeneRow] = React.useState<AracDetaySaaS | null>(null);
+    const [muayeneEditForm, setMuayeneEditForm] = React.useState({
+        muayeneTarihi: todayDate(),
+        gecerlilikTarihi: twoYearsAfter(todayDate()),
+        tutar: "",
+        gectiMi: true,
+        km: "",
+        aktifMi: true,
+    });
+
+    const [editDokumanRow, setEditDokumanRow] = React.useState<AracDetaySaaS | null>(null);
+    const [dokumanEditForm, setDokumanEditForm] = React.useState({
+        ad: "",
+        tur: "DIGER" as "RUHSAT" | "SIGORTA" | "KASKO" | "SERVIS_FATURA" | "DIGER",
+        dosyaUrl: "",
+    });
+
     const [editAracOpen, setEditAracOpen] = React.useState(false);
     const [updatingArac, setUpdatingArac] = React.useState(false);
     const [aracEditForm, setAracEditForm] = React.useState({
@@ -558,6 +636,370 @@ export default function AracDetailClient({
         toast.error("İşlem başarısız.", { description: res.error });
     };
 
+    const openBakimEdit = (row: AracDetaySaaS) => {
+        setEditBakimRow(row);
+        setBakimEditForm({
+            bakimTarihi: toDateTimeLocalInput(row.bakimTarihi),
+            arizaSikayet: row.arizaSikayet || "",
+            yapilanIslemler: row.yapilanIslemler || "",
+            degisenParca: row.degisenParca || "",
+            islemYapanFirma: row.islemYapanFirma || row.servisAdi || "",
+            tutar: row.tutar ? String(row.tutar) : "",
+        });
+    };
+
+    const closeBakimEdit = () => setEditBakimRow(null);
+
+    const handleUpdateBakim = async () => {
+        if (!editBakimRow) return;
+        setActionLoading(true);
+        const res = await updateBakim(editBakimRow.id, {
+            bakimTarihi: new Date(bakimEditForm.bakimTarihi),
+            arizaSikayet: bakimEditForm.arizaSikayet,
+            yapilanIslemler: bakimEditForm.yapilanIslemler,
+            degisenParca: bakimEditForm.degisenParca,
+            islemYapanFirma: bakimEditForm.islemYapanFirma,
+            tutar: Number(bakimEditForm.tutar || 0),
+            aracId: arac.id,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Servis kaydı güncellendi.");
+            closeBakimEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteBakim = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Servis Kaydını Sil",
+            message: "Bu servis kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteBakim(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Servis kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openYakitEdit = (row: AracDetaySaaS) => {
+        setEditYakitRow(row);
+        setYakitEditForm({
+            tarih: toDateTimeLocalInput(row.tarih),
+            litre: String(row.litre),
+            km: String(row.km),
+            istasyon: row.istasyon || "",
+        });
+    };
+
+    const closeYakitEdit = () => setEditYakitRow(null);
+
+    const handleUpdateYakit = async () => {
+        if (!editYakitRow) return;
+        setActionLoading(true);
+        const res = await updateYakit(editYakitRow.id, {
+            tarih: yakitEditForm.tarih,
+            litre: Number(yakitEditForm.litre),
+            km: Number(yakitEditForm.km),
+            istasyon: yakitEditForm.istasyon,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Yakıt kaydı güncellendi.");
+            closeYakitEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteYakit = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Yakıt Kaydını Sil",
+            message: "Bu yakıt kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteYakit(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Yakıt kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openMasrafEdit = (row: AracDetaySaaS) => {
+        setEditMasrafRow(row);
+        setMasrafEditForm({
+            tarih: toDateTimeLocalInput(row.tarih).slice(0, 10),
+            tur: row.tur,
+            tutar: String(row.tutar),
+            aciklama: row.aciklama || "",
+        });
+    };
+
+    const closeMasrafEdit = () => setEditMasrafRow(null);
+
+    const handleUpdateMasraf = async () => {
+        if (!editMasrafRow) return;
+        setActionLoading(true);
+        const res = await updateMasraf(editMasrafRow.id, {
+            tarih: masrafEditForm.tarih,
+            tur: masrafEditForm.tur,
+            tutar: Number(masrafEditForm.tutar),
+            aciklama: masrafEditForm.aciklama,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Masraf kaydı güncellendi.");
+            closeMasrafEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteMasraf = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Masraf Kaydını Sil",
+            message: "Bu masraf kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteMasraf(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Masraf kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openCezaEdit = (row: AracDetaySaaS) => {
+        setEditCezaRow(row);
+        setCezaEditForm({
+            tarih: toDateTimeLocalInput(row.tarih).slice(0, 10),
+            sonOdemeTarihi: toDateTimeLocalInput(row.sonOdemeTarihi || row.tarih).slice(0, 10),
+            soforId: row.soforId || "",
+            cezaMaddesi: row.cezaMaddesi || "",
+            tutar: String(row.tutar || 0),
+            odendiMi: row.odendiMi || false,
+        });
+    };
+
+    const closeCezaEdit = () => setEditCezaRow(null);
+
+    const handleUpdateCeza = async () => {
+        if (!editCezaRow) return;
+        setActionLoading(true);
+        const res = await updateCeza(editCezaRow.id, {
+            tarih: cezaEditForm.tarih,
+            sonOdemeTarihi: cezaEditForm.sonOdemeTarihi,
+            soforId: cezaEditForm.soforId || "",
+            cezaMaddesi: cezaEditForm.cezaMaddesi,
+            tutar: Number(cezaEditForm.tutar),
+            odendiMi: cezaEditForm.odendiMi,
+            aracId: arac.id,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Ceza kaydı güncellendi.");
+            closeCezaEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteCeza = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Ceza Kaydını Sil",
+            message: "Bu ceza kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteCeza(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Ceza kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openSigortaEdit = (row: AracDetaySaaS, tipi: "TRAFIK" | "KASKO") => {
+        setEditSigortaRow(row);
+        setSigortaEditTipi(tipi);
+        setSigortaEditForm({
+            sirket: row.sirket || "",
+            acente: row.acente || "",
+            policeNo: row.policeNo || "",
+            baslangicTarihi: toDateTimeLocalInput(row.baslangicTarihi).slice(0, 10),
+            bitisTarihi: toDateTimeLocalInput(row.bitisTarihi).slice(0, 10),
+            tutar: String(row.tutar || ""),
+            aktifMi: row.aktifMi ?? true,
+        });
+    };
+
+    const closeSigortaEdit = () => setEditSigortaRow(null);
+
+    const handleUpdateSigorta = async () => {
+        if (!editSigortaRow) return;
+        setActionLoading(true);
+        const action = sigortaEditTipi === "TRAFIK" ? updateSigorta : updateKasko;
+        const res = await action(editSigortaRow.id, {
+            ...sigortaEditForm,
+            tutar: sigortaEditForm.tutar ? Number(sigortaEditForm.tutar) : null,
+            aracId: arac.id,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Poliçe güncellendi.");
+            closeSigortaEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteSigorta = async (row: AracDetaySaaS, tipi: "TRAFIK" | "KASKO") => {
+        const confirmed = await openConfirm({
+            title: "Poliçeyi Sil",
+            message: "Bu poliçe kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const action = tipi === "TRAFIK" ? deleteSigorta : deleteKasko;
+        const res = await action(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Poliçe silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openMuayeneEdit = (row: AracDetaySaaS) => {
+        setEditMuayeneRow(row);
+        setMuayeneEditForm({
+            muayeneTarihi: toDateTimeLocalInput(row.muayeneTarihi).slice(0, 10),
+            gecerlilikTarihi: toDateTimeLocalInput(row.gecerlilikTarihi).slice(0, 10),
+            tutar: String(row.tutar || ""),
+            gectiMi: row.gectiMi ?? true,
+            km: String(row.km || ""),
+            aktifMi: row.aktifMi ?? true,
+        });
+    };
+
+    const closeMuayeneEdit = () => setEditMuayeneRow(null);
+
+    const handleUpdateMuayene = async () => {
+        if (!editMuayeneRow) return;
+        setActionLoading(true);
+        const res = await updateMuayene(editMuayeneRow.id, {
+            ...muayeneEditForm,
+            tutar: muayeneEditForm.tutar ? Number(muayeneEditForm.tutar) : null,
+            km: muayeneEditForm.km ? Number(muayeneEditForm.km) : null,
+            aracId: arac.id,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Muayene kaydı güncellendi.");
+            closeMuayeneEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteMuayene = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Muayene Kaydını Sil",
+            message: "Bu muayene kaydını silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteMuayene(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Muayene kaydı silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const openDokumanEdit = (row: AracDetaySaaS) => {
+        setEditDokumanRow(row);
+        setDokumanEditForm({
+            ad: row.ad || "",
+            tur: row.tur,
+            dosyaUrl: row.dosyaUrl || "",
+        });
+    };
+
+    const closeDokumanEdit = () => setEditDokumanRow(null);
+
+    const handleUpdateDokuman = async () => {
+        if (!editDokumanRow) return;
+        setActionLoading(true);
+        const res = await updateDokuman(editDokumanRow.id, {
+            ...dokumanEditForm,
+            aracId: arac.id,
+        });
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Evrak bilgisi güncellendi.");
+            closeDokumanEdit();
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
+    const handleDeleteDokuman = async (row: AracDetaySaaS) => {
+        const confirmed = await openConfirm({
+            title: "Evrakı Sil",
+            message: "Bu evrakı silmek istediğinize emin misiniz?",
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteDokuman(row.id);
+        setActionLoading(false);
+        if (res.success) {
+            toast.success("Evrak silindi.");
+            router.refresh();
+            return;
+        }
+        toast.error("İşlem başarısız.", { description: res.error });
+    };
+
     const getStatusBadge = (durum: string) => {
         switch (durum) {
             case 'AKTIF': return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-semibold px-3 py-1 border-0 shadow-none">Aktif</Badge>;
@@ -616,6 +1058,15 @@ export default function AracDetailClient({
                 tur: "BAKIM_ONARIM",
                 tutar: "",
                 aciklama: "",
+            });
+        } else if (tab === "ceza") {
+            setCezaForm({
+                tarih: todayDate(),
+                sonOdemeTarihi: todayDate(),
+                soforId: "",
+                cezaMaddesi: "",
+                tutar: "",
+                odendiMi: false,
             });
         } else if (tab === "sigorta") {
             setSigortaForm({
@@ -729,6 +1180,22 @@ export default function AracDetailClient({
                 });
                 if (!res.success) throw new Error(res.error || "Masraf kaydı oluşturulamadı.");
                 toast.success("Masraf kaydı eklendi.");
+            } else if (activeTab === "ceza") {
+                if (!cezaForm.tarih || !cezaForm.tutar) {
+                    toast.warning("Eksik Bilgi", { description: "Tarih ve tutar zorunludur." });
+                    return;
+                }
+                const res = await createCeza({
+                    aracId: arac.id,
+                    soforId: cezaForm.soforId || null,
+                    tarih: new Date(cezaForm.tarih),
+                    sonOdemeTarihi: cezaForm.sonOdemeTarihi ? new Date(cezaForm.sonOdemeTarihi) : null,
+                    cezaMaddesi: cezaForm.cezaMaddesi,
+                    tutar: Number(cezaForm.tutar),
+                    odendiMi: cezaForm.odendiMi,
+                });
+                if (!res.success) throw new Error(res.error || "Ceza kaydı oluşturulamadı.");
+                toast.success("Ceza kaydı eklendi.");
             } else if (activeTab === "sigorta") {
                 if (!sigortaForm.baslangicTarihi || !sigortaForm.bitisTarihi) {
                     toast.warning("Eksik Bilgi", { description: "Başlangıç ve bitiş tarihi zorunludur." });
@@ -941,6 +1408,49 @@ export default function AracDetailClient({
             );
         }
 
+        if (activeTab === "ceza") {
+            return (
+                <div className="grid gap-4 py-4">
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Ceza Tarihi <span className="text-red-500">*</span></label>
+                            <Input type="date" value={cezaForm.tarih} onChange={e => setCezaForm({ ...cezaForm, tarih: e.target.value })} className="h-9" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Son Ödeme (Opsiyonel)</label>
+                            <Input type="date" value={cezaForm.sonOdemeTarihi} onChange={e => setCezaForm({ ...cezaForm, sonOdemeTarihi: e.target.value })} className="h-9" />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Şoför</label>
+                        <SearchableSelect
+                            value={cezaForm.soforId}
+                            onValueChange={(v) => setCezaForm({ ...cezaForm, soforId: v })}
+                            placeholder="Şoför seçiniz..."
+                            options={[
+                                { value: "", label: "Şoför seçiniz..." },
+                                ...sortedKullanicilar.map(k => ({ value: k.id, label: k.adSoyad }))
+                            ]}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Ceza Maddesi</label>
+                            <Input value={cezaForm.cezaMaddesi} onChange={e => setCezaForm({ ...cezaForm, cezaMaddesi: e.target.value })} className="h-9" placeholder="Örn: 51/2-A" />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Tutar (₺) <span className="text-red-500">*</span></label>
+                            <Input type="number" value={cezaForm.tutar} onChange={e => setCezaForm({ ...cezaForm, tutar: e.target.value })} className="h-9" />
+                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <input type="checkbox" id="cezaOdendiMi" checked={cezaForm.odendiMi} onChange={e => setCezaForm({ ...cezaForm, odendiMi: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
+                        <label htmlFor="cezaOdendiMi" className="text-sm font-medium">Ödendi mi?</label>
+                    </div>
+                </div>
+            );
+        }
+
         if (activeTab === "sigorta") {
             return (
                 <div className="grid gap-4 py-4">
@@ -958,7 +1468,15 @@ export default function AracDetailClient({
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Acente</label>
-                            <Input value={sigortaForm.acente} onChange={e => setSigortaForm({ ...sigortaForm, acente: e.target.value })} className="h-9" />
+                            <select 
+                                value={sigortaForm.acente} 
+                                onChange={e => setSigortaForm({ ...sigortaForm, acente: e.target.value })} 
+                                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                            >
+                                <option value="">Seçiniz...</option>
+                                <option value="Hisar Sigorta Aracılık Hizmetleri">Hisar Sigorta Aracılık Hizmetleri</option>
+                                <option value="Erçal Sigorta">Erçal Sigorta</option>
+                            </select>
                         </div>
                     </div>
                     <div className="space-y-1.5">
@@ -1077,211 +1595,132 @@ export default function AracDetailClient({
                                 Araç Bilgilerini Düzenle
                             </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[560px] max-h-[88vh] overflow-y-auto">
+                        <DialogContent className="max-h-[88vh] overflow-y-auto">
                             <DialogHeader>
                                 <DialogTitle>Araç Bilgilerini Düzenle</DialogTitle>
                                 <DialogDescription>
-                                    {arac.plaka} için temel bilgileri ve güncel KM değerini güncelleyin.
+                                    "{arac.plaka}" plakalı aracın teknik ve idari bilgilerini güncelleyin.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="grid grid-cols-2 gap-3 py-2">
-                                <div className="col-span-2">
-                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Araç Bilgileri</p>
+                            <div className="grid gap-4 py-4">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
+                                        <Input value={aracEditForm.plaka} onChange={e => setAracEditForm({ ...aracEditForm, plaka: forceUppercase(e.target.value) })} className="h-9" placeholder="34ABC123" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Model Yılı</label>
+                                        <Input type="number" value={aracEditForm.yil} onChange={e => setAracEditForm({ ...aracEditForm, yil: Number(e.target.value) })} className="h-9" />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Plaka <span className="text-rose-500">*</span></label>
-                                    <Input
-                                        value={aracEditForm.plaka}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, plaka: forceUppercase(event.target.value) }))}
-                                        className="h-9 uppercase font-mono"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Marka <span className="text-red-500">*</span></label>
+                                        <Input value={aracEditForm.marka} onChange={e => setAracEditForm({ ...aracEditForm, marka: forceUppercase(e.target.value) })} className="h-9" placeholder="FORD" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Model <span className="text-red-500">*</span></label>
+                                        <Input value={aracEditForm.model} onChange={e => setAracEditForm({ ...aracEditForm, model: forceUppercase(e.target.value) })} className="h-9" placeholder="FOCUS" />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Marka <span className="text-rose-500">*</span></label>
-                                    <Input
-                                        value={aracEditForm.marka}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, marka: forceUppercase(event.target.value) }))}
-                                        className="h-9 uppercase"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Araç Türü</label>
+                                        <select value={aracEditForm.kategori} onChange={e => setAracEditForm({ ...aracEditForm, kategori: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
+                                            <option value="BINEK">Binek Araç</option>
+                                            <option value="HAFIF_TICARI">Hafif Ticari</option>
+                                            <option value="IS_MAKINESI">İş Makinesi</option>
+                                        </select>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Güncel Lokasyon / İl</label>
+                                        <select value={aracEditForm.bulunduguIl} onChange={e => setAracEditForm({ ...aracEditForm, bulunduguIl: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
+                                            {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Model <span className="text-rose-500">*</span></label>
-                                    <Input
-                                        value={aracEditForm.model}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, model: forceUppercase(event.target.value) }))}
-                                        className="h-9 uppercase"
-                                    />
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Güncel KM</label>
+                                        <Input type="number" value={aracEditForm.guncelKm} onChange={e => setAracEditForm({ ...aracEditForm, guncelKm: Number(e.target.value) })} className="h-9 font-medium" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Kira / Alım Bedeli (₺)</label>
+                                        <Input type="number" value={aracEditForm.bedel} onChange={e => setAracEditForm({ ...aracEditForm, bedel: e.target.value })} className="h-9" placeholder="0.00" />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
-                                    <Input
-                                        type="number"
-                                        value={aracEditForm.yil}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, yil: Number(event.target.value || 0) }))}
-                                        className="h-9"
-                                    />
+                                <div className="grid grid-cols-2 gap-3 border-t pt-4 mt-2">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Ruhsat Sahibi (Firma) <span className="text-red-500">*</span></label>
+                                        <SearchableSelect
+                                            value={aracEditForm.sirketId}
+                                            onValueChange={(v) => {
+                                                const sirket = sirketler.find(s => s.id === v);
+                                                setAracEditForm({
+                                                    ...aracEditForm,
+                                                    sirketId: v,
+                                                    bulunduguIl: sirket?.bulunduguIl || aracEditForm.bulunduguIl
+                                                });
+                                            }}
+                                            placeholder="Seçiniz..."
+                                            options={[
+                                                { value: "", label: "Seçiniz..." },
+                                                ...sirketler.map(s => ({ value: s.id, label: s.ad }))
+                                            ]}
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Kullanıcı Firma <span className="text-red-500">*</span></label>
+                                        <SearchableSelect
+                                            value={aracEditForm.calistigiKurum}
+                                            onValueChange={(v) => setAracEditForm({ ...aracEditForm, calistigiKurum: v })}
+                                            placeholder="Seçiniz..."
+                                            options={[
+                                                { value: "", label: "Seçiniz..." },
+                                                ...kullaniciFirmaOptions.map(opt => ({ value: opt, label: opt }))
+                                            ]}
+                                        />
+                                    </div>
                                 </div>
-                                <div className="space-y-1.5 col-span-2">
-                                    <label className="text-sm font-medium">Şase No (Opsiyonel)</label>
-                                    <Input
-                                        value={aracEditForm.saseNo}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, saseNo: forceUppercase(event.target.value) }))}
-                                        className="h-9 uppercase"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Muayene Geçerlilik Tarihi (Opsiyonel)</label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={aracEditForm.muayeneGecerlilikTarihi}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, muayeneGecerlilikTarihi: event.target.value }))}
-                                        className="h-9"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
-                                    <Input
-                                        type="number"
-                                        value={aracEditForm.guncelKm}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, guncelKm: Number(event.target.value || 0) }))}
-                                        className="h-9"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">BEDEL</label>
-                                    <Input
-                                        type="number"
-                                        value={aracEditForm.bedel}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, bedel: event.target.value }))}
-                                        className="h-9"
-                                        placeholder="₺"
-                                    />
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-                                    <select
-                                        value={aracEditForm.bulunduguIl}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, bulunduguIl: event.target.value }))}
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    >
-                                        {ILLER.map((il) => (
-                                            <option key={il.value} value={il.value}>
-                                                {il.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Araç Kategorisi</label>
-                                    <select
-                                        value={aracEditForm.kategori}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, kategori: event.target.value }))}
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    >
-                                        <option value="BINEK">Binek Araç</option>
-                                        <option value="SANTIYE">Şantiye Aracı</option>
-                                    </select>
-                                </div>
-                                <div className="col-span-2 pt-1">
-                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Ruhsat Sahibi Firma</label>
-                                    <select
-                                        value={aracEditForm.sirketId}
-                                        onChange={(event) => {
-                                            const nextSirketId = event.target.value;
-                                            const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
-                                            setAracEditForm((prev) => ({
-                                                ...prev,
-                                                sirketId: nextSirketId,
-                                                bulunduguIl: selectedSirket?.bulunduguIl || prev.bulunduguIl,
-                                            }));
-                                        }}
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    >
-                                        {canAssignIndependentRecords ? (
-                                            <option value="">Şirket Seçiniz (Bağımsız)</option>
-                                        ) : (
-                                            <option value="" disabled>Şirket Seçiniz</option>
-                                        )}
-                                        {canAssignIndependentRecords && !hasKiralikSirket ? (
-                                            <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>
-                                        ) : null}
-                                        {sirketler.map((sirket) => (
-                                            <option key={sirket.id} value={sirket.id}>
-                                                {sirket.ad}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Kullanıcı Firma</label>
-                                    <select
-                                        value={aracEditForm.calistigiKurum}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, calistigiKurum: event.target.value }))}
-                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                                    >
-                                        <option value="">Kullanıcı Firma Seçiniz</option>
-                                        {kullaniciFirmaOptions.map((firma) => (
-                                            <option key={firma} value={firma}>
-                                                {firma}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Kullanıcı</label>
+                                <div className="space-y-1.5 border-t pt-4">
+                                    <label className="text-sm font-medium">Atanmış Şoför / Kullanıcı</label>
                                     <SearchableSelect
                                         value={aracEditForm.kullaniciId}
-                                        onValueChange={(value) => {
-                                            const selectedKullanici = editAracFormKullanicilar.find((u) => u.id === value);
-                                            setAracEditForm((prev) => ({
-                                                ...prev,
-                                                kullaniciId: value,
-                                                calistigiKurum: selectedKullanici?.sirketAd || prev.calistigiKurum,
-                                            }));
-                                        }}
-                                        placeholder="Kullanıcı Seçiniz (Atanmamış)"
+                                        onValueChange={(v) => setAracEditForm({ ...aracEditForm, kullaniciId: v })}
+                                        placeholder="Atanmamış / Boşta"
                                         searchPlaceholder="Personel ara..."
                                         options={[
-                                            { value: "", label: "Kullanıcı Seçiniz (Atanmamış)" },
+                                            { value: "", label: "Atanmamış / Boşta" },
                                             ...editAracFormKullanicilar.map((u) => ({
                                                 value: u.id,
-                                                label: `${u.adSoyad}${u.sirketAd ? ` - ${u.sirketAd}` : ""}`,
-                                                searchText: `${u.adSoyad} ${u.sirketAd || ""}`,
+                                                label: getPersonelOptionLabel(u),
+                                                searchText: getPersonelOptionSearchText(u),
                                             })),
                                         ]}
                                     />
                                 </div>
-                                <div className="col-span-2 pt-1">
-                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Diğer Bilgiler</p>
+                                <div className="grid grid-cols-2 gap-3 mt-2">
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Ruhsat Seri No</label>
+                                        <Input value={aracEditForm.ruhsatSeriNo} onChange={e => setAracEditForm({ ...aracEditForm, ruhsatSeriNo: e.target.value })} className="h-9" placeholder="AA 123456" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Şase No</label>
+                                        <Input value={aracEditForm.saseNo} onChange={e => setAracEditForm({ ...aracEditForm, saseNo: forceUppercase(e.target.value) })} className="h-9 text-xs uppercase" />
+                                    </div>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Ruhsat Seri No</label>
-                                    <Input
-                                        value={aracEditForm.ruhsatSeriNo}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, ruhsatSeriNo: event.target.value }))}
-                                        className="h-9"
-                                    />
-                                </div>
-                                <div className="space-y-1.5 sm:col-span-2">
-                                    <label className="text-sm font-medium">Açıklama</label>
-                                    <textarea
-                                        value={aracEditForm.aciklama}
-                                        onChange={(event) => setAracEditForm((prev) => ({ ...prev, aciklama: event.target.value }))}
-                                        rows={2}
-                                        className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm"
-                                    />
+                                    <label className="text-sm font-medium">Ek Notlar / Açıklama</label>
+                                    <textarea value={aracEditForm.aciklama} onChange={e => setAracEditForm({ ...aracEditForm, aciklama: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-16 resize-none" />
                                 </div>
                             </div>
-                            <DialogFooter>
+                            <DialogFooter className="gap-2">
                                 <button
                                     onClick={handleUpdateAracBilgileri}
                                     disabled={updatingArac}
-                                    className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                                    className="bg-indigo-600 text-white hover:bg-indigo-700 px-6 py-2 rounded-md text-sm font-semibold shadow-md transition-all disabled:opacity-50"
                                 >
-                                    {updatingArac ? "Güncelleniyor..." : "Güncelle"}
+                                    {updatingArac ? 'Kaydediliyor...' : 'Değişiklikleri Kaydet'}
                                 </button>
                             </DialogFooter>
                         </DialogContent>
@@ -1344,50 +1783,36 @@ export default function AracDetailClient({
                             {arac.kullanici && (
                                 <Dialog
                                     open={soforIadeOpen}
-                                    onOpenChange={(open) => {
-                                        setSoforIadeOpen(open);
-                                        if (open) {
-                                            setSoforIadeForm({
-                                                bitis: nowDateTimeLocal(),
-                                                bitisKm: String(arac.guncelKm || 0),
-                                                notlar: activeZimmet?.notlar || "",
-                                            });
-                                        }
-                                    }}
+                                    onOpenChange={setSoforIadeOpen}
                                 >
                                     <DialogTrigger asChild>
-                                        <button
-                                            disabled={loading}
-                                            className="text-[10px] bg-rose-50 text-rose-600 hover:bg-rose-100 px-2 py-1 rounded font-bold uppercase transition-colors disabled:opacity-50"
-                                        >
-                                            Şoförden Ayır
-                                        </button>
+                                        <button className="flex-1 rounded-md border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">Teslim Al (Ayrıl)</button>
                                     </DialogTrigger>
-                                    <DialogContent className="sm:max-w-[420px]">
+                                    <DialogContent >
                                         <DialogHeader>
                                             <DialogTitle>Zimmeti Sonlandır</DialogTitle>
                                             <DialogDescription>
-                                                {arac.plaka} için teslim alma bilgilerini girin.
+                                                Araç personelden ayrılacak. İade tarihindeki kilometre bilgisini girin.
                                             </DialogDescription>
                                         </DialogHeader>
                                         <div className="grid gap-4 py-4">
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium">Teslim Alma Tarihi</label>
+                                                    <label className="text-sm font-medium">İade Tarihi</label>
                                                     <Input type="datetime-local" value={soforIadeForm.bitis} onChange={e => setSoforIadeForm({ ...soforIadeForm, bitis: e.target.value })} className="h-9" />
                                                 </div>
                                                 <div className="space-y-1.5">
-                                                    <label className="text-sm font-medium">Teslim Alma KM</label>
+                                                    <label className="text-sm font-medium">İade KM</label>
                                                     <Input type="number" value={soforIadeForm.bitisKm} onChange={e => setSoforIadeForm({ ...soforIadeForm, bitisKm: e.target.value })} className="h-9" />
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label className="text-sm font-medium">Not</label>
-                                                <Input value={soforIadeForm.notlar} onChange={e => setSoforIadeForm({ ...soforIadeForm, notlar: e.target.value })} className="h-9" placeholder="Opsiyonel not" />
+                                                <label className="text-sm font-medium">Notlar</label>
+                                                <Input value={soforIadeForm.notlar} onChange={e => setSoforIadeForm({ ...soforIadeForm, notlar: e.target.value })} className="h-9" />
                                             </div>
                                         </div>
                                         <DialogFooter>
-                                            <button onClick={handleUnassign} disabled={loading} className="bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                            <button onClick={handleUnassign} disabled={loading} className="bg-rose-600 text-white hover:bg-rose-700 px-4 py-2 rounded-md text-sm font-medium shadow transition-all disabled:opacity-50">
                                                 {loading ? "Sonlandırılıyor..." : "Zimmeti Sonlandır"}
                                             </button>
                                         </DialogFooter>
@@ -1397,18 +1822,13 @@ export default function AracDetailClient({
                             {!arac.kullanici && (
                                 <Dialog open={soforAtamaOpen} onOpenChange={setSoforAtamaOpen}>
                                     <DialogTrigger asChild>
-                                        <button
-                                            disabled={loading || kullanicilar.length === 0}
-                                            className="text-[10px] bg-indigo-50 text-indigo-700 hover:bg-indigo-100 px-2 py-1 rounded font-bold uppercase transition-colors disabled:opacity-50"
-                                        >
-                                            Şoför Ata
-                                        </button>
+                                        <button className="flex-1 rounded-md border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">Yeni Şoför Ata</button>
                                     </DialogTrigger>
-                                    <DialogContent className="sm:max-w-[420px]">
+                                    <DialogContent >
                                         <DialogHeader>
                                             <DialogTitle>Araca Şoför Ata</DialogTitle>
                                             <DialogDescription>
-                                                {arac.plaka} için şoför seçip yeni zimmet kaydı oluşturun.
+                                                Şoför seçerek aracı teslim edin. Teslim tarihindeki kilometreyi girin.
                                             </DialogDescription>
                                         </DialogHeader>
                                         <div className="grid gap-4 py-4">
@@ -1416,16 +1836,16 @@ export default function AracDetailClient({
                                                 <label className="text-sm font-medium">Şoför <span className="text-red-500">*</span></label>
                                                 <SearchableSelect
                                                     value={soforAtamaForm.kullaniciId}
-                                                    onValueChange={(value) => setSoforAtamaForm({ ...soforAtamaForm, kullaniciId: value })}
-                                                    placeholder="Şoför seçiniz..."
+                                                    onValueChange={v => setSoforAtamaForm({ ...soforAtamaForm, kullaniciId: v })}
+                                                    placeholder="Şoför Seçiniz..."
                                                     searchPlaceholder="Personel ara..."
                                                     options={[
-                                                        { value: "", label: "Şoför seçiniz..." },
-                                                        ...sortedKullanicilar.map((k) => ({
+                                                        { value: "", label: "Şoför Seçiniz..." },
+                                                        ...sortedKullanicilar.map(k => ({
                                                             value: k.id,
                                                             label: getPersonelOptionLabel(k),
                                                             searchText: getPersonelOptionSearchText(k),
-                                                        })),
+                                                        }))
                                                     ]}
                                                 />
                                             </div>
@@ -1440,13 +1860,13 @@ export default function AracDetailClient({
                                                 </div>
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label className="text-sm font-medium">Not</label>
-                                                <Input value={soforAtamaForm.notlar} onChange={e => setSoforAtamaForm({ ...soforAtamaForm, notlar: e.target.value })} className="h-9" placeholder="Opsiyonel not" />
+                                                <label className="text-sm font-medium">Notlar</label>
+                                                <Input value={soforAtamaForm.notlar} onChange={e => setSoforAtamaForm({ ...soforAtamaForm, notlar: e.target.value })} className="h-9" />
                                             </div>
                                         </div>
                                         <DialogFooter>
-                                            <button onClick={handleAssignSofor} disabled={loading || !soforAtamaForm.kullaniciId} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
-                                                {loading ? "Atanıyor..." : "Şoför Ata"}
+                                            <button onClick={handleAssignSofor} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow transition-all disabled:opacity-50">
+                                                {loading ? "Atanıyor..." : "Atamayı Tamamla"}
                                             </button>
                                         </DialogFooter>
                                     </DialogContent>
@@ -1476,7 +1896,7 @@ export default function AracDetailClient({
                 </div>
 
                 <Dialog open={!!editArizaRow} onOpenChange={(open) => !open && closeArizaEdit()}>
-                    <DialogContent className="sm:max-w-[520px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
                             <DialogDescription>{arac.plaka} için kayıt bilgilerini güncelleyin.</DialogDescription>
@@ -1516,18 +1936,17 @@ export default function AracDetailClient({
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Personel / Şoför</label>
+                                    <label className="text-sm font-medium">Bildiren Personel</label>
                                     <SearchableSelect
                                         value={arizaEditForm.soforId}
-                                        onValueChange={(value) => setArizaEditForm((prev) => ({ ...prev, soforId: value }))}
-                                        placeholder="Seçilmedi"
+                                        onValueChange={(val) => setArizaEditForm((prev) => ({ ...prev, soforId: val }))}
+                                        placeholder="Personel Seçin"
                                         searchPlaceholder="Personel ara..."
                                         options={[
                                             { value: "", label: "Seçilmedi" },
-                                            ...arizaSoforOptions.map((k) => ({
-                                                value: k.id,
-                                                label: getPersonelOptionLabel(k),
-                                                searchText: getPersonelOptionSearchText(k),
+                                            ...arizaSoforOptions.map((o) => ({
+                                                value: o.id,
+                                                label: o.adSoyad,
                                             })),
                                         ]}
                                     />
@@ -1535,48 +1954,330 @@ export default function AracDetailClient({
                             </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Arıza Açıklaması <span className="text-red-500">*</span></label>
-                                <textarea
-                                    value={arizaEditForm.aciklama}
-                                    onChange={(event) => setArizaEditForm((prev) => ({ ...prev, aciklama: event.target.value }))}
-                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none"
-                                />
+                                <textarea value={arizaEditForm.aciklama} onChange={(e) => setArizaEditForm({ ...arizaEditForm, aciklama: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400" />
                             </div>
-                            <div className="grid grid-cols-2 gap-3">
+                            <div className="grid grid-cols-2 gap-3 border-t pt-4">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Servis Adı</label>
-                                    <Input
-                                        value={arizaEditForm.servisAdi}
-                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, servisAdi: event.target.value }))}
-                                        className="h-9"
-                                    />
+                                    <label className="text-sm font-medium">Servis / Firma Adı</label>
+                                    <Input value={arizaEditForm.servisAdi} onChange={(e) => setArizaEditForm({ ...arizaEditForm, servisAdi: e.target.value })} className="h-9" />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Tutar (₺)</label>
-                                    <Input
-                                        type="number"
-                                        step="0.01"
-                                        value={arizaEditForm.tutar}
-                                        onChange={(event) => setArizaEditForm((prev) => ({ ...prev, tutar: event.target.value }))}
-                                        className="h-9"
-                                    />
+                                    <label className="text-sm font-medium">Tutar (Opsiyonel)</label>
+                                    <Input type="number" value={arizaEditForm.tutar} onChange={(e) => setArizaEditForm({ ...arizaEditForm, tutar: e.target.value })} className="h-9" />
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Yapılan / Planlanan İşlemler</label>
-                                <textarea
-                                    value={arizaEditForm.yapilanIslemler}
-                                    onChange={(event) => setArizaEditForm((prev) => ({ ...prev, yapilanIslemler: event.target.value }))}
-                                    className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none"
-                                />
+                                <label className="text-sm font-medium">Yapılan İşlemler</label>
+                                <textarea value={arizaEditForm.yapilanIslemler} onChange={(e) => setArizaEditForm({ ...arizaEditForm, yapilanIslemler: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-16 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400" />
                             </div>
                         </div>
                         <DialogFooter>
                             <button
                                 onClick={handleUpdateAriza}
                                 disabled={arizaActionLoading}
-                                className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                                className="bg-indigo-600 text-white hover:bg-indigo-700 px-6 py-2 rounded-md text-sm font-semibold shadow transition-all disabled:opacity-50"
                             >
                                 {arizaActionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Bakım Düzenle */}
+                <Dialog open={!!editBakimRow} onOpenChange={(open) => !open && closeBakimEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Servis Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>{arac.plaka} için servis kaydı detaylarını güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Bakım/Servis Tarihi</label>
+                                    <Input type="datetime-local" value={bakimEditForm.bakimTarihi} onChange={e => setBakimEditForm({ ...bakimEditForm, bakimTarihi: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tutar (₺)</label>
+                                    <Input type="number" value={bakimEditForm.tutar} onChange={e => setBakimEditForm({ ...bakimEditForm, tutar: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Servis/Firma Adı</label>
+                                <Input value={bakimEditForm.islemYapanFirma} onChange={e => setBakimEditForm({ ...bakimEditForm, islemYapanFirma: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Arıza/Şikayet Özeti</label>
+                                <Input value={bakimEditForm.arizaSikayet} onChange={e => setBakimEditForm({ ...bakimEditForm, arizaSikayet: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Yapılan İşlemler</label>
+                                <textarea value={bakimEditForm.yapilanIslemler} onChange={e => setBakimEditForm({ ...bakimEditForm, yapilanIslemler: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-16 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Değişen Parçalar</label>
+                                <Input value={bakimEditForm.degisenParca} onChange={e => setBakimEditForm({ ...bakimEditForm, degisenParca: e.target.value })} className="h-9" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateBakim} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Yakıt Düzenle */}
+                <Dialog open={!!editYakitRow} onOpenChange={(open) => !open && closeYakitEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Yakıt Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>Yakıt alım bilgilerini güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Tarih</label>
+                                <Input type="datetime-local" value={yakitEditForm.tarih} onChange={e => setYakitEditForm({ ...yakitEditForm, tarih: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Litre</label>
+                                    <Input type="number" step="0.01" value={yakitEditForm.litre} onChange={e => setYakitEditForm({ ...yakitEditForm, litre: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Araç KM</label>
+                                    <Input type="number" value={yakitEditForm.km} onChange={e => setYakitEditForm({ ...yakitEditForm, km: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">İstasyon / Kaynak</label>
+                                <Input value={yakitEditForm.istasyon} onChange={e => setYakitEditForm({ ...yakitEditForm, istasyon: e.target.value })} className="h-9" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateYakit} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Masraf Düzenle */}
+                <Dialog open={!!editMasrafRow} onOpenChange={(open) => !open && closeMasrafEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Masraf Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>Harcama bilgilerini güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tarih</label>
+                                    <Input type="date" value={masrafEditForm.tarih} onChange={e => setMasrafEditForm({ ...masrafEditForm, tarih: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tutar (₺)</label>
+                                    <Input type="number" value={masrafEditForm.tutar} onChange={e => setMasrafEditForm({ ...masrafEditForm, tutar: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Tür</label>
+                                <select value={masrafEditForm.tur} onChange={e => setMasrafEditForm({ ...masrafEditForm, tur: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
+                                    {MASRAF_TURLERI.map(tur => <option key={tur} value={tur}>{tur.replace(/_/g, " ")}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Açıklama</label>
+                                <Input value={masrafEditForm.aciklama} onChange={e => setMasrafEditForm({ ...masrafEditForm, aciklama: e.target.value })} className="h-9" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateMasraf} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Ceza Düzenle */}
+                <Dialog open={!!editCezaRow} onOpenChange={(open) => !open && closeCezaEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Ceza Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>Trafik cezası detaylarını güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ceza Tarihi</label>
+                                    <Input type="date" value={cezaEditForm.tarih} onChange={e => setCezaEditForm({ ...cezaEditForm, tarih: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Son Ödeme Tarihi</label>
+                                    <Input type="date" value={cezaEditForm.sonOdemeTarihi} onChange={e => setCezaEditForm({ ...cezaEditForm, sonOdemeTarihi: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Şoför</label>
+                                <SearchableSelect
+                                    value={cezaEditForm.soforId}
+                                    onValueChange={(v) => setCezaEditForm({ ...cezaEditForm, soforId: v })}
+                                    placeholder="Personel seçiniz..."
+                                    options={[
+                                        { value: "", label: "Seçiniz..." },
+                                        ...sortedKullanicilar.map(k => ({ value: k.id, label: k.adSoyad }))
+                                    ]}
+                                />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ceza Maddesi</label>
+                                    <Input value={cezaEditForm.cezaMaddesi} onChange={e => setCezaEditForm({ ...cezaEditForm, cezaMaddesi: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tutar (₺)</label>
+                                    <Input type="number" value={cezaEditForm.tutar} onChange={e => setCezaEditForm({ ...cezaEditForm, tutar: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <input type="checkbox" id="editCezaOdendi" checked={cezaEditForm.odendiMi} onChange={e => setCezaEditForm({ ...cezaEditForm, odendiMi: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
+                                <label htmlFor="editCezaOdendi" className="text-sm font-medium">Ceza Ödendi</label>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateCeza} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Sigorta/Kasko Düzenle */}
+                <Dialog open={!!editSigortaRow} onOpenChange={(open) => !open && closeSigortaEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>{sigortaEditTipi === "TRAFIK" ? "Trafik Sigortasını Düzenle" : "Kasko Poliçesini Düzenle"}</DialogTitle>
+                            <DialogDescription>Poliçe bilgilerini güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Şirket</label>
+                                    <Input value={sigortaEditForm.sirket} onChange={e => setSigortaEditForm({ ...sigortaEditForm, sirket: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Acente</label>
+                                    <Input value={sigortaEditForm.acente} onChange={e => setSigortaEditForm({ ...sigortaEditForm, acente: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Poliçe No</label>
+                                <Input value={sigortaEditForm.policeNo} onChange={e => setSigortaEditForm({ ...sigortaEditForm, policeNo: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Başlangıç Tarihi</label>
+                                    <Input type="date" value={sigortaEditForm.baslangicTarihi} onChange={e => setSigortaEditForm({ ...sigortaEditForm, baslangicTarihi: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Bitiş Tarihi</label>
+                                    <Input type="date" value={sigortaEditForm.bitisTarihi} onChange={e => setSigortaEditForm({ ...sigortaEditForm, bitisTarihi: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Tutar (₺)</label>
+                                    <Input type="number" value={sigortaEditForm.tutar} onChange={e => setSigortaEditForm({ ...sigortaEditForm, tutar: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="flex items-center gap-2 pt-6">
+                                    <input type="checkbox" id="editSigortaAktif" checked={sigortaEditForm.aktifMi} onChange={e => setSigortaEditForm({ ...sigortaEditForm, aktifMi: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
+                                    <label htmlFor="editSigortaAktif" className="text-sm font-medium">Poliçe Aktif</label>
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateSigorta} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Muayene Düzenle */}
+                <Dialog open={!!editMuayeneRow} onOpenChange={(open) => !open && closeMuayeneEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Muayene Kaydını Düzenle</DialogTitle>
+                            <DialogDescription>Muayene bilgilerini güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Muayene Tarihi</label>
+                                    <Input type="date" value={muayeneEditForm.muayeneTarihi} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, muayeneTarihi: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Geçerlilik Tarihi</label>
+                                    <Input type="date" value={muayeneEditForm.gecerlilikTarihi} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, gecerlilikTarihi: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ücret (₺)</label>
+                                    <Input type="number" value={muayeneEditForm.tutar} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, tutar: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">KM</label>
+                                    <Input type="number" value={muayeneEditForm.km} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, km: e.target.value })} className="h-9" />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Durum</label>
+                                    <select value={muayeneEditForm.gectiMi ? "GECTI" : "GECMEDI"} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, gectiMi: e.target.value === "GECTI" })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
+                                        <option value="GECTI">Geçti</option>
+                                        <option value="GECMEDI">Geçmedi</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-2 pt-6">
+                                    <input type="checkbox" id="editMuayeneAktif" checked={muayeneEditForm.aktifMi} onChange={e => setMuayeneEditForm({ ...muayeneEditForm, aktifMi: e.target.checked })} className="h-4 w-4 rounded border-slate-300" />
+                                    <label htmlFor="editMuayeneAktif" className="text-sm font-medium">Kayıt Aktif</label>
+                                </div>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateMuayene} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Evrak Düzenle */}
+                <Dialog open={!!editDokumanRow} onOpenChange={(open) => !open && closeDokumanEdit()}>
+                    <DialogContent >
+                        <DialogHeader>
+                            <DialogTitle>Evrak Bilgisini Düzenle</DialogTitle>
+                            <DialogDescription>Dosya bilgilerini ve türünü güncelleyin.</DialogDescription>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Belge Adı</label>
+                                <Input value={dokumanEditForm.ad} onChange={e => setDokumanEditForm({ ...dokumanEditForm, ad: e.target.value })} className="h-9" />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Kategori</label>
+                                <select value={dokumanEditForm.tur} onChange={e => setDokumanEditForm({ ...dokumanEditForm, tur: e.target.value as any })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
+                                    {DOKUMAN_TURLERI.map(tur => <option key={tur.value} value={tur.value}>{tur.label}</option>)}
+                                </select>
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Dosya URL</label>
+                                <Input value={dokumanEditForm.dosyaUrl} onChange={e => setDokumanEditForm({ ...dokumanEditForm, dosyaUrl: e.target.value })} className="h-9 text-xs" />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button onClick={handleUpdateDokuman} disabled={actionLoading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium shadow-md transition-all disabled:opacity-50">
+                                {actionLoading ? "Güncelleniyor..." : "Güncelle"}
                             </button>
                         </DialogFooter>
                     </DialogContent>
@@ -1621,14 +2322,19 @@ export default function AracDetailClient({
 
                     {QUICK_ADD_CONFIG[activeTab] && (
                         <div className="mt-4 flex justify-end">
-                            <Dialog open={quickAddOpen} onOpenChange={setQuickAddOpen}>
+                            <Dialog open={quickAddOpen} onOpenChange={(open) => {
+                                setQuickAddOpen(open);
+                                if (!open) {
+                                    resetFormForTab(activeTab);
+                                }
+                            }}>
                                 <DialogTrigger asChild>
-                                    <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
-                                        <Plus size={15} />
+                                    <button className="inline-flex items-center gap-2 rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-md transition-all hover:bg-indigo-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600">
+                                        <Plus size={16} />
                                         {QUICK_ADD_CONFIG[activeTab].button}
                                     </button>
                                 </DialogTrigger>
-                                <DialogContent className="sm:max-w-[460px]">
+                                <DialogContent >
                                     <DialogHeader>
                                         <DialogTitle>{QUICK_ADD_CONFIG[activeTab].title}</DialogTitle>
                                         <DialogDescription>{QUICK_ADD_CONFIG[activeTab].description}</DialogDescription>
@@ -1638,9 +2344,9 @@ export default function AracDetailClient({
                                         <button
                                             onClick={handleQuickCreate}
                                             disabled={submittingQuickAdd}
-                                            className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50"
+                                            className="bg-indigo-600 text-white hover:bg-indigo-700 px-6 py-2 rounded-md text-sm font-semibold shadow transition-all disabled:opacity-50"
                                         >
-                                            {submittingQuickAdd ? "Kaydediliyor..." : "Kaydet"}
+                                            {submittingQuickAdd ? "Kaydediliyor..." : "Kaydı Oluştur"}
                                         </button>
                                     </DialogFooter>
                                 </DialogContent>
@@ -1791,6 +2497,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Değişen Parça</TableHead>
                                             <TableHead className="font-semibold text-slate-500">İşlem Yapan Firma</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Masraf Tutarı</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1803,10 +2510,16 @@ export default function AracDetailClient({
                                                     <TableCell className="text-slate-600 max-w-[220px] truncate" title={b.degisenParca || ""}>{b.degisenParca || '-'}</TableCell>
                                                     <TableCell className="text-slate-900">{b.islemYapanFirma || b.servisAdi || '-'}</TableCell>
                                                     <TableCell className="font-bold text-slate-900 text-right">₺{Number(b.tutar || 0).toLocaleString("tr-TR")}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <RowActionButton variant="edit" onClick={() => openBakimEdit(b)} disabled={actionLoading} />
+                                                            <RowActionButton variant="delete" onClick={() => handleDeleteBakim(b)} disabled={actionLoading} />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
-                                            <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">Servis kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Servis kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -1920,6 +2633,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Araç KM</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Litre (L)</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1947,10 +2661,16 @@ export default function AracDetailClient({
                                                     <TableCell className="text-slate-700">{y.km.toLocaleString()} km</TableCell>
                                                     <TableCell className="text-slate-700">{y.litre} L</TableCell>
                                                     <TableCell className="font-bold text-slate-900 text-right">₺{y.tutar.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <RowActionButton variant="edit" onClick={() => openYakitEdit(y)} disabled={actionLoading} />
+                                                            <RowActionButton variant="delete" onClick={() => handleDeleteYakit(y)} disabled={actionLoading} />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
-                                            <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">Yakıt kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Yakıt kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -1966,6 +2686,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Tarih</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Masraf Türü</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -1975,10 +2696,16 @@ export default function AracDetailClient({
                                                     <TableCell className="text-slate-700">{formatDate(m.tarih)}</TableCell>
                                                     <TableCell className="text-slate-900"><Badge variant="outline">{m.tur}</Badge></TableCell>
                                                     <TableCell className="font-bold text-slate-900 text-right">₺{m.tutar.toLocaleString()}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <RowActionButton variant="edit" onClick={() => openMasrafEdit(m)} disabled={actionLoading} />
+                                                            <RowActionButton variant="delete" onClick={() => handleDeleteMasraf(m)} disabled={actionLoading} />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
-                                            <TableRow><TableCell colSpan={3} className="h-32 text-center text-slate-500">Ekstra masraf kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Ekstra masraf kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -1997,6 +2724,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Ceza Maddesi</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Durum</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -2044,11 +2772,17 @@ export default function AracDetailClient({
                                                             })()}
                                                         </TableCell>
                                                         <TableCell className="font-bold text-slate-900 text-right">₺{Number(c.tutar || 0).toLocaleString("tr-TR")}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <RowActionButton variant="edit" onClick={() => openCezaEdit(c)} disabled={actionLoading} />
+                                                                <RowActionButton variant="delete" onClick={() => handleDeleteCeza(c)} disabled={actionLoading} />
+                                                            </div>
+                                                        </TableCell>
                                                     </TableRow>
                                                 );
                                             })
                                         ) : (
-                                            <TableRow><TableCell colSpan={6} className="h-32 text-center text-slate-500">Ceza kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Ceza kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -2068,6 +2802,7 @@ export default function AracDetailClient({
                                                 <TableHead className="font-semibold text-slate-500">Bitiş Tarihi</TableHead>
                                                 <TableHead className="font-semibold text-slate-500">Şirket</TableHead>
                                                 <TableHead className="font-semibold text-slate-500 text-right">Tutar</TableHead>
+                                                <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -2077,10 +2812,16 @@ export default function AracDetailClient({
                                                         <TableCell className="text-slate-700">{formatDate(s.bitisTarihi)} <span className="ml-2">{renderDeadlineBadge(s.bitisTarihi, s.aktifMi)}</span></TableCell>
                                                         <TableCell className="text-slate-900">{s.sirket || '-'}</TableCell>
                                                         <TableCell className="text-slate-900 text-right">{s.tutar ? `₺${s.tutar.toLocaleString()}` : '-'}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <RowActionButton variant="edit" onClick={() => openSigortaEdit(s, "TRAFIK")} disabled={actionLoading} />
+                                                                <RowActionButton variant="delete" onClick={() => handleDeleteSigorta(s, "TRAFIK")} disabled={actionLoading} />
+                                                            </div>
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))
                                             ) : (
-                                                <TableRow><TableCell colSpan={3} className="h-32 text-center text-slate-500">Trafik sigortası kaydı bulunmuyor.</TableCell></TableRow>
+                                                <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Trafik sigortası kaydı bulunmuyor.</TableCell></TableRow>
                                             )}
                                         </TableBody>
                                     </Table>
@@ -2095,6 +2836,7 @@ export default function AracDetailClient({
                                                 <TableHead className="font-semibold text-slate-500">Bitiş Tarihi</TableHead>
                                                 <TableHead className="font-semibold text-slate-500">Şirket</TableHead>
                                                 <TableHead className="font-semibold text-slate-500 text-right">Tutar</TableHead>
+                                                <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -2104,10 +2846,16 @@ export default function AracDetailClient({
                                                         <TableCell className="text-slate-700">{formatDate(k.bitisTarihi)} <span className="ml-2">{renderDeadlineBadge(k.bitisTarihi, k.aktifMi)}</span></TableCell>
                                                         <TableCell className="text-slate-900">{k.sirket || '-'}</TableCell>
                                                         <TableCell className="text-slate-900 text-right">{k.tutar ? `₺${k.tutar.toLocaleString()}` : '-'}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <RowActionButton variant="edit" onClick={() => openSigortaEdit(k, "KASKO")} disabled={actionLoading} />
+                                                                <RowActionButton variant="delete" onClick={() => handleDeleteSigorta(k, "KASKO")} disabled={actionLoading} />
+                                                            </div>
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))
                                             ) : (
-                                                <TableRow><TableCell colSpan={3} className="h-32 text-center text-slate-500">Kasko poliçesi bulunmuyor.</TableCell></TableRow>
+                                                <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Kasko poliçesi bulunmuyor.</TableCell></TableRow>
                                             )}
                                         </TableBody>
                                     </Table>
@@ -2125,6 +2873,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Geçerlilik Bitiş</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Muayene Ücreti</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Durum</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -2135,10 +2884,16 @@ export default function AracDetailClient({
                                                     <TableCell className="font-medium text-slate-900">{formatDate(m.gecerlilikTarihi)}</TableCell>
                                                     <TableCell className="text-slate-900 text-right">{m.tutar ? `₺${Number(m.tutar).toLocaleString('tr-TR')}` : '-'}</TableCell>
                                                     <TableCell className="text-right">{m.gectiMi === false ? <Badge className="bg-rose-100 text-rose-800 border-0 shadow-none">Geçmedi</Badge> : renderDeadlineBadge(m.gecerlilikTarihi, m.aktifMi)}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <RowActionButton variant="edit" onClick={() => openMuayeneEdit(m)} disabled={actionLoading} />
+                                                            <RowActionButton variant="delete" onClick={() => handleDeleteMuayene(m)} disabled={actionLoading} />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
-                                            <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Muayene kaydı bulunmuyor.</TableCell></TableRow>
+                                            <TableRow><TableCell colSpan={5} className="h-32 text-center text-slate-500">Muayene kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
                                 </Table>
@@ -2154,7 +2909,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Yüklenme Tarihi</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Doküman Adı</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Kategori</TableHead>
-                                            <TableHead className="font-semibold text-slate-500 text-right">Aksiyon</TableHead>
+                                            <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -2162,9 +2917,14 @@ export default function AracDetailClient({
                                             arac.dokumanlar.map((d: AracDetaySaaS) => (
                                                 <TableRow key={d.id}>
                                                     <TableCell className="text-slate-700">{formatDate(d.yuklemeTarihi)}</TableCell>
-                                                    <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer">{d.ad}</TableCell>
+                                                    <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer" onClick={() => d.dosyaUrl && window.open(d.dosyaUrl, '_blank')}>{d.ad}</TableCell>
                                                     <TableCell className="text-slate-600"><Badge variant="outline">{d.tur}</Badge></TableCell>
-                                                    <TableCell className="text-right"><span className="text-sm font-medium text-slate-500 hover:text-indigo-600 cursor-pointer">Görüntüle</span></TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <RowActionButton variant="edit" onClick={() => openDokumanEdit(d)} disabled={actionLoading} />
+                                                            <RowActionButton variant="delete" onClick={() => handleDeleteDokuman(d)} disabled={actionLoading} />
+                                                        </div>
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (

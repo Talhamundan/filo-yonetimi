@@ -73,7 +73,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
 
     const [bakimlar, arizalar, kasko, trafikSigortasi, yakitlar, masraflar, cezalar, dokumanlar] = await Promise.all([
         (prisma as any).bakim.findMany({
-            where: { aracId },
+            where: { aracId, deletedAt: null },
             orderBy: { bakimTarihi: "desc" },
         }).catch((error: unknown) => {
             console.warn("Arac detay bakim sorgusu basarisiz.", error);
@@ -149,14 +149,14 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
             });
         }),
         (prisma as any).masraf.findMany({
-            where: { aracId },
+            where: { aracId, deletedAt: null },
             orderBy: { tarih: "desc" },
         }).catch((error: unknown) => {
             console.warn("Arac detay masraf sorgusu basarisiz.", error);
             return [];
         }),
         (prisma as any).ceza.findMany({
-            where: { aracId },
+            where: { aracId, deletedAt: null },
             orderBy: [{ odendiMi: "asc" }, { sonOdemeTarihi: "asc" }, { tarih: "desc" }],
             include: {
                 kullanici: {
@@ -172,7 +172,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
             return [];
         }),
         (prisma as any).dokuman.findMany({
-            where: { aracId },
+            where: { aracId, deletedAt: null },
             orderBy: { yuklemeTarihi: "desc" },
         }).catch((error: unknown) => {
             console.warn("Arac detay dokuman sorgusu basarisiz.", error);

@@ -66,6 +66,64 @@ export async function createDokuman(data: {
         return { success: false, error: "Doküman eklenirken bir hata oluştu." };
     }
 }
+export async function updateDokuman(id: string, data: {
+    ad?: string;
+    tur?: any;
+    dosyaUrl?: string;
+    aracId?: string;
+}) {
+    try {
+        const actor = await assertAuthenticatedUser();
+        const mevcutKayit = await getScopedRecordOrThrow({
+            prismaModel: "dokuman",
+            filterModel: "dokuman",
+            id,
+            select: { aracId: true },
+            errorMessage: "Doküman bulunamadı veya yetkiniz yok.",
+        });
+
+        const arac = data.aracId
+            ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
+            : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
+
+        const usageSirketId = await resolveVehicleUsageCompanyId({
+            aracId: arac.id,
+            fallbackSirketId: arac.sirketId,
+        });
+
+        const updated = await prisma.dokuman.update({
+            where: { id },
+            data: {
+                ad: data.ad !== undefined ? data.ad : undefined,
+                tur: data.tur !== undefined ? data.tur : undefined,
+                dosyaUrl: data.dosyaUrl !== undefined ? data.dosyaUrl : undefined,
+                aracId: arac.id,
+                sirketId: usageSirketId,
+            }
+        });
+
+        await logEntityActivity({
+            actionType: ActivityActionType.UPDATE,
+            entityType: ActivityEntityType.DOKUMAN,
+            entityId: updated.id,
+            summary: "Doküman güncellendi.",
+            actor,
+            companyId: updated.sirketId || actor.sirketId || null,
+            metadata: {
+                ad: updated.ad,
+                tur: updated.tur,
+                aracId: updated.aracId,
+            },
+        });
+
+        revalidateDokumanPages(arac.id);
+        return { success: true };
+    } catch (error) {
+        console.error("Doküman güncellenirken hata:", error);
+        return { success: false, error: "Doküman güncellenirken bir hata oluştu." };
+    }
+}
+
 
 export async function deleteDokuman(id: string) {
     try {

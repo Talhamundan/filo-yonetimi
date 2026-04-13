@@ -57,6 +57,22 @@ export interface DashboardDailyTrendItem {
     toplam: number;
 }
 
+export interface DashboardWeeklyTrendItem {
+    weekKey: string;
+    hafta: number;
+    name: string;
+    rangeLabel: string;
+    yakit: number;
+    yakitLitre?: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+}
+
 export interface DashboardVehicleCostItem {
     aracId: string;
     plaka: string;
@@ -116,6 +132,7 @@ export interface DashboardDriverFuelAverageItem {
 export interface DashboardData {
     metrics: {
         aylikToplamGider: number;
+        oncekiDonemToplamGider: number;
         ortalamaAracMaliyeti: number;
         ortalamaSoforMaliyeti: number;
         kritikUyariSayisi: number;
@@ -150,6 +167,7 @@ export interface DashboardData {
     calendarEvents: DashboardCalendarEvent[];
     monthlyExpenseTrend: DashboardMonthlyTrendItem[];
     dailyExpenseTrend: DashboardDailyTrendItem[];
+    weeklyExpenseTrend: DashboardWeeklyTrendItem[];
     vehicleCostReport: DashboardVehicleCostItem[];
     driverCostReport: DashboardDriverCostItem[];
     companyCostReport: DashboardCompanyCostItem[];

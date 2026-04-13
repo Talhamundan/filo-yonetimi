@@ -1,5 +1,5 @@
 import { MasrafKategorisi, Prisma } from "@prisma/client";
-import { eachDayOfInterval, endOfMonth, format, startOfMonth } from "date-fns";
+import { eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
@@ -10,6 +10,7 @@ import type {
     DashboardDailyTrendItem,
     DashboardDateContext,
     DashboardMonthlyTrendItem,
+    DashboardWeeklyTrendItem,
     GenericWhere,
 } from "@/lib/dashboard-types";
 import { getVehicleUsageScopeWhere, toNumber } from "@/lib/dashboard-helpers";
@@ -88,7 +89,10 @@ async function getPeriodAverageLitresPer100Km(
 }
 
 async function sumBakim(where: Prisma.BakimWhereInput) {
-    const result = await prisma.bakim.aggregate({ _sum: { tutar: true }, where });
+    const result = await prisma.bakim.aggregate({ 
+        _sum: { tutar: true }, 
+        where: { ...where, deletedAt: null } 
+    });
     return getSumTutar(result);
 }
 
@@ -98,7 +102,10 @@ async function sumMuayene(where: Prisma.MuayeneWhereInput) {
 }
 
 async function sumCeza(where: Prisma.CezaWhereInput) {
-    const result = await prisma.ceza.aggregate({ _sum: { tutar: true }, where });
+    const result = await prisma.ceza.aggregate({ 
+        _sum: { tutar: true }, 
+        where: { ...where, deletedAt: null } 
+    });
     return getSumTutar(result);
 }
 
@@ -113,7 +120,10 @@ async function sumTrafik(where: Prisma.TrafikSigortasiWhereInput) {
 }
 
 async function sumDigerMasraf(where: Prisma.MasrafWhereInput) {
-    const result = await prisma.masraf.aggregate({ _sum: { tutar: true }, where });
+    const result = await prisma.masraf.aggregate({ 
+        _sum: { tutar: true }, 
+        where: { ...where, deletedAt: null } 
+    });
     return getSumTutar(result);
 }
 
@@ -122,6 +132,7 @@ type DashboardCostServiceResult = {
     previous: CostBreakdown;
     monthlyExpenseTrend: DashboardMonthlyTrendItem[];
     dailyExpenseTrend: DashboardDailyTrendItem[];
+    weeklyExpenseTrend: DashboardWeeklyTrendItem[];
     sixMonthsTrend: { name: string; gider: number }[];
     companyCostReport: DashboardCompanyCostItem[];
 };
@@ -455,7 +466,7 @@ export async function getCompanyCostReportForPeriod(params: {
         }) as Promise<GroupedByVehicleYakitSumRow[]>,
         (prisma as any).bakim.groupBy({
             by: ["aracId", "sirketId"],
-            where: { ...(expenseScope as Prisma.BakimWhereInput), bakimTarihi: { gte: start, lte: end } },
+            where: { ...(expenseScope as Prisma.BakimWhereInput), bakimTarihi: { gte: start, lte: end }, deletedAt: null },
             _sum: { tutar: true },
         }) as Promise<GroupedByVehicleSumRow[]>,
         (prisma as any).muayene.groupBy({
@@ -465,7 +476,7 @@ export async function getCompanyCostReportForPeriod(params: {
         }) as Promise<GroupedByVehicleSumRow[]>,
         (prisma as any).ceza.groupBy({
             by: ["aracId", "sirketId"],
-            where: { ...(expenseCezaScope as Prisma.CezaWhereInput), tarih: { gte: start, lte: end } },
+            where: { ...(expenseCezaScope as Prisma.CezaWhereInput), tarih: { gte: start, lte: end }, deletedAt: null },
             _sum: { tutar: true },
         }) as Promise<GroupedByVehicleSumRow[]>,
         (prisma as any).kasko.groupBy({
@@ -484,6 +495,7 @@ export async function getCompanyCostReportForPeriod(params: {
                 ...(expenseScope as Prisma.MasrafWhereInput),
                 tur: { notIn: [...EXCLUDED_MASRAF_TURLERI] },
                 tarih: { gte: start, lte: end },
+                deletedAt: null,
             },
             _sum: { tutar: true },
         }) as Promise<GroupedByVehicleSumRow[]>,
@@ -666,7 +678,7 @@ async function getDailyExpenseTrendForPeriod(params: {
                 select: { tarih: true, tutar: true, litre: true },
             }),
             prisma.bakim.findMany({
-                where: { ...(scope as Prisma.BakimWhereInput), bakimTarihi: { gte: start, lte: end } },
+                where: { ...(scope as Prisma.BakimWhereInput), bakimTarihi: { gte: start, lte: end }, deletedAt: null },
                 select: { bakimTarihi: true, tutar: true },
             }),
             prisma.muayene.findMany({
@@ -674,7 +686,7 @@ async function getDailyExpenseTrendForPeriod(params: {
                 select: { muayeneTarihi: true, tutar: true },
             }),
             prisma.ceza.findMany({
-                where: { ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: start, lte: end } },
+                where: { ...(cezaScope as Prisma.CezaWhereInput), tarih: { gte: start, lte: end }, deletedAt: null },
                 select: { tarih: true, tutar: true },
             }),
             prisma.kasko.findMany({
@@ -690,6 +702,7 @@ async function getDailyExpenseTrendForPeriod(params: {
                     ...(scope as Prisma.MasrafWhereInput),
                     tur: { notIn: [...EXCLUDED_MASRAF_TURLERI] },
                     tarih: { gte: start, lte: end },
+                    deletedAt: null,
                 },
                 select: { tarih: true, tutar: true },
             }),
@@ -707,6 +720,69 @@ async function getDailyExpenseTrendForPeriod(params: {
     for (const row of digerRows) addDailyAmount(dayMap, row.tarih, "diger", toNumber(row.tutar));
 
     return [...dayMap.values()].sort((a, b) => a.dateKey.localeCompare(b.dateKey));
+}
+
+function createEmptyWeeklyTrendItem(params: {
+    weekKey: string;
+    weekStart: Date;
+    weekEnd: Date;
+}): DashboardWeeklyTrendItem {
+    const { weekKey, weekStart, weekEnd } = params;
+    return {
+        weekKey,
+        hafta: 0,
+        name: "",
+        rangeLabel: `${format(weekStart, "d MMM", { locale: tr })} - ${format(weekEnd, "d MMM", { locale: tr })}`,
+        yakit: 0,
+        yakitLitre: 0,
+        bakim: 0,
+        muayene: 0,
+        ceza: 0,
+        kasko: 0,
+        trafik: 0,
+        diger: 0,
+        toplam: 0,
+    };
+}
+
+function getWeeklyExpenseTrendFromDaily(params: {
+    dailyExpenseTrend: DashboardDailyTrendItem[];
+    start: Date;
+    end: Date;
+}): DashboardWeeklyTrendItem[] {
+    const { dailyExpenseTrend, start, end } = params;
+    const weekMap = new Map<string, DashboardWeeklyTrendItem>();
+
+    for (const day of dailyExpenseTrend) {
+        const dayDate = new Date(`${day.dateKey}T00:00:00`);
+        if (!Number.isFinite(dayDate.getTime())) continue;
+
+        const calendarWeekStart = startOfWeek(dayDate, { weekStartsOn: 1 });
+        const calendarWeekEnd = endOfWeek(dayDate, { weekStartsOn: 1 });
+        const weekStart = calendarWeekStart < start ? start : calendarWeekStart;
+        const weekEnd = calendarWeekEnd > end ? end : calendarWeekEnd;
+        const weekKey = format(weekStart, "yyyy-MM-dd");
+
+        const weeklyItem = weekMap.get(weekKey) || createEmptyWeeklyTrendItem({ weekKey, weekStart, weekEnd });
+        weeklyItem.yakit += toNumber(day.yakit);
+        weeklyItem.yakitLitre = toNumber(weeklyItem.yakitLitre) + toNumber(day.yakitLitre);
+        weeklyItem.bakim += toNumber(day.bakim);
+        weeklyItem.muayene += toNumber(day.muayene);
+        weeklyItem.ceza += toNumber(day.ceza);
+        weeklyItem.kasko += toNumber(day.kasko);
+        weeklyItem.trafik += toNumber(day.trafik);
+        weeklyItem.diger += toNumber(day.diger);
+        weeklyItem.toplam += toNumber(day.toplam);
+        weekMap.set(weekKey, weeklyItem);
+    }
+
+    const sorted = [...weekMap.values()].sort((a, b) => a.weekKey.localeCompare(b.weekKey));
+    return sorted.map((item, index) => ({
+        ...item,
+        hafta: index + 1,
+        name: `${index + 1}. Hafta`,
+        yakitLitre: roundOneDecimal(toNumber(item.yakitLitre)),
+    }));
 }
 
 export async function getDashboardCostData(params: {
@@ -736,6 +812,11 @@ export async function getDashboardCostData(params: {
             end: seciliAySonu,
         }),
     ]);
+    const weeklyExpenseTrend = getWeeklyExpenseTrendFromDaily({
+        dailyExpenseTrend,
+        start: seciliAyBasi,
+        end: seciliAySonu,
+    });
     const companyCostReport = await getCompanyCostReportForPeriod({
         scope: usageExpenseScope,
         cezaScope: usageExpenseCezaScope,
@@ -779,6 +860,7 @@ export async function getDashboardCostData(params: {
         previous,
         monthlyExpenseTrend,
         dailyExpenseTrend,
+        weeklyExpenseTrend,
         sixMonthsTrend: monthlyExpenseTrend.map((item) => ({ name: item.name, gider: item.toplam })),
         companyCostReport,
     };

@@ -6,7 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "../../../../components
 import { Badge } from "../../../../components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
@@ -294,7 +294,7 @@ export default function PersonelDetailClient({
                                             ARACI BIRAK
                                         </button>
                                     </DialogTrigger>
-                                    <DialogContent className="sm:max-w-[420px]">
+                                    <DialogContent >
                                         <DialogHeader>
                                             <DialogTitle>Zimmeti Sonlandır</DialogTitle>
                                             <DialogDescription>
@@ -335,7 +335,7 @@ export default function PersonelDetailClient({
                                             <Plus size={12} /> ARAÇ ATA
                                         </button>
                                     </DialogTrigger>
-                                    <DialogContent className="sm:max-w-[420px]">
+                                    <DialogContent >
                                         <DialogHeader>
                                             <DialogTitle>Personel Araca Ata</DialogTitle>
                                             <DialogDescription>
@@ -767,7 +767,7 @@ export default function PersonelDetailClient({
                 </Tabs>
 
                 <Dialog open={editOpen} onOpenChange={setEditOpen}>
-                    <DialogContent className="sm:max-w-[450px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Personeli Düzenle</DialogTitle>
                             <DialogDescription>{p.ad} {p.soyad} kişisinin bilgilerini güncelleyin.</DialogDescription>

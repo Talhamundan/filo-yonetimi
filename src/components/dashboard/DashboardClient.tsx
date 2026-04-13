@@ -37,6 +37,7 @@ import YeniZimmetShortcut from "./shortcuts/YeniZimmetShortcut";
 import YeniAracShortcut from "./shortcuts/YeniAracShortcut";
 import YeniPersonelShortcut from "./shortcuts/YeniPersonelShortcut";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { GaugeChart } from "@/components/ui/gauge-chart";
 
 interface DashboardClientProps {
     initialData: DashboardData;
@@ -114,6 +115,14 @@ const DRIVER_CATEGORY_LEGEND = [
     { key: "ceza", label: "Ceza", color: "#EF4444" },
 ] as const;
 
+type ExpenseTrendMode = "GUNLUK" | "HAFTALIK" | "AYLIK";
+
+const EXPENSE_TREND_OPTIONS: Array<{ value: ExpenseTrendMode; label: string }> = [
+    { value: "GUNLUK", label: "Günlük" },
+    { value: "HAFTALIK", label: "Haftalık" },
+    { value: "AYLIK", label: "Aylık" },
+];
+
 function getFuelDisplayValue(row: Record<string, unknown> | null | undefined) {
     return Number(row?.yakitLitre ?? row?.yakit ?? 0);
 }
@@ -121,6 +130,12 @@ function getFuelDisplayValue(row: Record<string, unknown> | null | undefined) {
 function getCategoryDisplayValue(row: Record<string, unknown> | null | undefined, categoryKey: string) {
     if (categoryKey === "yakit" || categoryKey === "yakitLitre") return getFuelDisplayValue(row);
     return Number(row?.[categoryKey] || 0);
+}
+
+function getOtherCostDisplayValue(row: Record<string, unknown> | null | undefined) {
+    return COST_CATEGORY_LEGEND
+        .filter((category) => category.key !== "yakit")
+        .reduce((sum, category) => sum + getCategoryDisplayValue(row, category.key), 0);
 }
 
 function formatCurrencyValue(value: number) {
@@ -139,6 +154,12 @@ function formatCategoryValue(categoryKey: string, value: number) {
     return categoryKey === "yakit" || categoryKey === "yakitLitre"
         ? formatLitreValue(value)
         : formatCurrencyValue(value);
+}
+
+function getGaugeColorForUsage(percentage: number) {
+    if (percentage <= 85) return "#16A34A";
+    if (percentage <= 100) return "#F59E0B";
+    return "#DC2626";
 }
 
 function truncateAxisLabel(value: unknown, maxLength = 12) {
@@ -171,10 +192,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     const selectedYil = searchParams.get("yil");
     const selectedAy = searchParams.get("ay");
     const isAllMonthSelected = selectedAy?.trim().toLowerCase() === "all" || selectedAy?.trim().toLowerCase() === "__all__";
+    const selectedKategori = searchParams.get("kategori");
     const apiParams = new URLSearchParams();
     if (selectedSirketId) apiParams.set("sirket", selectedSirketId);
     if (selectedYil) apiParams.set("yil", selectedYil);
     if (selectedAy) apiParams.set("ay", selectedAy);
+    if (selectedKategori) apiParams.set("kategori", selectedKategori);
     const dashboardApiKey = apiParams.toString() ? `/api/dashboard?${apiParams.toString()}` : "/api/dashboard";
 
     const { data } = useSWR<DashboardData>(isTechnicalPersonnel ? null : dashboardApiKey, fetcher, {
@@ -191,6 +214,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         operationArizalar = [],
         monthlyExpenseTrend = [],
         dailyExpenseTrend = [],
+        weeklyExpenseTrend = [],
         vehicleCostReport = [],
         driverCostReport = [],
         companyCostReport = [],
@@ -201,6 +225,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     const calendarCardRef = useRef<HTMLDivElement | null>(null);
     const [calendarCardHeight, setCalendarCardHeight] = React.useState<number | null>(null);
     const [fuelAverageMode, setFuelAverageMode] = useState<"ARAC" | "PERSONEL">("ARAC");
+    const [expenseTrendMode, setExpenseTrendMode] = useState<ExpenseTrendMode>(isAllMonthSelected ? "AYLIK" : "GUNLUK");
 
     useEffect(() => {
         const element = calendarCardRef.current;
@@ -215,6 +240,14 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
         return () => observer.disconnect();
     }, []);
+
+    useEffect(() => {
+        setExpenseTrendMode((current) => {
+            if (isAllMonthSelected) return "AYLIK";
+            if (current === "AYLIK" || current === "HAFTALIK" || current === "GUNLUK") return current;
+            return "GUNLUK";
+        });
+    }, [isAllMonthSelected]);
 
     const yearlyPieData = useMemo(
         () =>
@@ -273,6 +306,32 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 .filter((row: any) => Number(row.displayToplam || 0) > 0),
         [dailyExpenseTrend]
     );
+    const weeklyTotalData = useMemo(
+        () =>
+            weeklyExpenseTrend
+                .map((row: any) => ({
+                    ...row,
+                    displayToplam: COST_CATEGORY_LEGEND.reduce(
+                        (sum: number, category) => sum + getCategoryDisplayValue(row, category.key),
+                        0
+                    ),
+                }))
+                .filter((row: any) => Number(row.displayToplam || 0) > 0),
+        [weeklyExpenseTrend]
+    );
+    const monthlyTotalData = useMemo(
+        () =>
+            monthlyExpenseTrend
+                .map((row: any) => ({
+                    ...row,
+                    displayToplam: COST_CATEGORY_LEGEND.reduce(
+                        (sum: number, category) => sum + getCategoryDisplayValue(row, category.key),
+                        0
+                    ),
+                }))
+                .filter((row: any) => Number(row.displayToplam || 0) > 0),
+        [monthlyExpenseTrend]
+    );
 
     const dailyStackCategories = useMemo(
         () =>
@@ -280,6 +339,20 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 dailyExpenseTrend.some((row: any) => getCategoryDisplayValue(row, category.key) > 0)
             ),
         [dailyExpenseTrend]
+    );
+    const weeklyStackCategories = useMemo(
+        () =>
+            COST_CATEGORY_LEGEND.filter((category) =>
+                weeklyExpenseTrend.some((row: any) => getCategoryDisplayValue(row, category.key) > 0)
+            ),
+        [weeklyExpenseTrend]
+    );
+    const monthlyStackCategories = useMemo(
+        () =>
+            COST_CATEGORY_LEGEND.filter((category) =>
+                monthlyExpenseTrend.some((row: any) => getCategoryDisplayValue(row, category.key) > 0)
+            ),
+        [monthlyExpenseTrend]
     );
 
     const dailyCategorySummary = useMemo(
@@ -294,6 +367,32 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 ),
             })).filter((item) => item.value > 0),
         [dailyExpenseTrend]
+    );
+    const weeklyCategorySummary = useMemo(
+        () =>
+            COST_CATEGORY_LEGEND.map((category) => ({
+                key: category.key,
+                name: category.label,
+                color: category.color,
+                value: weeklyExpenseTrend.reduce(
+                    (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                    0
+                ),
+            })).filter((item) => item.value > 0),
+        [weeklyExpenseTrend]
+    );
+    const monthlyTrendCategorySummary = useMemo(
+        () =>
+            COST_CATEGORY_LEGEND.map((category) => ({
+                key: category.key,
+                name: category.label,
+                color: category.color,
+                value: monthlyExpenseTrend.reduce(
+                    (sum: number, row: any) => sum + getCategoryDisplayValue(row, category.key),
+                    0
+                ),
+            })).filter((item) => item.value > 0),
+        [monthlyExpenseTrend]
     );
 
     const yearlyFuelTotal = useMemo(
@@ -320,6 +419,99 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         () => dailyCategorySummary.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
         [dailyCategorySummary]
     );
+    const weeklyFuelTotal = useMemo(
+        () => weeklyCategorySummary.find((item) => item.key === "yakit")?.value || 0,
+        [weeklyCategorySummary]
+    );
+    const weeklyOtherCostTotal = useMemo(
+        () => weeklyCategorySummary.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
+        [weeklyCategorySummary]
+    );
+    const monthlyTrendFuelTotal = useMemo(
+        () => monthlyTrendCategorySummary.find((item) => item.key === "yakit")?.value || 0,
+        [monthlyTrendCategorySummary]
+    );
+    const monthlyTrendOtherCostTotal = useMemo(
+        () => monthlyTrendCategorySummary.filter((item) => item.key !== "yakit").reduce((sum, item) => sum + item.value, 0),
+        [monthlyTrendCategorySummary]
+    );
+    const selectedExpenseTrendData = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return weeklyTotalData;
+        if (expenseTrendMode === "AYLIK") return monthlyTotalData;
+        return dailyTotalData;
+    }, [dailyTotalData, expenseTrendMode, monthlyTotalData, weeklyTotalData]);
+    const selectedExpenseTrendCategories = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return weeklyStackCategories;
+        if (expenseTrendMode === "AYLIK") return monthlyStackCategories;
+        return dailyStackCategories;
+    }, [dailyStackCategories, expenseTrendMode, monthlyStackCategories, weeklyStackCategories]);
+    const selectedExpenseTrendSummary = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return weeklyCategorySummary;
+        if (expenseTrendMode === "AYLIK") return monthlyTrendCategorySummary;
+        return dailyCategorySummary;
+    }, [dailyCategorySummary, expenseTrendMode, monthlyTrendCategorySummary, weeklyCategorySummary]);
+    const selectedExpenseTrendFuelTotal = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return weeklyFuelTotal;
+        if (expenseTrendMode === "AYLIK") return monthlyTrendFuelTotal;
+        return dailyFuelTotal;
+    }, [dailyFuelTotal, expenseTrendMode, monthlyTrendFuelTotal, weeklyFuelTotal]);
+    const selectedExpenseTrendOtherCostTotal = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return weeklyOtherCostTotal;
+        if (expenseTrendMode === "AYLIK") return monthlyTrendOtherCostTotal;
+        return dailyOtherCostTotal;
+    }, [dailyOtherCostTotal, expenseTrendMode, monthlyTrendOtherCostTotal, weeklyOtherCostTotal]);
+    const selectedExpenseTrendLabel = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return "Haftalık";
+        if (expenseTrendMode === "AYLIK") return "Aylık";
+        return "Günlük";
+    }, [expenseTrendMode]);
+    const selectedExpenseTrendEmptyMessage = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return "Seçili ay için haftalık gider verisi yok.";
+        if (expenseTrendMode === "AYLIK") return "Seçili dönem için aylık gider verisi yok.";
+        return "Seçili ay için günlük gider verisi yok.";
+    }, [expenseTrendMode]);
+    const selectedExpenseTrendPeakByOtherCost = useMemo(() => {
+        if (selectedExpenseTrendData.length === 0) return null;
+        return selectedExpenseTrendData.reduce((peak: any, row: any) => {
+            if (!peak) return row;
+            return getOtherCostDisplayValue(row) > getOtherCostDisplayValue(peak) ? row : peak;
+        }, null);
+    }, [selectedExpenseTrendData]);
+    const selectedExpenseTrendAverageFuel = useMemo(() => {
+        if (selectedExpenseTrendData.length === 0) return 0;
+        const total = selectedExpenseTrendData.reduce((sum: number, row: any) => sum + getFuelDisplayValue(row), 0);
+        return total / selectedExpenseTrendData.length;
+    }, [selectedExpenseTrendData]);
+    const selectedExpenseTrendAverageOtherCost = useMemo(() => {
+        if (selectedExpenseTrendData.length === 0) return 0;
+        const total = selectedExpenseTrendData.reduce((sum: number, row: any) => sum + getOtherCostDisplayValue(row), 0);
+        return total / selectedExpenseTrendData.length;
+    }, [selectedExpenseTrendData]);
+    const selectedExpenseTrendMaxBarSize = useMemo(() => {
+        if (expenseTrendMode === "HAFTALIK") return 34;
+        if (expenseTrendMode === "AYLIK") return 40;
+        return 20;
+    }, [expenseTrendMode]);
+    const fleetUtilizationPercent = Number(metrics.verimlilikOrani || 0);
+    const utilizationGaugeColor =
+        fleetUtilizationPercent >= 85 ? "#16A34A" : fleetUtilizationPercent >= 70 ? "#F59E0B" : "#DC2626";
+
+    const dashboardTotalExpense = Number(metrics.aylikToplamGider || 0);
+    
+    const dashboardFuelExpense = useMemo(
+        () => companyCostReport.reduce((sum: number, row: any) => sum + Number(row?.yakit || 0), 0),
+        [companyCostReport]
+    );
+    const dashboardServiceExpense = useMemo(
+        () => companyCostReport.reduce((sum: number, row: any) => sum + Number(row?.bakim || 0), 0),
+        [companyCostReport]
+    );
+
+    const fuelCostRatioPercent = dashboardTotalExpense > 0 ? (dashboardFuelExpense / dashboardTotalExpense) * 100 : 0;
+    const fuelCostRatioGaugeColor = fuelCostRatioPercent > 75 ? "#DC2626" : fuelCostRatioPercent > 60 ? "#F59E0B" : "#16A34A";
+
+    const serviceCostRatioPercent = dashboardTotalExpense > 0 ? (dashboardServiceExpense / dashboardTotalExpense) * 100 : 0;
+    const serviceCostRatioGaugeColor = serviceCostRatioPercent > 25 ? "#DC2626" : serviceCostRatioPercent > 15 ? "#F59E0B" : "#16A34A";
     const isAdminOrYetkili = role === "ADMIN" || role === "YETKILI";
     const shouldShowVehicleAndDriverCostLists = isAdminOrYetkili;
     const shouldShowCompanyCostReport = role === "ADMIN" || (role === "YETKILI" && canAccessAllCompanies);
@@ -672,7 +864,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
     const renderOperationTrackingCard = () => (
         <Card
-            className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl flex flex-col overflow-hidden"
+            className="shadow-none border border-[#E2E8F0] bg-white rounded-xl flex flex-col overflow-hidden"
             style={calendarCardHeight ? { height: calendarCardHeight } : undefined}
         >
             <CardHeader className="pb-2 px-5 pt-5">
@@ -778,7 +970,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-indigo-700">
                                 <Car className="h-5 w-5" />
@@ -791,7 +983,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </CardContent>
                     </Card>
 
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-emerald-700">
                                 <Users className="h-5 w-5" />
@@ -804,7 +996,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </CardContent>
                     </Card>
 
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-amber-700">
                                 <ClipboardCheck className="h-5 w-5" />
@@ -819,7 +1011,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-rose-700">
                                 <Wrench className="h-5 w-5" />
@@ -836,7 +1028,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </CardContent>
                     </Card>
 
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-orange-700">
                                 <Fuel className="h-5 w-5" />
@@ -853,7 +1045,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </CardContent>
                     </Card>
 
-                    <Card className="hover:shadow-md transition-shadow border-slate-200">
+                    <Card className=" transition-shadow border-slate-200">
                         <CardHeader className="pb-3">
                             <CardTitle className="flex items-center gap-2 text-lg text-indigo-700">
                                 <Truck className="h-5 w-5" />
@@ -919,20 +1111,6 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {!isAdminOrYetkili && (
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
-                        <CardContent className="p-5">
-                            <div className="flex justify-between items-start mb-2">
-                                <p className="text-sm font-medium text-slate-500">Bu Ay Toplam Gider</p>
-                                <div className="p-1.5 bg-rose-50 rounded-md text-rose-600"><Wallet size={16} /></div>
-                            </div>
-                            <h3 className="text-2xl font-bold text-slate-900">₺{metrics.aylikToplamGider.toLocaleString("tr-TR")}</h3>
-                            <p className={`text-xs font-medium flex items-center gap-1 mt-2 ${getChangeClassName(metrics.giderDegisimYuzdesi)}`}>
-                                <TrendingUp size={12} /> {formatChangeText(metrics.giderDegisimYuzdesi)} {metrics.comparisonLabel}
-                            </p>
-                        </CardContent>
-                    </Card>
-                )}
 
                 <Card
                     role="button"
@@ -944,7 +1122,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/araclar");
                         }
                     }}
-                    className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-amber-200 hover:shadow-md"
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-amber-200 "
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2 text-slate-500">
@@ -971,7 +1149,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/personel?status=SOFOR");
                         }
                     }}
-                    className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 hover:shadow-md"
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 "
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
@@ -998,7 +1176,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/yakitlar");
                         }
                     }}
-                    className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-indigo-200 hover:shadow-md"
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-indigo-200 "
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
@@ -1031,7 +1209,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 navigateWithScope("/dashboard/servis-kayitlari");
                             }
                         }}
-                        className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 hover:shadow-md"
+                        className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 "
                     >
                         <CardContent className="p-5">
                             <div className="flex justify-between items-start mb-2">
@@ -1050,6 +1228,66 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 )}
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="shadow-none border border-slate-900 bg-slate-900 text-white rounded-xl flex flex-col justify-between overflow-hidden relative">
+                    <div className="absolute right-0 top-0 opacity-10 pointer-events-none transform translate-x-1/4 -translate-y-1/4">
+                        <Wallet size={120} />
+                    </div>
+                    <CardContent className="p-6 flex flex-col h-full justify-between relative z-10">
+                        <div>
+                            <div className="flex items-center gap-2 mb-3">
+                                <div className="p-1.5 bg-slate-800 rounded-md text-emerald-400 border border-slate-700">
+                                    <Wallet size={16} />
+                                </div>
+                                <p className="text-sm font-medium text-slate-400 uppercase tracking-wider">Dönem Toplam Gideri</p>
+                            </div>
+                            <h3 className="text-4xl font-black text-white tracking-tight">
+                                ₺{Number(metrics.aylikToplamGider || 0).toLocaleString("tr-TR")}
+                            </h3>
+                        </div>
+                        <div className="mt-8">
+                            <p className={`text-sm font-semibold flex items-center gap-1.5 ${metrics.giderDegisimYuzdesi < 0 ? "text-emerald-400" : metrics.giderDegisimYuzdesi > 0 ? "text-rose-400" : "text-slate-400"}`}>
+                                <TrendingUp size={16} /> 
+                                {formatChangeText(metrics.giderDegisimYuzdesi)} {metrics.comparisonLabel}
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                <GaugeChart
+                    label="Filo Verimlilik Endeksi"
+                    sublabel="Aktif / Toplam Araç Oranı"
+                    value={fleetUtilizationPercent}
+                    min={0}
+                    max={100}
+                    valueText={`${Math.round(fleetUtilizationPercent)}%`}
+                    helperText={`${metrics.aktifArac || 0} araç aktif (Toplam: ${metrics.toplamArac || 0})`}
+                    color={utilizationGaugeColor}
+                />
+
+                <GaugeChart
+                    label="Yakıt Maliyet Payı"
+                    sublabel="Dönem İçi Maliyet Yoğunluğu"
+                    value={Math.min(100, Math.max(0, fuelCostRatioPercent))}
+                    min={0}
+                    max={100}
+                    valueText={`${fuelCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                    helperText={`Yakıt Gideri: ${formatCurrencyValue(dashboardFuelExpense)}`}
+                    color={fuelCostRatioGaugeColor}
+                />
+
+                <GaugeChart
+                    label="Servis Maliyet Payı"
+                    sublabel="Dönem İçi Maliyet Yoğunluğu"
+                    value={Math.min(100, Math.max(0, serviceCostRatioPercent))}
+                    min={0}
+                    max={100}
+                    valueText={`${serviceCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                    helperText={`Servis Gideri: ${formatCurrencyValue(dashboardServiceExpense)}`}
+                    color={serviceCostRatioGaugeColor}
+                />
+            </div>
+
             <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] items-start gap-4">
                 <div ref={calendarCardRef}>
                     <DeadlineCalendar events={calendarEvents} compact />
@@ -1060,18 +1298,41 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
             <div className="grid grid-cols-1 gap-4">
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl h-full">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl h-full">
                         <CardHeader className="pb-1 px-5 pt-5 min-h-[84px]">
-                            <CardTitle className="text-sm font-semibold text-slate-900">
-                                {isAllMonthSelected
-                                    ? `Yıl Bazlı Kategori Dağılımı (${selectedYil || new Date().getFullYear()})`
-                                    : "Gün Bazlı Kategori Dağılımı"}
-                            </CardTitle>
-                            <p className="text-xs text-slate-500">
-                                {isAllMonthSelected
-                                    ? `Yakıt: ${formatLitreValue(yearlyFuelTotal)} • Diğer gider: ${formatCurrencyValue(yearlyOtherCostTotal)}`
-                                    : `${selectedMonthRow?.name || "-"} • Yakıt: ${formatLitreValue(dailyFuelTotal)} • Diğer gider: ${formatCurrencyValue(dailyOtherCostTotal)}`}
-                            </p>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                                <div>
+                                    <CardTitle className="text-sm font-semibold text-slate-900">
+                                        {isAllMonthSelected
+                                            ? `Yıl Bazlı Kategori Dağılımı (${selectedYil || new Date().getFullYear()})`
+                                            : `${selectedExpenseTrendLabel} Gider Trendi`}
+                                    </CardTitle>
+                                    <p className="text-xs text-slate-500">
+                                        {isAllMonthSelected
+                                            ? `Yakıt: ${formatLitreValue(yearlyFuelTotal)} • Diğer gider: ${formatCurrencyValue(yearlyOtherCostTotal)}`
+                                            : `Yakıt: ${formatLitreValue(selectedExpenseTrendFuelTotal)} • Diğer gider: ${formatCurrencyValue(selectedExpenseTrendOtherCostTotal)}`}
+                                    </p>
+                                </div>
+
+                                {!isAllMonthSelected ? (
+                                    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-1">
+                                        {EXPENSE_TREND_OPTIONS.map((option) => (
+                                            <button
+                                                key={option.value}
+                                                type="button"
+                                                onClick={() => setExpenseTrendMode(option.value)}
+                                                className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
+                                                    expenseTrendMode === option.value
+                                                        ? "bg-white text-slate-900 shadow-sm"
+                                                        : "text-slate-500 hover:text-slate-700"
+                                                }`}
+                                            >
+                                                {option.label}
+                                            </button>
+                                        ))}
+                                    </div>
+                                ) : null}
+                            </div>
                         </CardHeader>
                         <CardContent className="px-4 pb-4 pt-2 flex flex-col">
                             <div className="h-[260px]">
@@ -1081,7 +1342,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             <PieChart accessibilityLayer={false}>
                                                 <Tooltip
                                                     cursor={false}
-                                                    contentStyle={{ borderRadius: '8px', border: '1px solid #E2E8F0' }}
+                                                    contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0" }}
                                                     formatter={(value, name, entry) => {
                                                         const payload =
                                                             entry && typeof entry === "object" && "payload" in entry
@@ -1111,90 +1372,96 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             Seçili yıl için kategori verisi yok.
                                         </div>
                                     )
-                                ) : (
-                                    dailyTotalData.length > 0 ? (
-                                        <ResponsiveContainer width="100%" height="100%">
-                                            <BarChart accessibilityLayer={false} data={dailyTotalData} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>
-                                                <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
-                                                <XAxis
-                                                    dataKey="name"
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }}
-                                                />
-                                                <YAxis
-                                                    axisLine={false}
-                                                    tickLine={false}
-                                                    tick={{ fontSize: 11, fill: "#64748B" }}
-                                                    tickFormatter={(val) => Number(val).toLocaleString("tr-TR")}
-                                                />
-                                                <Tooltip
-                                                    cursor={false}
-                                                    contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0" }}
-                                                    content={({ active, payload, label }) => {
-                                                        if (!active || !payload || payload.length === 0) return null;
-                                                        const fuelTotal = payload.reduce(
-                                                            (sum, item) =>
-                                                                (String(item.dataKey) === "yakit" || String(item.dataKey) === "yakitLitre")
-                                                                    ? sum + Number(item.value ?? 0)
-                                                                    : sum,
-                                                            0
-                                                        );
-                                                        const otherTotal = payload.reduce(
-                                                            (sum, item) =>
-                                                                (String(item.dataKey) !== "yakit" && String(item.dataKey) !== "yakitLitre")
-                                                                    ? sum + Number(item.value ?? 0)
-                                                                    : sum,
-                                                            0
-                                                        );
-                                                        return (
-                                                            <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                                                                <p className="text-xs font-semibold text-slate-900">{`${String(label || "-")}. gün`}</p>
-                                                                <div className="mt-1.5 space-y-1">
-                                                                    {payload.map((item) => (
-                                                                        <div key={`${item.dataKey}`} className="flex items-center justify-between gap-3 text-xs">
-                                                                            <span className="font-medium" style={{ color: item.color || "#334155" }}>
-                                                                                {String(item.name || item.dataKey || "-")}
-                                                                            </span>
-                                                                            <span className="font-semibold text-slate-700">
-                                                                                {formatCategoryValue(String(item.dataKey || ""), Number(item.value ?? 0))}
-                                                                            </span>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                                {(fuelTotal > 0 || otherTotal > 0) ? (
-                                                                    <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
-                                                                        {fuelTotal > 0 ? `Yakıt: ${formatLitreValue(fuelTotal)}` : null}
-                                                                        {fuelTotal > 0 && otherTotal > 0 ? " • " : null}
-                                                                        {otherTotal > 0 ? `Diğer: ${formatCurrencyValue(otherTotal)}` : null}
+                                ) : selectedExpenseTrendData.length > 0 ? (
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart accessibilityLayer={false} data={selectedExpenseTrendData} margin={{ top: 10, right: 10, left: 4, bottom: 4 }}>
+                                            <CartesianGrid strokeDasharray="3 3" horizontal vertical={false} stroke="#F1F5F9" />
+                                            <XAxis
+                                                dataKey="name"
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fontSize: 11, fill: "#64748B", fontWeight: 600 }}
+                                            />
+                                            <YAxis
+                                                axisLine={false}
+                                                tickLine={false}
+                                                tick={{ fontSize: 11, fill: "#64748B" }}
+                                                tickFormatter={(val) => Number(val).toLocaleString("tr-TR")}
+                                            />
+                                            <Tooltip
+                                                cursor={false}
+                                                contentStyle={{ borderRadius: "8px", border: "1px solid #E2E8F0" }}
+                                                content={({ active, payload, label }) => {
+                                                    if (!active || !payload || payload.length === 0) return null;
+                                                    const raw = payload[0]?.payload as { rangeLabel?: string } | undefined;
+                                                    const fuelTotal = payload.reduce(
+                                                        (sum, item) =>
+                                                            (String(item.dataKey) === "yakit" || String(item.dataKey) === "yakitLitre")
+                                                                ? sum + Number(item.value ?? 0)
+                                                                : sum,
+                                                        0
+                                                    );
+                                                    const otherTotal = payload.reduce(
+                                                        (sum, item) =>
+                                                            (String(item.dataKey) !== "yakit" && String(item.dataKey) !== "yakitLitre")
+                                                                ? sum + Number(item.value ?? 0)
+                                                                : sum,
+                                                        0
+                                                    );
+                                                    const headerLabel =
+                                                        expenseTrendMode === "GUNLUK"
+                                                            ? `${String(label || "-")}. gün`
+                                                            : expenseTrendMode === "HAFTALIK"
+                                                                ? `${String(label || "-")} • ${raw?.rangeLabel || ""}`
+                                                                : String(label || "-");
+
+                                                    return (
+                                                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                                                            <p className="text-xs font-semibold text-slate-900">{headerLabel}</p>
+                                                            <div className="mt-1.5 space-y-1">
+                                                                {payload.map((item) => (
+                                                                    <div key={`${item.dataKey}`} className="flex items-center justify-between gap-3 text-xs">
+                                                                        <span className="font-medium" style={{ color: item.color || "#334155" }}>
+                                                                            {String(item.name || item.dataKey || "-")}
+                                                                        </span>
+                                                                        <span className="font-semibold text-slate-700">
+                                                                            {formatCategoryValue(String(item.dataKey || ""), Number(item.value ?? 0))}
+                                                                        </span>
                                                                     </div>
-                                                                ) : null}
+                                                                ))}
                                                             </div>
-                                                        );
-                                                    }}
+                                                            {(fuelTotal > 0 || otherTotal > 0) ? (
+                                                                <div className="mt-2 border-t border-slate-200 pt-1.5 text-xs font-bold text-slate-900">
+                                                                    {fuelTotal > 0 ? `Yakıt: ${formatLitreValue(fuelTotal)}` : null}
+                                                                    {fuelTotal > 0 && otherTotal > 0 ? " • " : null}
+                                                                    {otherTotal > 0 ? `Diğer: ${formatCurrencyValue(otherTotal)}` : null}
+                                                                </div>
+                                                            ) : null}
+                                                        </div>
+                                                    );
+                                                }}
+                                            />
+                                            {selectedExpenseTrendCategories.map((category, index) => (
+                                                <Bar
+                                                    key={`expense-trend-${expenseTrendMode}-${category.key}`}
+                                                    dataKey={category.key === "yakit" ? "yakitLitre" : category.key}
+                                                    name={category.label}
+                                                    stackId={expenseTrendMode}
+                                                    fill={category.color}
+                                                    radius={index === selectedExpenseTrendCategories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
+                                                    maxBarSize={selectedExpenseTrendMaxBarSize}
                                                 />
-                                                {dailyStackCategories.map((category, index) => (
-                                                    <Bar
-                                                        key={`daily-cost-${category.key}`}
-                                                        dataKey={category.key === "yakit" ? "yakitLitre" : category.key}
-                                                        name={category.label}
-                                                        stackId="gunluk"
-                                                        fill={category.color}
-                                                        radius={index === dailyStackCategories.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
-                                                        maxBarSize={20}
-                                                    />
-                                                ))}
-                                            </BarChart>
-                                        </ResponsiveContainer>
-                                    ) : (
-                                        <div className="h-full flex items-center justify-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
-                                            Seçili ay için günlük gider verisi yok.
-                                        </div>
-                                    )
+                                            ))}
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                ) : (
+                                    <div className="h-full flex items-center justify-center text-sm text-slate-500 border border-dashed border-slate-200 rounded-lg">
+                                        {selectedExpenseTrendEmptyMessage}
+                                    </div>
                                 )}
                             </div>
                             <div className="mt-2 min-h-[42px] flex flex-wrap justify-center gap-2 content-center">
-                                {(isAllMonthSelected ? yearlyPieData : dailyCategorySummary).map((item) => (
+                                {(isAllMonthSelected ? yearlyPieData : selectedExpenseTrendSummary).map((item) => (
                                     <div key={`legend-left-${item.key}`} className="inline-flex w-auto max-w-full rounded-md border border-slate-200 px-2 py-1.5 text-[11px] text-slate-600 items-center gap-2 whitespace-nowrap">
                                         <span className="inline-flex items-center gap-1.5">
                                             <span className="w-2 h-2 rounded-full" style={{ backgroundColor: item.color }} />
@@ -1204,10 +1471,30 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                     </div>
                                 ))}
                             </div>
+                            {!isAllMonthSelected ? (
+                                <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                        <p className="text-[11px] text-slate-500 font-medium">Ortalama Yakıt</p>
+                                        <p className="text-sm font-bold text-slate-900">{formatLitreValue(selectedExpenseTrendAverageFuel)}</p>
+                                    </div>
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                        <p className="text-[11px] text-slate-500 font-medium">Ortalama Diğer Gider</p>
+                                        <p className="text-sm font-bold text-slate-900">{formatCurrencyValue(selectedExpenseTrendAverageOtherCost)}</p>
+                                    </div>
+                                    <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+                                        <p className="text-[11px] text-slate-500 font-medium">En Yoğun Dönem</p>
+                                        <p className="text-sm font-bold text-slate-900">
+                                            {selectedExpenseTrendPeakByOtherCost
+                                                ? `${selectedExpenseTrendPeakByOtherCost.name} • ${formatCurrencyValue(getOtherCostDisplayValue(selectedExpenseTrendPeakByOtherCost))}`
+                                                : "-"}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : null}
                         </CardContent>
                     </Card>
 
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl h-full">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl h-full">
                         <CardHeader className="pb-1 px-5 pt-5 min-h-[84px]">
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 Ay Bazlı Kategori Dağılımı
@@ -1270,7 +1557,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 </div>
 
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-1 px-5 pt-5">
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 Araç Bazlı Toplam Maliyet (Top 10)
@@ -1375,7 +1662,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </div>
                     </Card>
 
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-1 px-5 pt-5">
                             <CardTitle className="text-sm font-semibold text-slate-900">
                                 Personel Bazlı Maliyet (Top 10)
@@ -1442,7 +1729,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
             {shouldShowVehicleAndDriverCostLists && (
                 <div className="space-y-4">
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-2 px-5 pt-5">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                                 <div>
@@ -1599,7 +1886,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     </Card>
 
                     {shouldShowCompanyCostReport && (
-                        <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                        <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                             <CardHeader className="pb-2 px-5 pt-5">
                                 <CardTitle className="text-sm font-semibold text-slate-900">Şirket Bazlı Aylık Gider</CardTitle>
                                 <p className="text-xs text-slate-500">
@@ -1669,7 +1956,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     )}
 
                     <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-2 px-5 pt-5">
                             <CardTitle className="text-sm font-semibold text-slate-900">Araç Bazlı Aylık Gider</CardTitle>
                             <p className="text-xs text-slate-500">
@@ -1737,7 +2024,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         </CardContent>
                     </Card>
 
-                    <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl">
+                    <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
                         <CardHeader className="pb-2 px-5 pt-5">
                             <CardTitle className="text-sm font-semibold text-slate-900">Personel Bazlı Aylık Gider</CardTitle>
                             <p className="text-xs text-slate-500">

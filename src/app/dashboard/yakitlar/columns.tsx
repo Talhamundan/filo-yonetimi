@@ -6,6 +6,7 @@ import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 import { PersonelLink } from "@/components/links/RecordLinks"
 import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display"
+import { ArrowRightLeft, PackageCheck } from "lucide-react"
 
 export type YakitRow = {
     id: string;
@@ -37,6 +38,7 @@ export type YakitRow = {
     ortalamaYakit100Km?: number | null;
     ortalamaKmBasiMaliyet?: number | null;
     ortalamaYakitDistanceKm?: number | null;
+    isStokHareketi?: boolean;
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
@@ -56,7 +58,21 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
             header: "Araç Plakası",
             accessorFn: (row) => row.arac.plaka,
             cell: ({ row }) => {
-                const { arac } = row.original;
+                const { arac, isStokHareketi } = row.original;
+                if (isStokHareketi) {
+                    const isTransfer = arac.plaka === "BİDON DOLUMU";
+                    return (
+                        <div className="flex items-center gap-2">
+                            <div className={`p-1.5 rounded-lg ${isTransfer ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                {isTransfer ? <ArrowRightLeft size={16} /> : <PackageCheck size={16} />}
+                            </div>
+                            <div>
+                                <p className="text-sm font-bold text-slate-900 leading-none">{arac.plaka}</p>
+                                <p className="text-[10px] font-semibold text-slate-500 mt-0.5 uppercase tracking-wider">Dahili Hareket</p>
+                            </div>
+                        </div>
+                    );
+                }
                 return (
                     <VehicleIdentityCell
                         aracId={arac.id}
@@ -106,6 +122,9 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
                     ? getPersonelDisplayName(selectedSofor)
                     : (row.original.soforId ? ESKI_PERSONEL_ETIKETI : null);
                 const soforId = getActivePersonelId(selectedSofor);
+                if (row.original.isStokHareketi) {
+                    return <span className="text-[11px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200">SİSTEM</span>;
+                }
                 if (!soforText) {
                     return <span className="text-sm text-slate-400">-</span>;
                 }
@@ -123,6 +142,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
             accessorKey: "km",
             header: "KM/Saat",
             cell: ({ row }) => {
+                if (row.original.isStokHareketi) return <div className="text-slate-300 italic">-</div>;
                 return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km/saat</div>
             },
         },

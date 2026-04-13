@@ -1,6 +1,24 @@
 import prisma from "@/lib/prisma";
 
-type TxClient = typeof prisma | any;
+type AggregateDelegate = {
+    aggregate?: (args: { where: { aracId: string }; _max: Record<string, true> }) => Promise<{
+        _max?: Record<string, unknown>;
+    }>;
+};
+
+type TxClient = {
+    arac: {
+        findUnique: (args: { where: { id: string }; select: { guncelKm: true } }) => Promise<{ guncelKm: number | null } | null>;
+        updateMany: (args: { where: { id: string }; data: { guncelKm: number } }) => Promise<unknown>;
+    };
+    yakit: {
+        findFirst: (args: {
+            where: { aracId: string };
+            select: { km: true };
+            orderBy: Array<Record<string, "asc" | "desc">>;
+        }) => Promise<{ km: number | null } | null>;
+    };
+};
 
 type CurrentRecordKm = {
     aracId?: string | null;
@@ -15,7 +33,10 @@ const LEGACY_SCHEMA_PATTERNS = [
 ];
 
 function isLegacySchemaError(error: unknown) {
-    const message = String((error as any)?.message || "");
+    const message =
+        typeof error === "object" && error !== null && "message" in error
+            ? String((error as { message?: unknown }).message || "")
+            : "";
     return LEGACY_SCHEMA_PATTERNS.some((pattern) => message.includes(pattern));
 }
 
@@ -42,7 +63,7 @@ async function safeAggregateMax(
     fieldName: string,
     aracId: string
 ) {
-    const model = tx?.[modelName];
+    const model = (tx as unknown as Record<string, unknown>)?.[modelName] as AggregateDelegate | undefined;
     if (!model?.aggregate) {
         return 0;
     }

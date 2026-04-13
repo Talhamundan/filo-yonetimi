@@ -23,7 +23,7 @@ type DriverYakitRow = {
 };
 
 type DriverArizaRow = {
-    aracId: string;
+    aracId: string | null;
     bakimTarihi: Date;
     tutar: number;
     soforId: string | null;
@@ -147,6 +147,7 @@ function buildDriverCosts(params: {
     }
 
     for (const ariza of arizaRows) {
+        if (!ariza.aracId) continue;
         const soforId =
             ariza.soforId ||
             findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
@@ -204,11 +205,16 @@ export async function getDashboardDriverData(params: {
             where: {
                 ...(expenseScope as Prisma.BakimWhereInput),
                 bakimTarihi: { gte: seciliAyBasi, lte: seciliAySonu },
+                deletedAt: null,
             },
             select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
+            where: { 
+                ...(expenseScope as Prisma.CezaWhereInput), 
+                tarih: { gte: seciliAyBasi, lte: seciliAySonu },
+                deletedAt: null,
+            },
             select: { soforId: true, tutar: true },
         }),
         prisma.yakit.findMany({
@@ -219,11 +225,16 @@ export async function getDashboardDriverData(params: {
             where: {
                 ...(expenseScope as Prisma.BakimWhereInput),
                 bakimTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
+                deletedAt: null,
             },
             select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { ...(expenseScope as Prisma.CezaWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
+            where: { 
+                ...(expenseScope as Prisma.CezaWhereInput), 
+                tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
+                deletedAt: null,
+            },
             select: { soforId: true, tutar: true },
         }),
     ]);

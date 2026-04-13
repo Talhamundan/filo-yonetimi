@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, ClipboardCheck } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
@@ -261,14 +261,17 @@ export default function ZimmetlerClient({
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Filo dahilindeki tüm geçmiş ve aktif araç-şoför atamalarının listesi.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
                             Yeni Zimmet Tanımla
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Yeni Zimmet Kaydı</DialogTitle>
                             <DialogDescription>
@@ -357,7 +360,7 @@ export default function ZimmetlerClient({
                     setEditFormData({ ...EMPTY_EDIT });
                 }
             }}>
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Zimmet Kaydını Düzenle</DialogTitle>
                         <DialogDescription>
@@ -418,7 +421,7 @@ export default function ZimmetlerClient({
                     }
                 }}
             >
-                <DialogContent className="sm:max-w-[425px]">
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Zimmeti Sonlandır</DialogTitle>
                         <DialogDescription>

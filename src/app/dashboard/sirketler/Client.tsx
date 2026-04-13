@@ -3,7 +3,7 @@
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Building2 } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { useRouter } from "next/navigation";
@@ -125,13 +125,16 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Platforma kayıtlı tüm müşteri şirketleri.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} /> Yeni Şirket Ekle
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Yeni Şirket Kaydı</DialogTitle>
                             <DialogDescription>Sisteme yeni bir müşteri/tenant şirketi ekleyin.</DialogDescription>
@@ -147,8 +150,13 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
             </header>
 
             {/* Edit Modal */}
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Şirketi Düzenle</DialogTitle>
                         <DialogDescription>"{editRow?.ad}" şirketinin bilgilerini güncelleyin.</DialogDescription>

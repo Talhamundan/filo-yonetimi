@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Upload, FolderOpen, Download } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
@@ -112,14 +112,17 @@ export default function DokumanlarClient({
                     <p className="text-slate-500 text-sm mt-1">Araçlara ait ruhsat, sigorta poliçesi ve servis faturası gibi belgelerin bulut arşivi.</p>
                 </div>
                 <div className="flex items-center gap-3">
-                    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                    <Dialog open={createOpen} onOpenChange={(v) => {
+                            setCreateOpen(v);
+                            if (!v) setFormData({ ...EMPTY });
+                        }}>
                         <DialogTrigger asChild>
                             <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                                 <Upload size={16} />
                                 Yeni Belge Yükle
                             </button>
                         </DialogTrigger>
-                        <DialogContent className="sm:max-w-[425px]">
+                        <DialogContent >
                             <DialogHeader>
                                 <DialogTitle>Sisteme Evrak Yükle</DialogTitle>
                                 <DialogDescription>

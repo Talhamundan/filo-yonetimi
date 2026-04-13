@@ -11,6 +11,19 @@ export async function getSelectedSirketId(
     return trimmed ? trimmed : null;
 }
 
+export async function getSelectedKategori(
+    searchParams?: Promise<DashboardSearchParams> | DashboardSearchParams
+): Promise<"BINEK" | "SANTIYE" | null> {
+    const resolved = searchParams ? await searchParams : {};
+    const rawValue = resolved?.kategori;
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    const normalized = value?.trim().toUpperCase();
+
+    if (normalized === "BINEK") return "BINEK";
+    if (normalized === "SANTIYE") return "SANTIYE";
+    return null;
+}
+
 export async function getSelectedYil(
     searchParams?: Promise<DashboardSearchParams> | DashboardSearchParams
 ) {

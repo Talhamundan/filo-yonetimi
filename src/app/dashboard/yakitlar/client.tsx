@@ -3,19 +3,20 @@ import { toast } from "sonner";
 
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState, useEffect } from "react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
-import { Plus, Fuel, Gauge, Wallet, Droplets } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
+import { Plus, Fuel, Gauge, Wallet, Droplets, Layers, ArrowRightLeft, PackageCheck, Edit2, PencilLine } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, YakitRow } from "./columns";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createYakit, updateYakit, deleteYakit } from "./actions";
+import { createYakit, updateYakit, deleteYakit, addFuelToTanker, transferFuelToBidon, deleteTankHareket, updateTank, updateTankHareket } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import SelectedAracInfo from "@/components/arac/SelectedAracInfo";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
+import { GaugeChart } from "@/components/ui/gauge-chart";
 
 const EMPTY = {
     aracId: '',
@@ -29,32 +30,18 @@ const EMPTY = {
 
 const YAKIT_CIKISI_OPTIONS = ["Mithra", "Binlik Bidon"] as const;
 
-const TANK_DEPO_KAPASITE = 40000;
-const TANK_GOSTERGE_TASLAK = [
-    {
-        id: "tank1",
-        ad: "Ana Tank 1",
-        kapasiteLitre: TANK_DEPO_KAPASITE,
-        mevcutLitre: 30250,
-        birimMaliyet: 38.42,
-        dagitimHatti: "Mithra / Binlik beslemesi",
-    },
-    {
-        id: "tank2",
-        ad: "Ana Tank 2",
-        kapasiteLitre: TANK_DEPO_KAPASITE,
-        mevcutLitre: 18600,
-        birimMaliyet: 38.42,
-        dagitimHatti: "Mithra / Binlik beslemesi",
-    },
-] as const;
-
 function formatLitre(value: number) {
     return `${Math.round(value).toLocaleString("tr-TR")} L`;
 }
 
 function formatPara(value: number) {
     return `₺${Math.round(value).toLocaleString("tr-TR")}`;
+}
+
+function getGaugeColorForTank(percentage: number) {
+    if (percentage < 20) return "#E11D48";
+    if (percentage < 45) return "#F59E0B";
+    return "#16A34A";
 }
 
 function getTankSeviye(dolulukOrani: number) {
@@ -127,12 +114,14 @@ const FormFields = ({
     araclar,
     personeller,
     onAracChange,
+    tankGosterge,
 }: {
     formData: any,
     setFormData: any,
     araclar: AracOption[],
     personeller: PersonelOption[],
     onAracChange: (aracId: string) => void,
+    tankGosterge?: any,
 }) => {
     const seciliArac = araclar.find((a) => a.id === formData.aracId);
     const seciliPersonel = personeller.find((personel) => personel.id === formData.soforId);
@@ -224,11 +213,28 @@ const FormFields = ({
                         className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                     >
                         <option value="">Seçiniz...</option>
-                        {alindigiYerOptions.map((item) => (
-                            <option key={item} value={item}>
-                                {item}
-                            </option>
-                        ))}
+                        {alindigiYerOptions.map((item) => {
+                            let label = item;
+                            if (tankGosterge) {
+                                if (item === "Mithra") {
+                                    const anaTanklar = tankGosterge.tanklar.filter((t: any) => t.ad.startsWith("Ana Tank"));
+                                    const mxMevcut = anaTanklar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
+                                    const mxKapasite = anaTanklar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
+                                    const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
+                                    label = `Mithra (Ana Tanklar: %${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
+                                } else if (item === "Binlik Bidon") {
+                                    const binlik = tankGosterge.tanklar.find((t: any) => t.ad === "Binlik Bidon");
+                                    if (binlik) {
+                                        label = `Binlik Bidon (%${binlik.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${binlik.mevcutLitre.toLocaleString("tr-TR")}L)`;
+                                    }
+                                }
+                            }
+                            return (
+                                <option key={item} value={item}>
+                                    {label}
+                                </option>
+                            );
+                        })}
                     </select>
                 </div>
             </div>
@@ -236,28 +242,320 @@ const FormFields = ({
     );
 };
 
+const TankerAlimDialog = ({
+    open,
+    onOpenChange,
+    tanks,
+    onSuccess,
+    editRow
+}: {
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+    tanks: any[],
+    onSuccess: () => void,
+    editRow?: YakitRow | null
+}) => {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        tankId: '',
+        litre: '',
+        toplamTutar: '',
+        tarih: new Date().toISOString().slice(0, 16)
+    });
+
+    React.useEffect(() => {
+        if (editRow) {
+            setFormData({
+                tankId: editRow.arac.id,
+                litre: editRow.litre.toString(),
+                toplamTutar: editRow.tutar.toString(),
+                tarih: new Date(editRow.tarih).toISOString().slice(0, 16)
+            });
+        } else {
+            setFormData({
+                tankId: '',
+                litre: '',
+                toplamTutar: '',
+                tarih: new Date().toISOString().slice(0, 16)
+            });
+        }
+    }, [editRow, open]);
+
+    const handleSave = async () => {
+        if (!formData.tankId || !formData.litre || !formData.toplamTutar) {
+            return toast.warning("Eksik Bilgi", { description: "Lütfen tüm alanları doldurun." });
+        }
+        setLoading(true);
+        const payload = {
+            litre: parseDecimal(formData.litre),
+            toplamTutar: parseDecimal(formData.toplamTutar),
+            tarih: formData.tarih
+        };
+
+        const res = editRow 
+            ? await updateTankHareket(editRow.id, payload)
+            : await addFuelToTanker({ ...payload, tankId: formData.tankId });
+
+        if (res.success) {
+            toast.success(editRow ? "Güncellendi" : "Alım Kaydedildi", { 
+                description: editRow ? "Stok alım kaydı güncellendi." : "Tanker yakıt alımı başarıyla eklendi." 
+            });
+            onSuccess();
+            onOpenChange(false);
+        } else {
+            toast.error("Hata", { description: res.error });
+        }
+        setLoading(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent >
+                <DialogHeader>
+                    <DialogTitle>{editRow ? 'Alım Kaydını Düzenle' : 'Tankere Yakıt Alışı Gir'}</DialogTitle>
+                    <DialogDescription>Dışarıdan tankere alınan yakıt miktarını ve maliyetini kaydedin.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Hedef Tank</label>
+                        <select
+                            disabled={!!editRow}
+                            value={formData.tankId}
+                            onChange={(e) => setFormData({ ...formData, tankId: e.target.value })}
+                            className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm disabled:opacity-50"
+                        >
+                            <option value="">Seçiniz...</option>
+                            {tanks.filter(t => t.ad !== "Binlik Bidon").map((t) => (
+                                <option key={t.id} value={t.id}>{t.ad}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Alınan Litre</label>
+                        <Input type="number" step="0.01" value={formData.litre} onChange={(e) => setFormData({ ...formData, litre: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Toplam Tutar (TL)</label>
+                        <Input type="number" step="0.01" value={formData.toplamTutar} onChange={(e) => setFormData({ ...formData, toplamTutar: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Tarih</label>
+                        <Input type="datetime-local" value={formData.tarih} onChange={(e) => setFormData({ ...formData, tarih: e.target.value })} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <button onClick={handleSave} disabled={loading} className="bg-emerald-600 text-white hover:bg-emerald-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                        {loading ? 'Kaydediliyor...' : 'Kaydet'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const TankerTransferDialog = ({
+    open,
+    onOpenChange,
+    onSuccess,
+    editRow
+}: {
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+    onSuccess: () => void,
+    editRow?: YakitRow | null
+}) => {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        litre: '',
+        tarih: new Date().toISOString().slice(0, 16)
+    });
+
+    React.useEffect(() => {
+        if (editRow) {
+            setFormData({
+                litre: editRow.litre.toString(),
+                tarih: new Date(editRow.tarih).toISOString().slice(0, 16).replace('T', ' ')
+            });
+        } else {
+            setFormData({
+                litre: '',
+                tarih: new Date().toISOString().slice(0, 16)
+            });
+        }
+    }, [editRow, open]);
+
+    const handleSave = async () => {
+        if (!formData.litre) {
+            return toast.warning("Eksik Bilgi", { description: "Lütfen aktarılacak litre miktarını girin." });
+        }
+        setLoading(true);
+        const payload = {
+            litre: parseDecimal(formData.litre),
+            tarih: formData.tarih
+        };
+
+        const res = editRow
+            ? await updateTankHareket(editRow.id, payload)
+            : await transferFuelToBidon(payload);
+
+        if (res.success) {
+            toast.success(editRow ? "Güncellendi" : "Aktarım Başarılı", { 
+                description: editRow ? "Aktarım kaydı güncellendi." : "Ana tanktan bidona yakıt başarıyla aktarıldı." 
+            });
+            onSuccess();
+            onOpenChange(false);
+        } else {
+            toast.error("Hata", { description: res.error });
+        }
+        setLoading(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent >
+                <DialogHeader>
+                    <DialogTitle>{editRow ? 'Aktarımı Düzenle' : 'Bidona Yakıt Aktar'}</DialogTitle>
+                    <DialogDescription>Mithra (Ana Tanklar) üzerinden Binlik Bidon&apos;a iç transfer yapın.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <p className="text-[12px] text-amber-700 bg-amber-50 p-2 rounded border border-amber-100">
+                        Sistem otomatik olarak Ana Tank 1 veya 2&apos;den (uygunluk durumuna göre) Binlik Bidon&apos;a aktarım yapacaktır.
+                    </p>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Aktarılacak Litre</label>
+                        <Input type="number" step="0.01" value={formData.litre} onChange={(e) => setFormData({ ...formData, litre: e.target.value })} placeholder="0.00" />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Tarih</label>
+                        <Input type="datetime-local" value={formData.tarih} onChange={(e) => setFormData({ ...formData, tarih: e.target.value })} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <button onClick={handleSave} disabled={loading} className="bg-amber-600 text-white hover:bg-amber-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                        {loading ? 'İşlem Yapılıyor...' : editRow ? 'Güncelle' : 'Aktarımı Tamamla'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
+const TankEditDialog = ({
+    open,
+    onOpenChange,
+    tank,
+    onSuccess
+}: {
+    open: boolean,
+    onOpenChange: (open: boolean) => void,
+    tank: any | null,
+    onSuccess: () => void
+}) => {
+    const [loading, setLoading] = useState(false);
+    const [formData, setFormData] = useState({
+        ad: '',
+        kapasiteLitre: '',
+        mevcutLitre: '',
+        birimMaliyet: ''
+    });
+
+    React.useEffect(() => {
+        if (tank) {
+            setFormData({
+                ad: tank.ad,
+                kapasiteLitre: tank.kapasiteLitre.toString(),
+                mevcutLitre: tank.mevcutLitre.toString(),
+                birimMaliyet: tank.birimMaliyet.toString()
+            });
+        }
+    }, [tank]);
+
+    const handleSave = async () => {
+        if (!tank) return;
+        setLoading(true);
+        const res = await updateTank(tank.id, {
+            ad: formData.ad,
+            kapasiteLitre: Number(formData.kapasiteLitre),
+            mevcutLitre: Number(formData.mevcutLitre),
+            birimMaliyet: Number(formData.birimMaliyet)
+        });
+        if (res.success) {
+            toast.success("Tank Güncellendi", { description: "Tank bilgileri başarıyla güncellendi." });
+            onSuccess();
+            onOpenChange(false);
+        } else {
+            toast.error("Hata", { description: res.error });
+        }
+        setLoading(false);
+    };
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent >
+                <DialogHeader>
+                    <DialogTitle>Tank Bilgilerini Düzenle</DialogTitle>
+                    <DialogDescription>Tankın fiziksel kapasitesini veya mevcut stok durumunu güncelleyin.</DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Tank Adı</label>
+                        <Input value={formData.ad} onChange={(e) => setFormData({ ...formData, ad: e.target.value })} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Kapasite (Litre)</label>
+                            <Input type="number" value={formData.kapasiteLitre} onChange={(e) => setFormData({ ...formData, kapasiteLitre: e.target.value })} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-sm font-medium">Mevcut Stok (Litre)</label>
+                            <Input type="number" value={formData.mevcutLitre} onChange={(e) => setFormData({ ...formData, mevcutLitre: e.target.value })} />
+                        </div>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Birim Maliyet (₺/L)</label>
+                        <Input type="number" step="0.01" value={formData.birimMaliyet} onChange={(e) => setFormData({ ...formData, birimMaliyet: e.target.value })} />
+                    </div>
+                </div>
+                <DialogFooter>
+                    <button onClick={handleSave} disabled={loading} className="bg-slate-900 text-white hover:bg-slate-800 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                        {loading ? 'Güncelleniyor...' : 'Güncelle'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+};
+
 export default function YakitlarClient({
     initialYakitlar,
     araclar,
     personeller,
+    yakitTanklari,
 }: {
     initialYakitlar: YakitRow[],
     araclar: AracOption[],
     personeller: PersonelOption[],
+    yakitTanklari: any[],
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
+    const [tankerOpen, setTankerOpen] = useState(false);
+    const [transferOpen, setTransferOpen] = useState(false);
+    const [tankEditOpen, setTankEditOpen] = useState(false);
+    const [selectedTank, setSelectedTank] = useState<any | null>(null);
     const [editRow, setEditRow] = useState<YakitRow | null>(null);
+    const [editStockRow, setEditStockRow] = useState<YakitRow | null>(null);
     const [formData, setFormData] = useState({ ...EMPTY });
     const [loading, setLoading] = useState(false);
     const searchParams = useSearchParams();
     const shouldOpenCreate = searchParams.get("add") === "true";
     const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
     const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
+
     const tankGosterge = React.useMemo(() => {
-        const tanklar = TANK_GOSTERGE_TASLAK.map((tank) => {
+        const tanklar = yakitTanklari.map((tank) => {
             const dolulukOrani = tank.kapasiteLitre > 0 ? (tank.mevcutLitre / tank.kapasiteLitre) * 100 : 0;
             return {
                 ...tank,
@@ -290,11 +588,47 @@ export default function YakitlarClient({
             agirlikliMaliyet,
             genelDolulukOrani: toplamKapasite > 0 ? (toplamStok / toplamKapasite) * 100 : 0,
         };
-    }, []);
+    }, [yakitTanklari]);
+    const tankGaugeItems = React.useMemo(() => {
+        const normalized = (value: unknown) => String(value || "").toLocaleLowerCase("tr-TR");
+        const list = tankGosterge.tanklar as any[];
+        const usedIds = new Set<string>();
+        const pickByKeywords = (keywords: string[]) => {
+            const found = list.find((tank) => {
+                const name = normalized(tank.ad);
+                return !usedIds.has(tank.id) && keywords.some((keyword) => name.includes(keyword));
+            });
+            if (!found) return null;
+            usedIds.add(found.id);
+            return found;
+        };
+
+        const result: Array<{ id: string; title: string; sublabel: string; tank: any }> = [];
+        const tank1 = pickByKeywords(["ana tank 1", "tank 1"]);
+        const tank2 = pickByKeywords(["ana tank 2", "tank 2"]);
+        const gezici = pickByKeywords(["binlik", "gezici"]);
+
+        if (tank1) result.push({ id: tank1.id, title: "Tank 1", sublabel: tank1.ad, tank: tank1 });
+        if (tank2) result.push({ id: tank2.id, title: "Tank 2", sublabel: tank2.ad, tank: tank2 });
+        if (gezici) result.push({ id: gezici.id, title: "Gezici Araç", sublabel: gezici.ad, tank: gezici });
+
+        if (result.length === 0) {
+            return list.slice(0, 3).map((tank) => ({
+                id: tank.id,
+                title: tank.ad,
+                sublabel: tank.ad,
+                tank,
+            }));
+        }
+
+        return result;
+    }, [tankGosterge.tanklar]);
+
     const son30GunYakitCikisi = React.useMemo(
         () => initialYakitlar.reduce((sum, row) => sum + Number(row?.litre || 0), 0),
         [initialYakitlar]
     );
+
     const son7GunYakitCikisi = React.useMemo(() => {
         const now = Date.now();
         const yediGunOncesi = now - 7 * 24 * 60 * 60 * 1000;
@@ -304,6 +638,7 @@ export default function YakitlarClient({
             return sum + Number(row?.litre || 0);
         }, 0);
     }, [initialYakitlar]);
+
     const mithraCikisLitre = React.useMemo(
         () =>
             initialYakitlar.reduce((sum, row) => {
@@ -313,6 +648,7 @@ export default function YakitlarClient({
             }, 0),
         [initialYakitlar]
     );
+
     const binlikCikisLitre = React.useMemo(
         () =>
             initialYakitlar.reduce((sum, row) => {
@@ -322,6 +658,7 @@ export default function YakitlarClient({
             }, 0),
         [initialYakitlar]
     );
+
     const sonGuncelleme = React.useMemo(() => {
         const latest = initialYakitlar[0];
         if (!latest?.tarih) return "-";
@@ -335,6 +672,7 @@ export default function YakitlarClient({
             minute: "2-digit",
         });
     }, [initialYakitlar]);
+
     const tahminiKalanGun = React.useMemo(() => {
         if (son30GunYakitCikisi <= 0) return null;
         const gunlukOrtalama = son30GunYakitCikisi / 30;
@@ -345,7 +683,6 @@ export default function YakitlarClient({
     useEffect(() => {
         if (shouldOpenCreate) {
             setCreateOpen(true);
-            // URL'den parametreyi temizle (isteğe bağlı, ama kullanıcı sayfada kalırsa tekrar açılmasın diye iyi olur)
             const params = new URLSearchParams(searchParams.toString());
             params.delete("add");
             const query = params.toString();
@@ -374,11 +711,10 @@ export default function YakitlarClient({
             setLoading(false);
             return toast.error("Geçersiz değer", { description: "Litre veya KM alanını kontrol edin." });
         }
-        const tutar = 0;
         const res = await createYakit({
             ...formData,
             litre,
-            tutar,
+            tutar: 0,
             km,
             soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
@@ -395,63 +731,79 @@ export default function YakitlarClient({
     };
 
     const handleUpdate = async () => {
-        if (!editRow || !formData.aracId) {
-            toast.error("Güncelleme Hatası", { description: "Güncellenecek yakıt kaydı veya araç bilgisi eksik." });
-            return;
-        }
+        if (!editRow || !formData.aracId) return;
         setLoading(true);
         const litre = parseDecimal(formData.litre);
         const km = parseKm(formData.km);
-        const isKmInvalid = km !== null && !Number.isFinite(km);
-        if (!Number.isFinite(litre) || isKmInvalid) {
+        if (!Number.isFinite(litre)) {
             setLoading(false);
-            return toast.error("Geçersiz değer", { description: "Litre veya KM alanını kontrol edin." });
+            return toast.error("Geçersiz Değer", { description: "Litre alanını kontrol edin." });
         }
-        const tutar = 0;
         const res = await updateYakit(editRow.id, {
             ...formData,
             litre,
-            tutar,
+            tutar: 0,
             km,
             soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
             setEditRow(null);
-            toast.success("Güncelleme Başarılı", { description: "Yakıt alım kaydı güncellendi." });
+            toast.success("Güncellendi", { description: "Yakıt alım kaydı güncellendi." });
             router.refresh();
         } else {
-            toast.error("Güncelleme Hatası", { description: res.error });
+            toast.error("Hata", { description: res.error });
         }
         setLoading(false);
     };
 
-    const handleDelete = async (id: string, plaka: string) => {
-        const confirmed = await openConfirm({ title: "Kaydı Sil", message: `${plaka} plakalı aracın yakıt kaydını silmek istediğinizden emin misiniz?`, confirmText: "Evet, Sil", variant: "danger" });
-        if (!confirmed) return;
-        const res = await deleteYakit(id);
-        if (res.success) {
-            toast.success("Kayıt Silindi", { description: "Yakıt alım kaydı sistemden kaldırıldı." });
-            router.refresh();
+    const handleEdit = (row: YakitRow) => {
+        if (row.isStokHareketi) {
+            setEditStockRow(row);
+            const plaka = String(row.arac.plaka || "").toLocaleUpperCase("tr-TR");
+            if (plaka === "BİDON DOLUMU") {
+                setTransferOpen(true);
+            } else {
+                setTankerOpen(true);
+            }
         } else {
-            toast.error("Silme Başarısız", { description: res.error });
+            openEdit(row);
         }
     };
 
     const openEdit = (row: YakitRow) => {
-        const litre = row.litre || 0;
         setFormData({
             aracId: row.arac.id,
-            soforId: normalizeSoforId(row.soforId || row.kullanici?.id || row.arac.kullanici?.id),
-            tarih: new Date(row.tarih).toISOString().slice(0, 16),
-            litre: String(litre),
-            km: String(row.km),
+            soforId: normalizeSoforId(row.soforId || (row as any).kullanici?.id || row.arac.kullanici?.id),
+            tarih: new Date(row.tarih).toISOString().slice(0, 16).replace('T', ' '),
+            litre: row.litre.toString(),
+            km: row.km.toString(),
             istasyon: row.istasyon || '',
             odemeYontemi: row.odemeYontemi || 'NAKIT'
         });
         setEditRow(row);
+        setCreateOpen(true);
     };
 
+    const handleDelete = async (row: YakitRow) => {
+        const isStok = row.isStokHareketi;
+        const plaka = row.arac.plaka;
+        const title = isStok ? "Stok Hareketini Sil" : "Kaydı Sil";
+        const message = isStok 
+            ? `${plaka} işlemini silmek istediğinizden emin misiniz? (Stok iadesi yapılacaktır)` 
+            : `${plaka} plakalı aracın yakıt kaydını silmek istediğinizden emin misiniz?`;
+            
+        const confirmed = await openConfirm({ title, message, confirmText: "Evet, Sil", variant: "danger" });
+        if (!confirmed) return;
+        
+        const res = isStok ? await deleteTankHareket(row.id) : await deleteYakit(row.id);
+        if (res.success) {
+            toast.success("Silindi", { description: "Kayıt başarıyla kaldırıldı." });
+            router.refresh();
+        } else {
+            toast.error("Hata", { description: res.error });
+        }
+    };
 
     const columnsWithActions = [
         ...getColumns(canAccessAllCompanies),
@@ -460,8 +812,8 @@ export default function YakitlarClient({
             header: 'İşlemler',
             cell: ({ row }: any) => (
                 <div className="flex items-center gap-2">
-                    <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
-                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original.id, row.original.arac.plaka)} />
+                    <RowActionButton variant="edit" onClick={() => handleEdit(row.original)} />
+                    <RowActionButton variant="delete" onClick={() => handleDelete(row.original)} />
                 </div>
             )
         },
@@ -469,137 +821,147 @@ export default function YakitlarClient({
 
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
-        {confirmModal}
+            {confirmModal}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                         <Fuel className="text-rose-600" /> Yakıt Alım Kayıtları
+                         <Fuel className="text-rose-600" /> Yakıt Yönetimi
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Yakıt hareketlerini araç, personel ve kurum bazlı takip edin.</p>
+                    <p className="text-slate-500 text-sm mt-1">Tanker stoklarını ve araç yakıtlarını takip edin.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                    <DialogTrigger asChild>
-                        <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
-                            <Plus size={16} />
-                            Yakıt Alımı Gir
-                        </button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
-                        <DialogHeader>
-                            <DialogTitle>Yakıt Alım Bilgisi</DialogTitle>
-                            <DialogDescription>
-                                Yeni yakıt kaydını tablo alanlarıyla uyumlu şekilde girin.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <FormFields
-                            formData={formData}
-                            setFormData={setFormData}
-                            araclar={araclar}
-                            personeller={personeller}
-                            onAracChange={handleAracSelection}
-                        />
-                        <DialogFooter>
-                            <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
-                                {loading ? 'Kaydediliyor...' : 'Kaydet'}
+                <div className="flex items-center gap-3">
+                    <button onClick={() => setTankerOpen(true)} className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 px-4 py-2 rounded-md font-medium text-sm border border-emerald-200 transition-all flex items-center gap-2">
+                        <Plus size={16} /> Tankere Yakıt Al
+                    </button>
+                    <button onClick={() => setTransferOpen(true)} className="bg-amber-50 text-amber-700 hover:bg-amber-100 px-4 py-2 rounded-md font-medium text-sm border border-amber-200 transition-all flex items-center gap-2">
+                        <Droplets size={16} /> Bidona Aktar
+                    </button>
+                    <Dialog open={createOpen} onOpenChange={(v) => {
+                        setCreateOpen(v);
+                        if (!v) {
+                            setFormData({ ...EMPTY });
+                            setEditRow(null);
+                        }
+                    }}>
+                        <DialogTrigger asChild>
+                            <button className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-md font-medium text-sm transition-all flex items-center gap-2">
+                                <Plus size={16} /> Araca Yakıt Ver
                             </button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
+                        </DialogTrigger>
+                        <DialogContent >
+                            <DialogHeader>
+                                <DialogTitle>{editRow ? 'Kaydı Düzenle' : 'Araca Yakıt Verme'}</DialogTitle>
+                            </DialogHeader>
+                            <FormFields
+                                formData={formData}
+                                setFormData={setFormData}
+                                araclar={araclar}
+                                personeller={personeller}
+                                onAracChange={handleAracSelection}
+                                tankGosterge={tankGosterge}
+                            />
+                            <DialogFooter>
+                                <button onClick={editRow ? handleUpdate : handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                    {loading ? 'İşleniyor...' : editRow ? 'Güncelle' : 'Kaydet'}
+                                </button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
+
+                <TankerAlimDialog 
+                    open={tankerOpen} 
+                    onOpenChange={(v) => { 
+                        setTankerOpen(v); 
+                        if(!v) {
+                            setEditStockRow(null);
+                            setFormData({ ...EMPTY });
+                        }
+                    }} 
+                    tanks={yakitTanklari} 
+                    onSuccess={() => router.refresh()} 
+                    editRow={editStockRow}
+                />
+                <TankerTransferDialog
+                    open={transferOpen}
+                    onOpenChange={(v) => { 
+                        setTransferOpen(v); 
+                        if(!v) {
+                            setEditStockRow(null);
+                            setFormData({ ...EMPTY });
+                        }
+                    }}
+                    onSuccess={() => router.refresh()}
+                    editRow={editStockRow}
+                />
+                <TankEditDialog 
+                    open={tankEditOpen} 
+                    onOpenChange={(v) => {
+                        setTankEditOpen(v);
+                        if (!v) {
+                            setFormData({ ...EMPTY });
+                            setSelectedTank(null);
+                        }
+                    }} 
+                    tank={selectedTank} 
+                    onSuccess={() => router.refresh()} 
+                />
             </header>
 
-            <section className="mb-4">
-                <div className="relative rounded-xl border border-slate-200 bg-slate-50/70 p-4 md:p-5">
-                    <span className="absolute right-3 top-3 inline-flex items-center rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-sm font-extrabold uppercase tracking-wide text-amber-800 shadow-sm">
-                        Demo Görsel
-                    </span>
-                    <div className="flex flex-wrap items-end justify-between gap-2 mb-3">
-                        <div>
-                            <h3 className="text-sm md:text-base font-semibold text-slate-900">Yakıt Stok Özeti</h3>
-                            <p className="text-[11px] text-slate-500 mt-0.5">Son güncelleme: {sonGuncelleme}</p>
+            <section className="mb-6">
+                <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-5">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="font-bold text-slate-800">Tank Durumları</h3>
+                        <div className="flex gap-4 text-xs font-medium text-slate-500">
+                            <span>Toplam Stok: {formatLitre(tankGosterge.toplamStok)}</span>
+                            <span>Genel Doluluk: %{tankGosterge.genelDolulukOrani.toFixed(1)}</span>
                         </div>
                     </div>
-
-                    <div className="grid grid-cols-2 xl:grid-cols-4 gap-2.5 mb-3">
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] text-slate-500">Toplam Stok</p>
-                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">{formatLitre(tankGosterge.toplamStok)}</p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Gauge size={12} /> Genel Doluluk</p>
-                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
-                                %{tankGosterge.genelDolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Wallet size={12} /> Ortalama Maliyet</p>
-                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">
-                                ₺{tankGosterge.agirlikliMaliyet.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-slate-200 bg-white px-3 py-2.5">
-                            <p className="text-[11px] text-slate-500 inline-flex items-center gap-1"><Droplets size={12} /> Tahmini Yeterlilik</p>
-                            <p className="text-base md:text-lg font-bold text-slate-900 tabular-nums">{tahminiKalanGun ? `${tahminiKalanGun} gün` : "-"}</p>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2.5">
-                        {tankGosterge.tanklar.map((tank) => {
-                            const seviye = getTankSeviye(tank.dolulukOrani);
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {tankGaugeItems.map((item) => {
+                            const tank = item.tank;
+                            const seviye = getTankSeviye(Number(tank.dolulukOrani || 0));
+                            const doluluk = Number(tank.dolulukOrani || 0);
                             return (
-                                <div key={tank.id} className={`rounded-lg border border-slate-200 bg-white px-3 py-3 ${seviye.topBorderClass}`}>
-                                    <div className="flex items-center justify-between gap-2 mb-2">
-                                        <p className="text-sm font-semibold text-slate-900">{tank.ad}</p>
-                                        <span className="text-xs font-bold text-slate-900 tabular-nums">
-                                            %{tank.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}
-                                        </span>
-                                    </div>
-                                    <div className="h-3.5 rounded-full bg-slate-200 border border-slate-300 overflow-hidden">
-                                        <div
-                                            className={`h-full rounded-full ${seviye.barClass} shadow-[inset_0_-1px_0_rgba(255,255,255,0.25)]`}
-                                            style={{ width: `${Math.max(0, Math.min(100, tank.dolulukOrani))}%` }}
-                                        />
-                                    </div>
-                                    <p className="mt-2 text-sm font-semibold text-slate-900 tabular-nums">
-                                        {formatLitre(tank.mevcutLitre)}
-                                        <span className="text-slate-500 font-medium"> / {formatLitre(tank.kapasiteLitre)}</span>
-                                    </p>
-                                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                        <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 tabular-nums">
-                                            ₺{tank.birimMaliyet.toLocaleString("tr-TR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/L
-                                        </span>
-                                        <span>Son dolum: {sonGuncelleme}</span>
-                                        <span className={`inline-flex items-center rounded-full border px-2 py-0.5 font-semibold ${seviye.badgeClass}`}>
-                                            {seviye.etiket}
-                                        </span>
-                                    </div>
-                                </div>
+                                <GaugeChart
+                                    key={item.id}
+                                    label={item.title}
+                                    sublabel={item.sublabel}
+                                    value={doluluk}
+                                    min={0}
+                                    max={100}
+                                    valueText={`%${doluluk.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`}
+                                    helperText={`${formatLitre(Number(tank.mevcutLitre || 0))} / ${formatLitre(Number(tank.kapasiteLitre || 0))}`}
+                                    color={getGaugeColorForTank(doluluk)}
+                                    className="h-full"
+                                    headerRight={
+                                        <button
+                                            onClick={() => {
+                                                setSelectedTank(tank);
+                                                setTankEditOpen(true);
+                                            }}
+                                            className="text-slate-400 hover:text-indigo-600 transition-colors"
+                                            title="Tankı düzenle"
+                                            aria-label={`${item.title} düzenle`}
+                                        >
+                                            <PencilLine size={14} />
+                                        </button>
+                                    }
+                                    footer={
+                                        <div className="flex items-center justify-between gap-3">
+                                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${seviye.badgeClass}`}>
+                                                {seviye.etiket}
+                                            </span>
+                                            <div className="text-right">
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase">Maliyet</p>
+                                                <p className="text-xs font-bold text-slate-700">₺{Number(tank.birimMaliyet || 0).toFixed(2)}</p>
+                                            </div>
+                                        </div>
+                                    }
+                                />
                             );
                         })}
                     </div>
-
-                    <details className="mt-3 rounded-lg border border-slate-200 bg-white px-3 py-2">
-                        <summary className="cursor-pointer select-none text-[12px] font-semibold text-slate-700">
-                            Detayı Göster
-                        </summary>
-                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 text-[11px]">
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                <p className="text-slate-500">Stok Değeri</p>
-                                <p className="font-semibold text-slate-900 tabular-nums">{formatPara(tankGosterge.toplamDeger)}</p>
-                            </div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                <p className="text-slate-500">Son 7 Gün Tüketim</p>
-                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(son7GunYakitCikisi)}</p>
-                            </div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                <p className="text-slate-500">Mithra Çıkışı</p>
-                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(mithraCikisLitre)}</p>
-                            </div>
-                            <div className="rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2">
-                                <p className="text-slate-500">Binlik Çıkışı</p>
-                                <p className="font-semibold text-slate-900 tabular-nums">{formatLitre(binlikCikisLitre)}</p>
-                            </div>
-                        </div>
-                    </details>
                 </div>
             </section>
 
@@ -607,34 +969,11 @@ export default function YakitlarClient({
                 columns={columnsWithActions as any}
                 data={initialYakitlar}
                 searchKey="arac_plaka"
-                searchPlaceholder="Yakıt kaydı için araç plakası ara..."
+                searchPlaceholder="Plaka ara..."
                 toolbarArrangement="report-right-scroll"
-                serverFiltering={{
-                    showDateRange: true,
-                }}
+                serverFiltering={{ showDateRange: true }}
                 excelEntity="yakit"
             />
-
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>Yakıt Kaydını Düzenle</DialogTitle>
-                        <DialogDescription>&quot;{editRow?.arac.plaka}&quot; plakalı aracın yakıt alım bilgisini güncelleyin.</DialogDescription>
-                    </DialogHeader>
-                    <FormFields
-                        formData={formData}
-                        setFormData={setFormData}
-                        araclar={araclar}
-                        personeller={personeller}
-                        onAracChange={handleAracSelection}
-                    />
-                    <DialogFooter>
-                        <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
-                            {loading ? 'Güncelleniyor...' : 'Güncelle'}
-                        </button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
         </div>
     );
 }

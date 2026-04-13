@@ -3,7 +3,7 @@
 import React, { useState } from "react";
 import { toast } from "sonner";
 import { useConfirm } from "@/components/ui/confirm-modal";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, Receipt } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
@@ -183,14 +183,17 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Araç bazlı genel masrafları, kategorilerine göre sisteme kaydedin.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
                             Yeni Gider Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Harcama Formu</DialogTitle>
                             <DialogDescription>
@@ -220,8 +223,13 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
                 excelEntity="masraf"
             />
 
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Gider Kaydını Düzenle</DialogTitle>
                         <DialogDescription>"{editRow?.arac.plaka}" plakalı aracın harcama bilgisini güncelleyin.</DialogDescription>

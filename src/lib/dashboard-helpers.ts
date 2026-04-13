@@ -42,12 +42,29 @@ export function buildDateContext(
             ? new Date(normalizedYear, normalizedMonth - 2, 1)
             : new Date(normalizedYear - 1, normalizedMonth - 1, 1);
 
+    const isYearMode = comparisonGranularity === "YIL";
+
+    const bugun = startOfDay(now);
+    const seciliAyBasi = isYearMode 
+        ? new Date(normalizedYear, 0, 1) 
+        : startOfMonth(referenceDate);
+    const seciliAySonu = isYearMode 
+        ? new Date(normalizedYear, 11, 31, 23, 59, 59, 999) 
+        : endOfMonth(referenceDate);
+        
+    const oncekiDonemBasi = isYearMode 
+        ? new Date(normalizedYear - 1, 0, 1) 
+        : startOfMonth(previousReferenceDate);
+    const oncekiDonemSonu = isYearMode 
+        ? new Date(normalizedYear - 1, 11, 31, 23, 59, 59, 999) 
+        : endOfMonth(previousReferenceDate);
+
     return {
-        bugun: startOfDay(now),
-        seciliAyBasi: startOfMonth(referenceDate),
-        seciliAySonu: endOfMonth(referenceDate),
-        oncekiDonemBasi: startOfMonth(previousReferenceDate),
-        oncekiDonemSonu: endOfMonth(previousReferenceDate),
+        bugun,
+        seciliAyBasi,
+        seciliAySonu,
+        oncekiDonemBasi,
+        oncekiDonemSonu,
         normalizedYear,
         normalizedMonth,
     };

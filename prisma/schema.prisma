@@ -51,6 +51,7 @@ model Arac {
   kullaniciGecmisi KullaniciZimmet[]
   trafikSigortasi  TrafikSigortasi[]
   yakitlar         Yakit[]
+  yakitTankHareketleri YakitTankHareket[]
 
   @@index([plaka])
   @@index([durum])
@@ -80,6 +81,7 @@ model Kullanici {
   sirket         Sirket?           @relation(fields: [sirketId], references: [id])
   zimmetler      KullaniciZimmet[]
   yakitKayitlari Yakit[]           @relation("YakitSoforRelation")
+  yakitTankHareketleri YakitTankHareket[]
 
   @@index([sirketId])
   @@index([deletedAt])
@@ -289,10 +291,56 @@ model Yakit {
   saseNo       String?
   arac         Arac         @relation(fields: [aracId], references: [id])
   sofor        Kullanici?   @relation("YakitSoforRelation", fields: [soforId], references: [id])
+  tankHareketi YakitTankHareket?
 
   @@index([aracId])
   @@index([sirketId])
   @@index([tarih])
+  @@index([soforId])
+}
+
+model YakitTank {
+  id               String            @id @default(cuid())
+  ad               String
+  kapasiteLitre    Float
+  mevcutLitre      Float             @default(0)
+  birimMaliyet     Float             @default(0)
+  aktifMi          Boolean           @default(true)
+  olusturmaTarihi  DateTime          @default(now())
+  guncellemeTarihi DateTime          @default(now()) @updatedAt
+  hareketler       YakitTankHareket[] @relation("YakitTankKaynak")
+  hedefHareketler  YakitTankHareket[] @relation("YakitTankHedef")
+
+  @@index([aktifMi])
+}
+
+model YakitTankHareket {
+  id               String               @id @default(cuid())
+  tip              YakitTankHareketTip
+  tarih            DateTime             @default(now())
+  litre            Float
+  birimMaliyet     Float
+  toplamTutar      Float
+  tankId           String
+  hedefTankId      String?
+  aracId           String?
+  soforId          String?
+  yakitId          String?              @unique
+  istasyon         String?
+  km               Int?
+  aciklama         String?
+  olusturmaTarihi  DateTime             @default(now())
+  tank             YakitTank            @relation("YakitTankKaynak", fields: [tankId], references: [id])
+  hedefTank        YakitTank?           @relation("YakitTankHedef", fields: [hedefTankId], references: [id])
+  arac             Arac?                @relation(fields: [aracId], references: [id])
+  sofor            Kullanici?           @relation(fields: [soforId], references: [id])
+  yakit            Yakit?               @relation(fields: [yakitId], references: [id], onDelete: SetNull)
+
+  @@index([tip])
+  @@index([tarih])
+  @@index([tankId])
+  @@index([hedefTankId])
+  @@index([aracId])
   @@index([soforId])
 }
 
@@ -432,6 +480,12 @@ enum OnayDurumu {
 enum OdemeYontemi {
   NAKIT
   TASIT_TANIMA
+}
+
+enum YakitTankHareketTip {
+  ALIM
+  CIKIS
+  TRANSFER
 }
 
 enum ActivityActionType {

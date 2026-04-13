@@ -1,5 +1,14 @@
 import prisma from "@/lib/prisma";
 
+type AktifZimmetRow = {
+    kullanici: { sirketId: string | null } | null;
+};
+
+type AracWithKullaniciRow = {
+    sirketId: string | null;
+    kullanici: { sirketId: string | null; deletedAt: Date | null } | null;
+};
+
 function normalizeSirketId(value: unknown) {
     const normalized = typeof value === "string" ? value.trim() : "";
     return normalized || null;
@@ -11,7 +20,7 @@ export async function resolveVehicleUsageCompanyId(params: {
 }) {
     const fallbackSirketId = normalizeSirketId(params.fallbackSirketId);
 
-    const aktifZimmet = await (prisma as any).kullaniciZimmet
+    const aktifZimmet = await prisma.kullaniciZimmet
         .findFirst({
             where: { aracId: params.aracId, bitis: null },
             orderBy: { baslangic: "desc" },
@@ -19,13 +28,13 @@ export async function resolveVehicleUsageCompanyId(params: {
                 kullanici: { select: { sirketId: true } },
             },
         })
-        .catch(() => null);
+        .catch(() => null) as AktifZimmetRow | null;
     const aktifZimmetSirketId = normalizeSirketId(aktifZimmet?.kullanici?.sirketId);
     if (aktifZimmetSirketId) {
         return aktifZimmetSirketId;
     }
 
-    const arac = await (prisma as any).arac
+    const arac = await prisma.arac
         .findUnique({
             where: { id: params.aracId },
             select: {
@@ -33,7 +42,7 @@ export async function resolveVehicleUsageCompanyId(params: {
                 kullanici: { select: { sirketId: true, deletedAt: true } },
             },
         })
-        .catch(() => null);
+        .catch(() => null) as AracWithKullaniciRow | null;
 
     const aktifKullaniciSirketId =
         arac?.kullanici && !arac.kullanici.deletedAt ? normalizeSirketId(arac.kullanici.sirketId) : null;

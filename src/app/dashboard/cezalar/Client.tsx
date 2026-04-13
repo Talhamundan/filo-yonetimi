@@ -3,7 +3,7 @@
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "../../../components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Plus, AlertOctagon, Car, User, Wallet } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "../../../components/ui/searchable-select";
@@ -232,13 +232,16 @@ export default function CezalarClient({
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Şoför ve araç bazında trafik cezalarını yönetin.</p>
                 </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <Dialog open={createOpen} onOpenChange={(v) => {
+                    setCreateOpen(v);
+                    if (!v) setFormData({ ...EMPTY });
+                }}>
                     <DialogTrigger asChild>
                         <button className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} /> Yeni Ceza Kaydı
                         </button>
                     </DialogTrigger>
-                    <DialogContent className="sm:max-w-[425px]">
+                    <DialogContent >
                         <DialogHeader>
                             <DialogTitle>Yeni Ceza Kaydı</DialogTitle>
                             <DialogDescription>Ceza kaydını araç ve şoför bilgisiyle birlikte oluşturun.</DialogDescription>
@@ -318,8 +321,13 @@ export default function CezalarClient({
                 excelEntity="ceza"
             />
 
-            <Dialog open={!!editRow} onOpenChange={(o) => !o && setEditRow(null)}>
-                <DialogContent className="sm:max-w-[425px]">
+            <Dialog open={!!editRow} onOpenChange={(o) => {
+                if (!o) {
+                    setEditRow(null);
+                    setFormData({ ...EMPTY });
+                }
+            }}>
+                <DialogContent >
                     <DialogHeader>
                         <DialogTitle>Ceza Kaydını Düzenle</DialogTitle>
                         <DialogDescription>Kayıt detaylarını güncelleyin.</DialogDescription>

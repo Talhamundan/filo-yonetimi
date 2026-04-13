@@ -303,17 +303,17 @@ export function DataTable<TData, TValue>({
 
         if (actionsIndex >= 0) {
             nextColumns.splice(actionsIndex, 0, selectionColumn)
-            return nextColumns
+            return nextColumns as ColumnDef<TData, TValue>[]
         }
 
-        return [...nextColumns, selectionColumn]
+        return [...nextColumns, selectionColumn] as ColumnDef<TData, TValue>[]
     }, [canSelectRows, columns])
 
-    const table = useReactTable({
+    const table = useReactTable<TData>({
         data,
         columns: tableColumns,
         defaultColumn: {
-            filterFn: includesTextFilter,
+            filterFn: includesTextFilter as FilterFn<TData>,
         },
         onSortingChange: setSorting,
         onColumnFiltersChange: setColumnFilters,
@@ -391,6 +391,22 @@ export function DataTable<TData, TValue>({
             return { ...prev, pageIndex: urlPageIndex }
         })
     }, [urlPageIndex])
+
+    React.useEffect(() => {
+        // Filtre değiştiğinde mevcut sayfada kalmak boş ekran oluşturabiliyor (örn. ?...Page=4).
+        // Bu yüzden filtreleme anında ilk sayfaya dön.
+        setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }))
+    }, [columnFilters])
+
+    React.useEffect(() => {
+        const pageCount = table.getPageCount()
+        if (pageCount <= 0) return
+        if (pagination.pageIndex < pageCount) return
+        setPagination((prev) => ({
+            ...prev,
+            pageIndex: Math.max(pageCount - 1, 0),
+        }))
+    }, [pagination.pageIndex, table, filteredCount])
 
     React.useEffect(() => {
         const nextPageNumber = pagination.pageIndex + 1
@@ -942,7 +958,7 @@ export function DataTable<TData, TValue>({
                             <TableRow
                                 key={row.id}
                                 data-state={row.getIsSelected() && "selected"}
-                                onClick={() => onRowClick && onRowClick(row.original)}
+                                onClick={() => onRowClick && onRowClick(row.original as TData)}
                                 className={`
                                     group border-b-slate-100 transition-colors hover:bg-slate-50/80
                                     ${onRowClick ? "cursor-pointer" : ""}
