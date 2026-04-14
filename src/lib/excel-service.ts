@@ -1435,14 +1435,14 @@ export function buildRelationLookupWheres(modelName: string, rawValue: string) {
             const soyad = parts.slice(1).join(" ");
             wheres.push({
                 AND: [
-                    { ad },
-                    { soyad },
+                    { ad: { equals: ad, mode: "insensitive" } },
+                    { soyad: { equals: soyad, mode: "insensitive" } },
                 ],
             } as WhereData);
         }
-        wheres.push({ eposta: personText });
-        wheres.push({ tcNo: personText });
-        wheres.push({ ad: personText });
+        wheres.push({ eposta: { equals: personText, mode: "insensitive" } });
+        wheres.push({ tcNo: { equals: personText, mode: "insensitive" } });
+        wheres.push({ ad: { equals: personText, mode: "insensitive" } });
         return wheres;
     }
 
@@ -1827,7 +1827,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             }
 
             if (config.prismaModel === "kullaniciZimmet") {
-                if (!parsedRow.aracId) { skipped++; continue; }
+                if (!parsedRow.aracId || !parsedRow.kullaniciId) { skipped++; continue; }
                 if (parsedRow.baslangicKm === undefined || parsedRow.baslangicKm === null) {
                     let km = kmCache.get(parsedRow.aracId as string);
                     if (km === undefined) {
