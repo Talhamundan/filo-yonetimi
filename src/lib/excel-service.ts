@@ -1,0 +1,1831 @@
+import { Prisma, $Enums } from "@prisma/client";
+import * as XLSX from "xlsx";
+import { randomUUID } from "node:crypto";
+import { prisma } from "@/lib/prisma";
+import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/excel-entities";
+import { syncAracGuncelKm } from "@/lib/km-consistency";
+import { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
+import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
+
+export { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
+export { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
+
+// --- Types ---
+export type RowData = Record<string, unknown>;
+export type WhereData = Record<string, unknown>;
+export type ExportColumn =
+    | { key: string; type: "scalar"; fieldName: string }
+    | {
+        key: string;
+        type: "relationLookup";
+        relationFieldName: string;
+        relationModelName: string;
+        foreignKeyFieldName: string;
+    };
+
+export type ModelDelegate = {
+    findMany?: (args?: {
+        where?: WhereData;
+        orderBy?: Record<string, "asc" | "desc">;
+        include?: Record<string, unknown>;
+        select?: Record<string, boolean>;
+        take?: number;
+    }) => Promise<RowData[]>;
+    create?: (args: { data: RowData; select?: Record<string, boolean> }) => Promise<unknown>;
+    update?: (args: { where: WhereData; data: RowData; select?: Record<string, boolean> }) => Promise<unknown>;
+    upsert?: (args: { where: WhereData; create: RowData; update: RowData }) => Promise<unknown>;
+    findUnique?: (args: { where: WhereData; select: Record<string, boolean> }) => Promise<RowData | null>;
+};
+
+export type PrismaField = (typeof Prisma.dmmf.datamodel.models)[number]["fields"][number];
+
+export type ExcelModelProfile = {
+    visibleColumns?: string[];
+    hiddenColumns?: string[];
+    labels?: Record<string, string>;
+    aliases?: Record<string, string[]>;
+    strictVisibleColumns?: boolean;
+};
+
+// --- Config & Constants ---
+export const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+
+export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
+    arac: {
+        visibleColumns: [
+            "durum",
+            "plaka",
+            "ruhsatSahibi",
+            "calistigiKurum",
+            "saseNo",
+            "kategori",
+            "marka",
+            "model",
+            "yil",
+            "bulunduguIl",
+            "bedel",
+            "guncelKm",
+            "kullanici",
+            "ruhsatSeriNo",
+            "aciklama",
+        ],
+        hiddenColumns: ["olusturmaTarihi", "guncellemeTarihi"],
+        labels: {
+            durum: "Durum",
+            plaka: "Plaka",
+            ruhsatSahibi: "Ruhsat Sahibi",
+            calistigiKurum: "Kullanıcı Firma",
+            saseNo: "Şase No",
+            kategori: "Kategori",
+            marka: "Marka",
+            model: "Model",
+            yil: "Model Yılı",
+            bulunduguIl: "Bulunduğu Şantiye",
+            bedel: "BEDEL",
+            guncelKm: "KM",
+            kullanici: "Kullanıcı",
+            ruhsatSeriNo: "Ruhsat Seri No",
+            aciklama: "Açıklama",
+        },
+        aliases: {
+            ruhsatSahibi: [
+                "Ruhsat Sahibi Firma",
+                "operasyonFirma",
+                "operasyonFirmasi",
+                "ruhsatSahibiFirma",
+                "ruhsatSahibiFirmasi",
+                "sirket",
+                "bagliSirket",
+            ],
+            calistigiKurum: [
+                "Kullanıcı Firma",
+                "Kullanıcı Firması",
+                "Kullanici Firma",
+                "Kullanici Firmasi",
+                "kullanici firma",
+                "kullanici firmasi",
+                "kullaniciFirma",
+                "kullaniciFirmasi",
+                "Çalıştığı Kurum",
+                "Calistigi Kurum",
+            ],
+            guncelKm: ["Güncel KM", "km", "Km"],
+            kullanici: ["Sofor", "Şoför", "sofor"],
+            bulunduguIl: ["Bulunduğu İl", "Bulunduğu Şantiye", "Şantiye", "İl", "il"],
+            yil: ["Yıl", "yil"],
+            bedel: ["Bedel", "alış bedeli", "alis bedeli", "alış maliyeti", "alis maliyeti"],
+            aciklama: ["Açiklama", "aciklama"],
+        },
+    },
+    kullanici: {
+        visibleColumns: [
+            "ad",
+            "soyad",
+            "telefon",
+            "tcNo",
+            "calistigiKurum",
+            "rol",
+            "sirket",
+            "onayDurumu",
+            "eposta",
+        ],
+        hiddenColumns: ["deletedAt", "deletedBy"],
+        labels: {
+            ad: "Ad",
+            soyad: "Soyad",
+            telefon: "Telefon",
+            tcNo: "TC Kimlik No",
+            calistigiKurum: "Çalıştığı Kurum",
+            rol: "Rol",
+            sirket: "Bağlı Şirket",
+            onayDurumu: "Onay Durumu",
+            eposta: "E-Posta",
+        },
+        aliases: {
+            calistigiKurum: [
+                "Çalıştığı Kurum",
+                "Calistigi Kurum",
+                "Kurum",
+                "Çalıştığı Firma",
+                "Calistigi Firma",
+                "Şehir",
+                "Sehir",
+                "sehir",
+            ],
+            sirket: ["Bağlı Şirket", "Bagli Sirket", "Şirket", "Sirket"],
+            tcNo: ["TC No", "TCKN", "TC Kimlik"],
+            eposta: ["Eposta", "Mail"],
+        },
+    },
+    yakit: {
+        visibleColumns: [
+            "tarih",
+            "arac",
+            "bagliSirket",
+            "calistigiKurum",
+            "sofor",
+            "km",
+            "litre",
+            "istasyon",
+        ],
+        strictVisibleColumns: true,
+        labels: {
+            tarih: "Tarih Saat",
+            arac: "Araç Plakası",
+            bagliSirket: "Bağlı Şirket",
+            calistigiKurum: "Çalıştığı Kurum",
+            sofor: "Yakıt Alan Personel",
+            km: "KM/Saat",
+            litre: "Alınan Litre",
+            istasyon: "Yakıt Çıkışı",
+        },
+        aliases: {
+            tarih: ["Tarih", "Tarih Saati", "Alım Tarihi", "Alim Tarihi", "Alım Tarihi & Saati"],
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            bagliSirket: ["Bağlı Şirket", "Bagli Sirket", "Ruhsat Sahibi", "Şirket", "Sirket"],
+            calistigiKurum: ["Çalıştığı Kurum", "Calistigi Kurum", "Kullanıcı Firma", "Kullanici Firma"],
+            sofor: ["Yakıtı Alan", "Yakit Alan", "Yakıt Alan Personel", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici"],
+            km: ["KM", "Km", "km", "KM/Saat", "Alım KM", "Alim KM"],
+            litre: ["Litre", "Alınan Litre", "Alinan Litre"],
+            istasyon: ["Yakıt Çıkışı", "Yakit Cikisi", "Alındığı Yer", "Alindigi Yer", "İstasyon", "Istasyon", "Yakıt Alım Yeri", "Yakit Alim Yeri"],
+        },
+    },
+    bakim: {
+        visibleColumns: [
+            "bakimTarihi",
+            "arac",
+            "sofor",
+            "arizaSikayet",
+            "yapilanIslemler",
+            "degisenParca",
+            "islemYapanFirma",
+            "tutar",
+        ],
+        strictVisibleColumns: true,
+        labels: {
+            bakimTarihi: "Bakım Tarihi",
+            arac: "Plaka",
+            sofor: "Şoför",
+            arizaSikayet: "Arıza Şikayet",
+            yapilanIslemler: "Yapılan İşlem",
+            degisenParca: "Değişen Parça",
+            islemYapanFirma: "İşlem Yapan Firma",
+            tutar: "Masraf Tutarı",
+        },
+        aliases: {
+            sofor: ["Şoför", "Sofor", "Servise Götüren", "Servise Goturen", "Personel", "Kullanıcı", "Kullanici"],
+            bakimTarihi: ["Tarih"],
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            arizaSikayet: ["Arıza Şikayet", "Ariza Sikayet", "Arıza Şikayeti", "Ariza Sikayeti", "Şikayet", "Sikayet", "Arıza Açıklama", "Ariza Aciklama"],
+            yapilanIslemler: ["Yapılan İşlem", "Yapılan İşlemler", "Yapilan Islem", "Yapilan Islemler", "İşlem", "Islem"],
+            degisenParca: ["Değişen Parça", "Degisen Parca", "Değişen Parçalar", "Degisen Parcalar"],
+            islemYapanFirma: ["İşlem Yapan Firma", "Islem Yapan Firma", "Servis Adı", "Servis Adi", "Servis Firması", "Servis Firmasi"],
+            tutar: ["Tutar", "Masraf", "Masraf Tutarı", "Masraf Tutari"],
+        },
+    },
+    muayene: {
+        visibleColumns: ["arac", "gecerlilikTarihi"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            gecerlilikTarihi: "Geçerlilik Tarihi",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            gecerlilikTarihi: ["Tarih", "Geçerlilik Bitiş", "Gecerlilik Bitis", "Bitiş Tarihi", "Bitis Tarihi"],
+        },
+    },
+    kasko: {
+        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            sirket: "Sigorta Şirketi",
+            policeNo: "Poliçe No",
+            acente: "Acente",
+            baslangicTarihi: "Başlangıç Tarihi",
+            bitisTarihi: "Bitiş Tarihi",
+            tutar: "Poliçe Tutarı",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Kasko Firması", "Kasko Firmasi"],
+            policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
+            acente: ["Acente", "Aracı Kurum"],
+            baslangicTarihi: ["Başlangıç Tarihi", "Baslangic Tarihi", "Başlangıç", "Baslangic", "Tarih"],
+            bitisTarihi: ["Bitiş Tarihi", "Bitis Tarihi", "Bitiş", "Bitis", "Geçerlilik Bitiş", "Gecerlilik Bitis"],
+            tutar: ["Poliçe Tutarı", "Police Tutari", "Tutar", "Maliyet"],
+        },
+    },
+    trafikSigortasi: {
+        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Araç Plakası",
+            sirket: "Sigorta Şirketi",
+            policeNo: "Poliçe No",
+            acente: "Acente",
+            baslangicTarihi: "Başlangıç Tarihi",
+            bitisTarihi: "Bitiş Tarihi",
+            tutar: "Poliçe Tutarı",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
+            sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Sigorta Firması", "Sigorta Firmasi"],
+            policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
+            acente: ["Acente", "Aracı Kurum"],
+            baslangicTarihi: ["Başlangıç Tarihi", "Baslangic Tarihi", "Başlangıç", "Baslangic", "Tarih"],
+            bitisTarihi: ["Bitiş Tarihi", "Bitis Tarihi", "Bitiş", "Bitis", "Geçerlilik Bitiş", "Gecerlilik Bitis"],
+            tutar: ["Poliçe Tutarı", "Police Tutari", "Tutar", "Maliyet"],
+        },
+    },
+    ceza: {
+        visibleColumns: ["tarih", "arac", "sofor", "cezaMaddesi", "tutar", "aciklama"],
+        strictVisibleColumns: true,
+        labels: {
+            tarih: "Ceza Tarihi",
+            arac: "Plaka",
+            sofor: "Şoför",
+            cezaMaddesi: "Ceza Maddesi",
+            tutar: "Tutar",
+            aciklama: "Açıklama",
+        },
+        aliases: {
+            tarih: ["Tarih", "Ceza Tarihi", "Tarih Saat"],
+            arac: ["Araç", "Arac", "Plaka", "Araç Plakası"],
+            sofor: ["Şoför", "Sofor", "Personel", "Sürücü"],
+            cezaMaddesi: ["Ceza Maddesi", "Madde", "İhlal"],
+            tutar: ["Tutar", "Ceza Tutarı", "Bedel"],
+        },
+    },
+    masraf: {
+        visibleColumns: ["tarih", "arac", "kategori", "tutar", "aciklama"],
+        strictVisibleColumns: true,
+        labels: {
+            tarih: "Tarih",
+            arac: "Plaka",
+            kategori: "Kategori",
+            tutar: "Tutar",
+            aciklama: "Açıklama",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka"],
+            tutar: ["Tutar", "Bedel", "Maliyet"],
+            kategori: ["Tür", "Masraf Türü"],
+        },
+    },
+    arizaKaydi: {
+        visibleColumns: ["bildirimTarihi", "arac", "bildirenSofor", "aciklama", "durum"],
+        strictVisibleColumns: true,
+        labels: {
+            bildirimTarihi: "Bildirim Tarihi",
+            arac: "Plaka",
+            bildirenSofor: "Bildiren Şoför",
+            aciklama: "Arıza Açıklaması",
+            durum: "Durum",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka"],
+            bildirenSofor: ["Şoför", "Sofor", "Bildiren"],
+        },
+    },
+    kullaniciZimmet: {
+        visibleColumns: ["arac", "kullanici", "baslangic", "bitis", "notlar"],
+        strictVisibleColumns: true,
+        labels: {
+            arac: "Plaka",
+            kullanici: "Zimmetlenen Personel",
+            baslangic: "Başlangıç Tarihi",
+            bitis: "Bitiş Tarihi",
+            notlar: "Açıklama",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka"],
+            kullanici: ["Personel", "Şoför", "Sofor", "Kullanıcı"],
+            notlar: ["Açıklama", "Not", "Notlar", "aciklama"],
+        },
+    },
+    dokuman: {
+        visibleColumns: ["yuklemeTarihi", "arac", "kategori", "aciklama"],
+        strictVisibleColumns: true,
+        labels: {
+            yuklemeTarihi: "Yükleme Tarihi",
+            arac: "Plaka",
+            kategori: "Kategori",
+            aciklama: "Açıklama",
+        },
+        aliases: {
+            arac: ["Araç", "Arac", "Plaka"],
+        },
+    },
+};
+
+const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {
+    AracKategori: {
+        TIR: "SANTIYE",
+        KAMYON: "SANTIYE",
+        "KAMYON TIR": "SANTIYE",
+        "KAMYON/TIR": "SANTIYE",
+        "SANTIYE ARACI": "SANTIYE",
+        SANTIYE: "SANTIYE",
+        "BINEK ARAC": "BINEK",
+        "IS MAKINESI": "SANTIYE",
+        "IS MAKINASI": "SANTIYE",
+        "IS_MAKINASI": "SANTIYE",
+        "IS MAKINESI ARACI": "SANTIYE",
+    },
+    AracDurumu: {
+        AKTIFTE: "AKTIF",
+        BOS: "BOSTA",
+    },
+    Rol: {
+        SURUCU: "SOFOR",
+    },
+};
+
+const NULLISH_CELL_TOKENS = new Set([
+    "-",
+    "--",
+    "—",
+    "n/a",
+    "na",
+    "null",
+    "none",
+    "nil",
+    "yok",
+    "bos",
+    "boş",
+]);
+
+const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
+    "plaka",
+    "marka",
+    "model",
+    "yil",
+    "bulunduguIl",
+    "guncelKm",
+    "bedel",
+    "aciklama",
+    "ruhsatSeriNo",
+    "durum",
+    "kullaniciId",
+    "sirketId",
+    "calistigiKurum",
+    "kategori",
+    "saseNo",
+    "deletedAt",
+    "deletedBy",
+]);
+
+// --- Utility Functions ---
+
+export function lowerFirst(value: string) {
+    return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+export function getExcelModelProfile(modelName: string): ExcelModelProfile | null {
+    return EXCEL_MODEL_PROFILES[modelName] || null;
+}
+
+export function getExportHeaderLabel(modelName: string, key: string) {
+    const profile = getExcelModelProfile(modelName);
+    return profile?.labels?.[key] || key;
+}
+
+export function getHeaderAliases(modelName: string, key: string) {
+    const profile = getExcelModelProfile(modelName);
+    return profile?.aliases?.[key] || [];
+}
+
+export function normalizeHeaderToken(value: string) {
+    return value
+        .trim()
+        .toLocaleLowerCase("tr-TR")
+        .replace(/ı/g, "i")
+        .replace(/İ/g, "i")
+        .replace(/ş/g, "s")
+        .replace(/ğ/g, "g")
+        .replace(/ü/g, "u")
+        .replace(/ö/g, "o")
+        .replace(/ç/g, "c")
+        .replace(/[^a-z0-9]/g, "");
+}
+
+export function buildHeaderIndex(headers: string[]) {
+    const index = new Map<string, string>();
+    for (const header of headers) {
+        const normalized = normalizeHeaderToken(header);
+        if (!normalized) continue;
+        if (!index.has(normalized)) {
+            index.set(normalized, header);
+        }
+        const dedupNormalized = normalized.replace(/\d+$/, "");
+        if (dedupNormalized && dedupNormalized !== normalized && !index.has(dedupNormalized)) {
+            index.set(dedupNormalized, header);
+        }
+    }
+    return index;
+}
+
+export function findHeaderByCandidates(
+    availableHeaders: Set<string>,
+    normalizedHeaderIndex: Map<string, string>,
+    candidates: string[]
+) {
+    for (const candidate of candidates) {
+        if (availableHeaders.has(candidate)) {
+            return candidate;
+        }
+        const normalized = normalizeHeaderToken(candidate);
+        if (!normalized) continue;
+        const matched = normalizedHeaderIndex.get(normalized);
+        if (matched) return matched;
+    }
+    return null;
+}
+
+export function resolveImportHeaderForRecord(
+    recordHeaders: Set<string>,
+    normalizedRecordHeaderIndex: Map<string, string>,
+    fallbackHeaders: Set<string>,
+    fallbackNormalizedHeaderIndex: Map<string, string>,
+    candidates: string[]
+) {
+    return (
+        findHeaderByCandidates(recordHeaders, normalizedRecordHeaderIndex, candidates) ||
+        findHeaderByCandidates(fallbackHeaders, fallbackNormalizedHeaderIndex, candidates)
+    );
+}
+
+export function readRecordCellValue(
+    record: Record<string, unknown>,
+    header: string | null,
+    normalizedRecordHeaderIndex: Map<string, string>
+) {
+    if (!header) return null;
+    if (Object.prototype.hasOwnProperty.call(record, header)) {
+        return record[header];
+    }
+    const normalized = normalizeHeaderToken(header);
+    if (!normalized) return null;
+    const matchedHeader = normalizedRecordHeaderIndex.get(normalized);
+    return matchedHeader ? record[matchedHeader] : null;
+}
+
+export function getHeaderCandidates(modelName: string, key: string, extra: string[] = []) {
+    const candidates = [key, getExportHeaderLabel(modelName, key), ...getHeaderAliases(modelName, key), ...extra];
+    return [...new Set(candidates.filter((value) => value && value.trim().length > 0))];
+}
+
+export function extractSheetHeaders(sheet: XLSX.WorkSheet) {
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+        header: 1,
+        raw: true,
+        defval: null,
+        blankrows: false,
+    });
+    const headerRow = Array.isArray(rows[0]) ? rows[0] : [];
+    return headerRow
+        .map((cell) => {
+            const normalized = normalizeCell(cell);
+            return normalized === null ? null : String(normalized).trim();
+        })
+        .filter((header): header is string => Boolean(header));
+}
+
+export function applyExportProfile(modelName: string, columnKeys: string[]) {
+    const profile = getExcelModelProfile(modelName);
+    if (!profile) return columnKeys;
+
+    let next = [...columnKeys];
+    if (profile.hiddenColumns?.length) {
+        const hidden = new Set(profile.hiddenColumns);
+        next = next.filter((key) => !hidden.has(key));
+    }
+    if (profile.visibleColumns?.length) {
+        const visibleSet = new Set(next);
+        const ordered = profile.visibleColumns.filter((key) => visibleSet.has(key));
+        if (profile.strictVisibleColumns) {
+            next = [...new Set(profile.visibleColumns)];
+        } else {
+            const remaining = next.filter((key) => !ordered.includes(key));
+            next = [...ordered, ...remaining];
+        }
+    }
+    return next;
+}
+
+export function getEntityOrNull(entity: string) {
+    return isExcelEntityKey(entity) ? EXCEL_ENTITY_CONFIG[entity] : null;
+}
+
+export function getModelMeta(prismaModel: string) {
+    return Prisma.dmmf.datamodel.models.find((model) => lowerFirst(model.name) === prismaModel) || null;
+}
+
+export function getModelDelegate(source: unknown, modelName: string): ModelDelegate | null {
+    if (!source || typeof source !== "object") return null;
+    const delegate = (source as Record<string, unknown>)[modelName];
+    if (!delegate || typeof delegate !== "object") return null;
+    return delegate as ModelDelegate;
+}
+
+export function getColumnFields(model: NonNullable<ReturnType<typeof getModelMeta>>) {
+    return model.fields.filter((field) => field.kind === "scalar" || field.kind === "enum");
+}
+
+export function getObjectFields(model: NonNullable<ReturnType<typeof getModelMeta>>) {
+    return model.fields.filter((field) => field.kind === "object");
+}
+
+export function getRelationFromFields(field: PrismaField) {
+    const relationFromFields = (field as PrismaField & { relationFromFields?: string[] | null }).relationFromFields;
+    return Array.isArray(relationFromFields) ? relationFromFields : [];
+}
+
+export function buildRelationFieldByForeignKeyMap(model: NonNullable<ReturnType<typeof getModelMeta>>) {
+    const relationFieldByForeignKey = new Map<string, PrismaField>();
+    const objectFields = getObjectFields(model);
+    const scalarFieldNames = new Set(
+        model.fields
+            .filter((field) => field.kind === "scalar" || field.kind === "enum")
+            .map((field) => field.name)
+    );
+
+    for (const objectField of objectFields) {
+        for (const foreignKeyField of getRelationFromFields(objectField)) {
+            relationFieldByForeignKey.set(foreignKeyField, objectField);
+        }
+    }
+
+    for (const objectField of objectFields) {
+        const foreignKeyCandidate = `${objectField.name}Id`;
+        if (!relationFieldByForeignKey.has(foreignKeyCandidate) && scalarFieldNames.has(foreignKeyCandidate)) {
+            relationFieldByForeignKey.set(foreignKeyCandidate, objectField);
+        }
+    }
+
+    if (model.name === "Arac") {
+        const objectFieldByName = new Map(objectFields.map((field) => [field.name, field]));
+        const sirketField = objectFieldByName.get("sirket");
+        const kullaniciField = objectFieldByName.get("kullanici");
+        if (!relationFieldByForeignKey.has("sirketId") && sirketField) {
+            relationFieldByForeignKey.set("sirketId", sirketField);
+        }
+        if (!relationFieldByForeignKey.has("kullaniciId") && kullaniciField) {
+            relationFieldByForeignKey.set("kullaniciId", kullaniciField);
+        }
+    }
+
+    return relationFieldByForeignKey;
+}
+
+export function shouldHideInternalField(fieldName: string) {
+    if (fieldName === "id" || fieldName === "sifre") return true;
+    if (fieldName === "sifreHash") return true;
+    if (fieldName === "deletedAt" || fieldName === "deletedBy") return true;
+    if (fieldName === "olusturmaTarihi" || fieldName === "guncellemeTarihi") return true;
+    if (fieldName.endsWith("Id")) return true;
+    return false;
+}
+
+export function buildRelationExportSelect(modelName: string) {
+    if (modelName === "Kullanici") {
+        return {
+            ad: true,
+            soyad: true,
+            calistigiKurum: true,
+            sirket: { select: { ad: true } },
+        };
+    }
+
+    const modelMeta = Prisma.dmmf.datamodel.models.find((model) => model.name === modelName);
+    if (!modelMeta) {
+        return { id: true };
+    }
+
+    const scalarFields = modelMeta.fields.filter((field) => field.kind === "scalar" || field.kind === "enum");
+    const selected = scalarFields
+        .map((field) => field.name)
+        .filter((fieldName) => !["sifre", "sifreHash", "deletedAt", "deletedBy"].includes(fieldName));
+
+    if (selected.length === 0) {
+        const fallback = scalarFields.find((field) => !field.isId)?.name ?? scalarFields[0]?.name ?? "id";
+        return { [fallback]: true };
+    }
+
+    return Object.fromEntries(selected.map((name) => [name, true]));
+}
+
+export function relationDisplayValue(value: unknown) {
+    if (!value || typeof value !== "object") return null;
+    const relation = value as Record<string, unknown>;
+
+    const ad = typeof relation.ad === "string" ? relation.ad.trim() : "";
+    const soyad = typeof relation.soyad === "string" ? relation.soyad.trim() : "";
+    const adSoyad = `${ad} ${soyad}`.trim();
+    if (adSoyad) return adSoyad;
+    if (ad) return ad;
+
+    const plaka = typeof relation.plaka === "string" ? relation.plaka.trim() : "";
+    const saseNo = typeof relation.saseNo === "string" ? relation.saseNo.trim() : "";
+    if (plaka && saseNo) return `${plaka} / ${saseNo}`;
+    if (plaka) return plaka;
+    if (saseNo) return saseNo;
+
+    if (typeof relation.ad === "string" && relation.ad.trim()) return relation.ad.trim();
+    if (typeof relation.eposta === "string" && relation.eposta.trim()) return relation.eposta.trim();
+    return null;
+}
+
+export function getForeignKeyBaseName(fieldName: string) {
+    return fieldName.endsWith("Id") ? fieldName.slice(0, -2) : fieldName;
+}
+
+export function getExportColumnKeyForRelationId(fieldName: string, usedKeys: Set<string>) {
+    const base = getForeignKeyBaseName(fieldName);
+    const candidates = [base, `${base}Adi`, `${base}Bilgi`];
+
+    for (const candidate of candidates) {
+        if (!usedKeys.has(candidate)) return candidate;
+    }
+
+    let suffix = 2;
+    while (usedKeys.has(`${base}${suffix}`)) {
+        suffix += 1;
+    }
+    return `${base}${suffix}`;
+}
+
+export function buildExportColumns(
+    fields: PrismaField[],
+    relationFieldByForeignKey: Map<string, PrismaField>,
+    modelName?: string
+) {
+    const exportColumns: ExportColumn[] = [];
+    const usedKeys = new Set<string>();
+
+    for (const field of fields) {
+        if (shouldHideInternalField(field.name)) {
+            if (field.name.endsWith("Id")) {
+                const relationField = relationFieldByForeignKey.get(field.name);
+                if (!relationField) continue;
+                const key =
+                    modelName === "Arac" && field.name === "sirketId" && !usedKeys.has("ruhsatSahibi")
+                        ? "ruhsatSahibi"
+                        : getExportColumnKeyForRelationId(field.name, usedKeys);
+                usedKeys.add(key);
+                exportColumns.push({
+                    key,
+                    type: "relationLookup",
+                    relationFieldName: relationField.name,
+                    relationModelName: relationField.type,
+                    foreignKeyFieldName: field.name,
+                });
+            }
+            continue;
+        }
+
+        usedKeys.add(field.name);
+        exportColumns.push({
+            key: field.name,
+            type: "scalar",
+            fieldName: field.name,
+        });
+    }
+
+    return exportColumns;
+}
+
+export function getRelationImportHeaderAliases(modelName: string, foreignKeyFieldName: string) {
+    if (modelName === "arac" && foreignKeyFieldName === "sirketId") {
+        return [
+            "Ruhsat Sahibi",
+            "Ruhsat Sahibi Firma",
+            "sirket",
+            "bagliSirket",
+            "operasyonFirma",
+            "operasyonFirmasi",
+            "ruhsatSahibi",
+            "ruhsatSahibiFirma",
+            "ruhsatSahibiFirmasi",
+        ];
+    }
+    if (modelName === "yakit" && foreignKeyFieldName === "sirketId") {
+        return [
+            "Bağlı Şirket",
+            "Bagli Sirket",
+            "Şirket",
+            "Sirket",
+            "Kullanıcı Firma",
+            "Kullanici Firma",
+            "Çalıştığı Kurum",
+            "Calistigi Kurum",
+            "bagliSirket",
+            "calistigiKurum",
+        ];
+    }
+    return [];
+}
+
+export function toExportCell(value: unknown) {
+    if (value === undefined) return null;
+    if (value === null) return null;
+    if (value instanceof Date) return value.toISOString();
+    if (typeof value === "bigint") return value.toString();
+    if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
+        return Buffer.from(value).toString("base64");
+    }
+    if (typeof value === "object") {
+        const serializable = typeof (value as { toJSON?: () => unknown }).toJSON === "function"
+            ? (value as { toJSON: () => unknown }).toJSON()
+            : value;
+        if (
+            serializable === null ||
+            typeof serializable === "string" ||
+            typeof serializable === "number" ||
+            typeof serializable === "boolean"
+        ) {
+            return serializable;
+        }
+        return JSON.stringify(serializable);
+    }
+    return value;
+}
+
+export function excelDateToJSDate(value: number) {
+    const excelEpochUtc = Date.UTC(1899, 11, 30);
+    return new Date(excelEpochUtc + Math.round(value * 86400 * 1000));
+}
+
+export function parseBoolean(value: unknown) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "number") return value !== 0;
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        if (["true", "1", "evet", "yes"].includes(normalized)) return true;
+        if (["false", "0", "hayir", "hayır", "no"].includes(normalized)) return false;
+    }
+    throw new Error(`Boolean deger parse edilemedi: ${String(value)}`);
+}
+
+export function normalizeCell(value: unknown) {
+    if (value === undefined || value === null) return null;
+    if (typeof value === "string") {
+        const trimmed = value.trim();
+        return trimmed === "" ? null : trimmed;
+    }
+    return value;
+}
+
+export function normalizeTextToken(value: string) {
+    return value
+        .trim()
+        .toLocaleLowerCase("tr-TR")
+        .replace(/ı/g, "i")
+        .replace(/İ/g, "i")
+        .replace(/ş/g, "s")
+        .replace(/ğ/g, "g")
+        .replace(/ü/g, "u")
+        .replace(/ö/g, "o")
+        .replace(/ç/g, "c");
+}
+
+export function isNullishCellValue(value: unknown) {
+    if (typeof value !== "string") return false;
+    return NULLISH_CELL_TOKENS.has(normalizeTextToken(value));
+}
+
+export function parseNumericCellValue(value: unknown) {
+    if (typeof value === "number") {
+        return Number.isFinite(value) ? value : null;
+    }
+
+    if (typeof value !== "string") {
+        return null;
+    }
+
+    const compact = value
+        .trim()
+        .replace(/\s+/g, "")
+        .replace(/₺/g, "")
+        .replace(/TL/gi, "")
+        .replace(/\$/g, "");
+
+    if (!compact) return null;
+
+    const lastDot = compact.lastIndexOf(".");
+    const lastComma = compact.lastIndexOf(",");
+    let normalized = compact;
+
+    if (lastDot >= 0 && lastComma >= 0) {
+        if (lastComma > lastDot) {
+            normalized = compact.replace(/\./g, "").replace(",", ".");
+        } else {
+            normalized = compact.replace(/,/g, "");
+        }
+    } else if (lastComma >= 0) {
+        const commaCount = (compact.match(/,/g) || []).length;
+        if (commaCount > 1) {
+            normalized = compact.replace(/,/g, "");
+        } else {
+            const [left = "", right = ""] = compact.split(",");
+            if (/^\d{3}$/.test(right)) {
+                normalized = `${left}${right}`;
+            } else {
+                normalized = `${left}.${right}`;
+            }
+        }
+    }
+
+    const parsed = Number(normalized);
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+export function hasAnyNonEmptyCell(record: Record<string, unknown>) {
+    return Object.values(record).some((value) => normalizeCell(value) !== null);
+}
+
+export function getEnumValueMap() {
+    const map = new Map<string, Set<string>>();
+    const dmmfEnums = (Prisma as any).dmmf?.datamodel?.enums || [];
+    for (const enumType of dmmfEnums) {
+        map.set(enumType.name, new Set(enumType.values.map((v: any) => v.name)));
+    }
+
+    for (const [enumName, enumObject] of Object.entries($Enums || {})) {
+        if (!enumObject || typeof enumObject !== "object") continue;
+        const values = Object.values(enumObject)
+            .map((value) => String(value))
+            .filter((value) => value.trim().length > 0);
+
+        if (values.length > 0) {
+            map.set(enumName, new Set(values));
+        }
+    }
+    return map;
+}
+
+export function normalizeEnumText(value: string) {
+    return value
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .replace(/İ/g, "I")
+        .replace(/İ/g, "I")
+        .replace(/Ş/g, "S")
+        .replace(/Ğ/g, "G")
+        .replace(/Ü/g, "U")
+        .replace(/Ö/g, "O")
+        .replace(/Ç/g, "C")
+        .replace(/\s+/g, "_")
+        .replace(/-/g, "_")
+        .replace(/[^A-Z0-9_]/g, "")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
+export function resolveEnumAlias(enumName: string, value: string) {
+    const aliasMap = ENUM_INPUT_ALIASES[enumName];
+    if (!aliasMap) return null;
+
+    const normalizedInput = normalizeEnumText(value);
+    for (const [alias, canonicalValue] of Object.entries(aliasMap)) {
+        if (normalizeEnumText(alias) === normalizedInput) {
+            return canonicalValue;
+        }
+    }
+
+    return null;
+}
+
+export function coerceValue(
+    field: PrismaField,
+    rawValue: unknown,
+    enumMap: ReturnType<typeof getEnumValueMap>
+) {
+    const value = normalizeCell(rawValue);
+    if (value === null) return null;
+    const valueIsNullish = isNullishCellValue(value);
+
+    if (field.kind === "enum") {
+        if (valueIsNullish) return null;
+        const enumValues = enumMap.get(field.type);
+        const strValue = String(value).trim();
+        if (enumValues?.has(strValue)) {
+            return strValue;
+        }
+
+        const aliasMatch = resolveEnumAlias(field.type, strValue);
+        if (aliasMatch && enumValues?.has(aliasMatch)) {
+            return aliasMatch;
+        }
+
+        const normalizedInput = normalizeEnumText(strValue);
+        const matchedValue = enumValues
+            ? [...enumValues].find((enumValue) => normalizeEnumText(enumValue) === normalizedInput)
+            : null;
+
+        if (!matchedValue) {
+            throw new Error(`Enum degeri gecersiz (${field.name}): ${strValue}`);
+        }
+        return matchedValue;
+    }
+
+    switch (field.type) {
+        case "String":
+            return String(value);
+        case "Int": {
+            if (valueIsNullish) return null;
+            const parsed = parseNumericCellValue(value);
+            if (parsed === null || !Number.isFinite(parsed)) {
+                throw new Error(`Int parse edilemedi (${field.name}): ${String(value)}`);
+            }
+            return Math.trunc(parsed);
+        }
+        case "BigInt": {
+            if (valueIsNullish) return null;
+            try {
+                return BigInt(String(value));
+            } catch {
+                throw new Error(`BigInt parse edilemedi (${field.name}): ${String(value)}`);
+            }
+        }
+        case "Decimal": {
+            if (valueIsNullish) return null;
+            try {
+                return new Prisma.Decimal(String(value));
+            } catch {
+                throw new Error(`Decimal parse edilemedi (${field.name}): ${String(value)}`);
+            }
+        }
+        case "Float": {
+            if (valueIsNullish) return null;
+            const parsed = parseNumericCellValue(value);
+            if (parsed === null || !Number.isFinite(parsed)) {
+                throw new Error(`Sayi parse edilemedi (${field.name}): ${String(value)}`);
+            }
+            return parsed;
+        }
+        case "Bytes":
+            if (typeof value === "string") {
+                return Buffer.from(value, "base64");
+            }
+            if (value instanceof Uint8Array) {
+                return Buffer.from(value);
+            }
+            throw new Error(`Bytes parse edilemedi (${field.name}): ${String(value)}`);
+        case "Boolean":
+            if (valueIsNullish) return null;
+            return parseBoolean(value);
+        case "DateTime": {
+            if (valueIsNullish) return null;
+            if (value instanceof Date && !Number.isNaN(value.getTime())) {
+                return value;
+            }
+            if (typeof value === "number") {
+                const dt = excelDateToJSDate(value);
+                if (Number.isNaN(dt.getTime())) throw new Error(`Tarih parse edilemedi (${field.name}).`);
+                return dt;
+            }
+            const parsed = new Date(String(value));
+            if (Number.isNaN(parsed.getTime())) throw new Error(`Tarih parse edilemedi (${field.name}): ${String(value)}`);
+            return parsed;
+        }
+        case "Json":
+            if (valueIsNullish) return null;
+            if (typeof value === "string") {
+                try {
+                    return JSON.parse(value);
+                } catch {
+                    return value;
+                }
+            }
+            return value;
+        default:
+            return value;
+    }
+}
+
+export function getWhereUnique(
+    fields: PrismaField[],
+    parsedRow: Record<string, unknown>,
+    modelName?: string
+) {
+    if (modelName === "arac") {
+        const plakaValue = parsedRow.plaka;
+        if (plakaValue !== null && plakaValue !== undefined && plakaValue !== "") {
+            return { where: { plaka: plakaValue } as WhereData, uniqueFieldName: "plaka" };
+        }
+    }
+
+    const idField = fields.find((field) => field.isId);
+    if (idField) {
+        const idValue = parsedRow[idField.name];
+        if (idValue !== null && idValue !== undefined && idValue !== "") {
+            return { where: { [idField.name]: idValue } as WhereData, uniqueFieldName: idField.name };
+        }
+    }
+
+    const uniqueFields = fields.filter((field) => field.isUnique && !field.isId);
+    for (const uniqueField of uniqueFields) {
+        const uniqueValue = parsedRow[uniqueField.name];
+        if (uniqueValue !== null && uniqueValue !== undefined && uniqueValue !== "") {
+            return { where: { [uniqueField.name]: uniqueValue } as WhereData, uniqueFieldName: uniqueField.name };
+        }
+    }
+
+    return null;
+}
+
+export function validateRequiredFields(fields: PrismaField[], parsedRow: Record<string, unknown>, modelName?: string) {
+    for (const field of fields) {
+        if (field.isUpdatedAt) continue;
+        if (!field.isRequired) continue;
+        if (field.hasDefaultValue) continue;
+        if (parsedRow[field.name] === null || parsedRow[field.name] === undefined || parsedRow[field.name] === "") {
+            // Some business logic field specific overrides
+            if (modelName === "Yakit" && field.name === "tutar") continue;
+            if (modelName === "Muayene" && field.name === "muayeneTarihi") continue;
+            if (modelName === "Bakim" && field.name === "yapilanKm") continue;
+            
+            throw new Error(`Zorunlu alan bos birakilamaz: ${field.name}`);
+        }
+    }
+}
+
+export function buildCreateData(fields: PrismaField[], parsedRow: Record<string, unknown>) {
+    const data: Record<string, unknown> = {};
+
+    for (const field of fields) {
+        if (field.isUpdatedAt) continue;
+
+        const value = parsedRow[field.name];
+        if (value === undefined) {
+            continue;
+        }
+        if (value === null && (field.hasDefaultValue || field.isId)) {
+            continue;
+        }
+
+        data[field.name] = value;
+    }
+
+    return data;
+}
+
+export function buildUpdateData(
+    fields: PrismaField[],
+    parsedRow: Record<string, unknown>,
+    uniqueFieldName?: string
+) {
+    const data: Record<string, unknown> = {};
+
+    for (const field of fields) {
+        if (field.isId || field.isUpdatedAt || field.name === uniqueFieldName) continue;
+        const value = parsedRow[field.name];
+        if (value === undefined) continue;
+        if (value === null && field.hasDefaultValue) continue;
+        data[field.name] = value;
+    }
+
+    return data;
+}
+
+export function applyYakitRelationWritesForCreate(data: Record<string, unknown>) {
+    const nextData = { ...data };
+    const aracId = typeof nextData.aracId === "string" ? nextData.aracId.trim() : "";
+    const soforId = typeof nextData.soforId === "string" ? nextData.soforId.trim() : "";
+
+    delete nextData.aracId;
+    delete nextData.soforId;
+
+    if (aracId) {
+        nextData.arac = { connect: { id: aracId } };
+    }
+    if (soforId) {
+        nextData.sofor = { connect: { id: soforId } };
+    }
+
+    return nextData;
+}
+
+export function applyYakitRelationWritesForUpdate(
+    data: Record<string, unknown>,
+    parsedRow: Record<string, unknown>
+) {
+    const nextData = { ...data };
+    const hasAracValue = Object.prototype.hasOwnProperty.call(parsedRow, "aracId");
+    const hasSoforValue = Object.prototype.hasOwnProperty.call(parsedRow, "soforId");
+    const aracId = typeof parsedRow.aracId === "string" ? parsedRow.aracId.trim() : "";
+    const soforId = typeof parsedRow.soforId === "string" ? parsedRow.soforId.trim() : "";
+
+    delete nextData.aracId;
+    delete nextData.soforId;
+
+    if (hasAracValue && aracId) {
+        nextData.arac = { connect: { id: aracId } };
+    }
+
+    if (hasSoforValue) {
+        nextData.sofor = soforId ? { connect: { id: soforId } } : { disconnect: true };
+    }
+
+    return nextData;
+}
+
+export async function createAracWithoutPlakaRaw(tx: unknown, data: Record<string, unknown>) {
+    const txRaw = tx as { $executeRaw?: (...args: unknown[]) => Promise<unknown> };
+    if (typeof txRaw.$executeRaw !== "function") {
+        throw new Error("Plakasiz arac importu icin SQL baglami bulunamadi.");
+    }
+
+    const entries = Object.entries(data).filter(([key, value]) => {
+        if (!ARAC_IMPORT_ALLOWED_COLUMNS.has(key)) return false;
+        if (value === undefined) return false;
+        return true;
+    });
+
+    if (!entries.some(([key]) => key === "id")) {
+        entries.push(["id", randomUUID()]);
+    }
+    if (!entries.some(([key]) => key === "plaka")) {
+        entries.push(["plaka", null]);
+    }
+
+    const columnsSql = Prisma.join(entries.map(([key]) => Prisma.raw(`"${key}"`)));
+    const valuesSql = Prisma.join(entries.map(([, value]) => (value === null ? Prisma.sql`NULL` : Prisma.sql`${value}`)));
+
+    await txRaw.$executeRaw(
+        Prisma.sql`INSERT INTO "Arac" (${columnsSql}) VALUES (${valuesSql})`
+    );
+}
+
+export async function getExistingTableColumns(db: unknown, tableName: string) {
+    const queryRunner = db as {
+        $queryRaw?: <T = unknown>(query: unknown) => Promise<T>;
+    };
+    if (typeof queryRunner?.$queryRaw !== "function") {
+        return null;
+    }
+
+    try {
+        const rows = (await queryRunner.$queryRaw<Array<{ column_name: string }>>(
+            Prisma.sql`
+                SELECT column_name
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND LOWER(table_name) = LOWER(${tableName})
+            `
+        )) as Array<{ column_name: string }>;
+
+        return new Set(
+            rows
+                .map((row) => (typeof row?.column_name === "string" ? row.column_name.trim() : ""))
+                .filter((name) => name.length > 0)
+        );
+    } catch (error) {
+        console.warn(`${tableName} tablo kolonlari okunamadi, import kolon uyumluluk fallback'i atlandi.`, error);
+        return null;
+    }
+}
+
+export function pruneDataByExistingColumns(data: Record<string, unknown>, columns: Set<string> | null) {
+    if (!columns || columns.size === 0) return data;
+    const pruned = { ...data };
+    for (const key of Object.keys(pruned)) {
+        if (!columns.has(key)) {
+            delete pruned[key];
+        }
+    }
+    return pruned;
+}
+
+export function buildRequiredImportColumnGroups(fields: PrismaField[], exportColumns: ExportColumn[], modelName?: string) {
+    const relationColumnByForeignKey = new Map<string, string>();
+    for (const column of exportColumns) {
+        if (column.type === "relationLookup") {
+            relationColumnByForeignKey.set(column.foreignKeyFieldName, column.key);
+        }
+    }
+
+    const requiredGroups: Array<{ fieldName: string; candidates: string[] }> = [];
+    for (const field of fields) {
+        if (field.isUpdatedAt) continue;
+        if (!field.isRequired || field.hasDefaultValue) continue;
+        if (modelName === "Yakit" && field.name === "tutar") continue;
+        if (modelName === "Muayene" && field.name === "muayeneTarihi") continue;
+        if (modelName === "Bakim" && field.name === "yapilanKm") continue;
+
+        if (shouldHideInternalField(field.name)) {
+            if (field.name.endsWith("Id")) {
+                const relationColumn = relationColumnByForeignKey.get(field.name);
+                if (relationColumn) {
+                    requiredGroups.push({
+                        fieldName: field.name,
+                        candidates: [relationColumn, field.name],
+                    });
+                }
+            }
+            continue;
+        }
+
+        requiredGroups.push({
+            fieldName: field.name,
+            candidates: [field.name],
+        });
+    }
+
+    return requiredGroups;
+}
+
+export function normalizeLookupString(value: unknown) {
+    const normalized = normalizeCell(value);
+    if (normalized === null) return null;
+    if (isNullishCellValue(normalized)) return null;
+    return String(normalized).trim();
+}
+
+export function normalizeAracPlaka(value: unknown) {
+    const normalized = normalizeCell(value);
+    if (normalized === null) return null;
+    if (isNullishCellValue(normalized)) return null;
+    const text = String(normalized)
+        .replace(/[^0-9a-zA-ZğüşiöçıİĞÜŞÖÇ]/g, "")
+        .toLocaleUpperCase("tr-TR");
+    return text || null;
+}
+
+export function normalizeAracSaseNo(value: unknown) {
+    const normalized = normalizeCell(value);
+    if (normalized === null) return null;
+    if (isNullishCellValue(normalized)) return null;
+    const text = String(normalized).replace(/\s+/g, "").toLocaleUpperCase("tr-TR");
+    return text || null;
+}
+
+export async function findExistingNoPlateAracId(tx: unknown, createData: Record<string, unknown>) {
+    const txQuery = tx as { $queryRaw?: (...args: unknown[]) => Promise<unknown> };
+    if (typeof txQuery.$queryRaw !== "function") {
+        return null;
+    }
+
+    const normalizedSaseNo = normalizeAracSaseNo(createData.saseNo);
+    if (normalizedSaseNo) {
+        const rows = (await txQuery.$queryRaw(
+            Prisma.sql`
+                SELECT "id"
+                FROM "Arac"
+                WHERE ("plaka" IS NULL OR "plaka" = '-')
+                  AND "saseNo" = ${normalizedSaseNo}
+                ORDER BY "id" ASC
+                LIMIT 1
+            `
+        )) as Array<{ id: string }>;
+        const id = rows?.[0]?.id;
+        return typeof id === "string" && id.trim().length > 0 ? id : null;
+    }
+
+    const marka = typeof createData.marka === "string" ? createData.marka.trim() : "";
+    const model = typeof createData.model === "string" ? createData.model.trim() : "";
+    const yil = typeof createData.yil === "number" && Number.isFinite(createData.yil) ? createData.yil : null;
+    if (!marka || !model || yil === null) {
+        return null;
+    }
+
+    const sirketIdRaw = "sirketId" in createData ? createData.sirketId : undefined;
+    const sirketId = typeof sirketIdRaw === "string" && sirketIdRaw.trim().length > 0 ? sirketIdRaw : null;
+
+    const rows = sirketId
+        ? ((await txQuery.$queryRaw(
+            Prisma.sql`
+                SELECT "id"
+                FROM "Arac"
+                WHERE ("plaka" IS NULL OR "plaka" = '-')
+                  AND "marka" = ${marka}
+                  AND "model" = ${model}
+                  AND "yil" = ${yil}
+                  AND "sirketId" = ${sirketId}
+                ORDER BY "id" ASC
+                LIMIT 1
+            `
+        )) as Array<{ id: string }>)
+        : ((await txQuery.$queryRaw(
+            Prisma.sql`
+                SELECT "id"
+                FROM "Arac"
+                WHERE ("plaka" IS NULL OR "plaka" = '-')
+                  AND "marka" = ${marka}
+                  AND "model" = ${model}
+                  AND "yil" = ${yil}
+                  AND "sirketId" IS NULL
+                ORDER BY "id" ASC
+                LIMIT 1
+            `
+        )) as Array<{ id: string }>);
+
+    const id = rows?.[0]?.id;
+    return typeof id === "string" && id.trim().length > 0 ? id : null;
+}
+
+export function sanitizeAracImportRow(parsedRow: Record<string, unknown>) {
+    const nullableToUndefined: Array<keyof typeof parsedRow> = ["guncelKm", "durum", "kategori", "bulunduguIl"];
+    for (const key of nullableToUndefined) {
+        if (parsedRow[key] === null || parsedRow[key] === "") {
+            parsedRow[key] = undefined;
+        }
+    }
+
+    if (parsedRow.yil === null || parsedRow.yil === undefined || parsedRow.yil === "") {
+        parsedRow.yil = new Date().getFullYear();
+    }
+}
+
+export function buildRelationLookupWheres(modelName: string, rawValue: string) {
+    const value = rawValue.trim();
+    if (!value) return [];
+
+    const wheres: WhereData[] = [{ id: value }];
+
+    if (modelName === "Arac") {
+        const normalizedPlaka = normalizeAracPlaka(value);
+        const slashParts = value.split("/").map((part) => part.trim()).filter(Boolean);
+        if (slashParts.length >= 2) {
+            wheres.push({
+                AND: [
+                    { plaka: slashParts[0] },
+                    { saseNo: slashParts[1] },
+                ],
+            } as WhereData);
+        }
+        wheres.push({ plaka: value });
+        if (normalizedPlaka && normalizedPlaka !== value) {
+            wheres.push({ plaka: normalizedPlaka });
+        }
+        wheres.push({ saseNo: value });
+        return wheres;
+    }
+
+    if (modelName === "Kullanici") {
+        const personText = value.split(/\s+-\s+/)[0]?.trim() || value;
+        const parts = personText.split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            const ad = parts[0];
+            const soyad = parts.slice(1).join(" ");
+            wheres.push({
+                AND: [
+                    { ad },
+                    { soyad },
+                ],
+            } as WhereData);
+        }
+        wheres.push({ eposta: personText });
+        wheres.push({ tcNo: personText });
+        wheres.push({ ad: personText });
+        return wheres;
+    }
+
+    if (modelName === "Sirket") {
+        wheres.push({ ad: value });
+        return wheres;
+    }
+
+    wheres.push({ ad: value });
+    wheres.push({ plaka: value });
+    wheres.push({ eposta: value });
+    return wheres;
+}
+
+export async function resolveRelationValueToForeignKey(params: {
+    tx: unknown;
+    relationModelName: string;
+    relationColumnKey: string;
+    rawRelationValue: unknown;
+    rowIndex: number;
+    cache: Map<string, string>;
+    allowNotFound?: boolean;
+    context?: {
+        importModelName?: string;
+        foreignKeyFieldName?: string;
+        parsedRow?: Record<string, unknown>;
+    };
+}) {
+    const relationText = normalizeLookupString(params.rawRelationValue);
+    if (!relationText) return null;
+
+    const scopedAracId =
+        params.context?.importModelName === "yakit" && params.context?.foreignKeyFieldName === "soforId"
+            ? normalizeLookupString(params.context?.parsedRow?.aracId)
+            : null;
+    const scopedSirketId =
+        params.context?.importModelName === "yakit" && params.context?.foreignKeyFieldName === "soforId"
+            ? normalizeLookupString(params.context?.parsedRow?.sirketId)
+            : null;
+    const cacheKey = `${params.relationModelName}|${relationText}|arac:${scopedAracId || ""}|sirket:${scopedSirketId || ""}`;
+    const cached = params.cache.get(cacheKey);
+    if (cached) return cached;
+
+    const relationDelegate = getModelDelegate(params.tx, lowerFirst(params.relationModelName));
+    if (!relationDelegate?.findMany) {
+        throw new Error(`Satir ${params.rowIndex + 2}: ${params.relationColumnKey} icin iliski modeli bulunamadi.`);
+    }
+
+    const whereCandidates = buildRelationLookupWheres(params.relationModelName, relationText);
+    for (const where of whereCandidates) {
+        const effectiveWhere =
+            params.relationModelName === "Kullanici"
+                ? ({ AND: [where as WhereData, { deletedAt: null }] } as WhereData)
+                : where;
+        const matches = await relationDelegate.findMany({
+            where: effectiveWhere,
+            select: { id: true },
+            take: 2,
+            orderBy: { id: "asc" },
+        });
+
+        if (matches.length === 1) {
+            const id = matches[0]?.id;
+            if (typeof id !== "string" || !id.trim()) continue;
+            params.cache.set(cacheKey, id);
+            return id;
+        }
+
+        if (matches.length > 1) {
+            const isYakitSoforResolve =
+                params.context?.importModelName === "yakit" &&
+                params.context?.foreignKeyFieldName === "soforId" &&
+                params.relationModelName === "Kullanici";
+            if (isYakitSoforResolve) {
+                const candidateIds = matches
+                    .map((match) => (typeof match?.id === "string" ? match.id.trim() : ""))
+                    .filter((id) => id.length > 0);
+                const parsedRow = params.context?.parsedRow || {};
+
+                const scopedSirket = normalizeLookupString(parsedRow.sirketId);
+                if (candidateIds.length > 1 && scopedSirket) {
+                    const companyMatches = await relationDelegate.findMany({
+                        where: {
+                            AND: [
+                                { id: { in: candidateIds } },
+                                { sirketId: scopedSirket },
+                                { deletedAt: null },
+                            ],
+                        },
+                        select: { id: true },
+                        orderBy: { id: "asc" },
+                        take: 2,
+                    });
+                    if (companyMatches.length === 1) {
+                        const scopedUserId = normalizeLookupString(companyMatches[0]?.id);
+                        if (scopedUserId) {
+                            params.cache.set(cacheKey, scopedUserId);
+                            return scopedUserId;
+                        }
+                    }
+                }
+                const scopedKurum = normalizeLookupString(parsedRow.calistigiKurum);
+                if (candidateIds.length > 1 && scopedKurum) {
+                    const kurumMatches = await relationDelegate.findMany({
+                        where: {
+                            AND: [
+                                { id: { in: candidateIds } },
+                                { calistigiKurum: { equals: scopedKurum, mode: "insensitive" } },
+                                { deletedAt: null },
+                            ],
+                        },
+                        select: { id: true },
+                        orderBy: { id: "asc" },
+                        take: 2,
+                    });
+                    if (kurumMatches.length === 1) {
+                        const kurumUserId = normalizeLookupString(kurumMatches[0]?.id);
+                        if (kurumUserId) {
+                            params.cache.set(cacheKey, kurumUserId);
+                            return kurumUserId;
+                        }
+                    }
+                }
+
+                if (params.allowNotFound) {
+                    return null;
+                }
+            }
+            if (params.allowNotFound) {
+                return null;
+            }
+            throw new Error(
+                `Satir ${params.rowIndex + 2}: ${params.relationColumnKey} degeri birden fazla kayitla eslesti (${relationText}).`
+            );
+        }
+    }
+
+    if (params.allowNotFound) {
+        return null;
+    }
+    throw new Error(`Satir ${params.rowIndex + 2}: ${params.relationColumnKey} icin eslesen kayit bulunamadi (${relationText}).`);
+}
+
+// --- Orchestration Functions ---
+
+export async function exportEntity(entityKey: string, where?: WhereData) {
+    const config = getEntityOrNull(entityKey);
+    if (!config) throw new Error("Desteklenmeyen export modeli.");
+
+    const modelMeta = getModelMeta(config.prismaModel);
+    if (!modelMeta) throw new Error("Model metadata bulunamadi.");
+
+    const fields = getColumnFields(modelMeta);
+    const relationFieldByForeignKey = buildRelationFieldByForeignKeyMap(modelMeta);
+    const exportColumns = buildExportColumns(fields, relationFieldByForeignKey, modelMeta.name);
+    const columns = exportColumns.map((column) => column.key);
+
+    const modelDelegate = getModelDelegate(prisma, config.prismaModel);
+    if (!modelDelegate?.findMany) throw new Error("Model export icin uygun degil.");
+
+    const orderByField = fields.find((field) => field.isId)?.name || columns[0];
+    const include = Object.fromEntries(
+        [...relationFieldByForeignKey.entries()].map(([, relationField]) => [
+            relationField.name,
+            { select: buildRelationExportSelect(relationField.type) },
+        ])
+    );
+    
+    const rows = await modelDelegate.findMany({
+        where: where ? (where as WhereData) : undefined,
+        orderBy: orderByField ? { [orderByField]: "asc" } : undefined,
+        include: Object.keys(include).length > 0 ? include : undefined,
+    });
+
+    const aktifZimmetByAracId = new Map<string, { adSoyad: string | null; sirketAd: string | null }>();
+    if (config.prismaModel === "arac") {
+        const aracIds = rows.map((row) => (row.id as string)).filter(Boolean);
+        if (aracIds.length > 0) {
+            const zimmetRows = await prisma.kullaniciZimmet.findMany({
+                where: { aracId: { in: aracIds }, bitis: null },
+                orderBy: [{ aracId: "asc" }, { baslangic: "desc" }],
+                select: {
+                    aracId: true,
+                    kullanici: {
+                        select: {
+                            ad: true,
+                            soyad: true,
+                            sirket: { select: { ad: true } },
+                        },
+                    },
+                },
+            });
+            for (const row of zimmetRows) {
+                if (!row?.aracId || aktifZimmetByAracId.has(row.aracId)) continue;
+                const adSoyad = `${row.kullanici?.ad || ""} ${row.kullanici?.soyad || ""}`.trim();
+                aktifZimmetByAracId.set(row.aracId, {
+                    adSoyad: adSoyad || null,
+                    sirketAd: row.kullanici?.sirket?.ad || null
+                });
+            }
+        }
+    }
+
+    const yakitSirketNameById = new Map<string, string>();
+    if (config.prismaModel === "yakit") {
+        const sirketIds = Array.from(new Set(rows.map(r => (r.arac as any)?.sirketId).filter(Boolean))) as string[];
+        if (sirketIds.length > 0) {
+            const sirkets = await prisma.sirket.findMany({ where: { id: { in: sirketIds } }, select: { id: true, ad: true } });
+            for (const s of sirkets) yakitSirketNameById.set(s.id, s.ad);
+        }
+    }
+
+    const normalizedRows = rows.map((row) => {
+        const output: Record<string, unknown> = {};
+        for (const column of exportColumns) {
+            if (column.type === "scalar") {
+                output[column.key] = toExportCell(row[column.fieldName]);
+            } else {
+                output[column.key] = toExportCell(relationDisplayValue(row[column.relationFieldName]));
+            }
+        }
+        if (config.prismaModel === "arac") {
+            const rowId = row.id as string;
+            const zimmet = aktifZimmetByAracId.get(rowId);
+            const kullaniciObj = row.kullanici as any;
+            const kullaniciSirketAd = kullaniciObj?.sirket?.ad;
+            const adSoyad = relationDisplayValue(kullaniciObj);
+            output.kullanici = toExportCell(adSoyad || zimmet?.adSoyad || null);
+            output.calistigiKurum = toExportCell(row.calistigiKurum || kullaniciSirketAd || zimmet?.sirketAd || null);
+        }
+        if (config.prismaModel === "yakit") {
+            const aracObj = row.arac as any;
+            const soforObj = row.sofor as any;
+            const bagliSirket = aracObj?.sirket?.ad || yakitSirketNameById.get(aracObj?.sirketId) || null;
+            output.arac = toExportCell(aracObj?.plaka || relationDisplayValue(aracObj));
+            output.sofor = toExportCell(relationDisplayValue(soforObj));
+            output.bagliSirket = toExportCell(bagliSirket);
+            output.calistigiKurum = toExportCell(aracObj?.calistigiKurum || soforObj?.calistigiKurum || soforObj?.sirket?.ad || null);
+        }
+        if (config.prismaModel === "bakim") {
+            const islemYapanFirma = normalizeLookupString(row.islemYapanFirma) || normalizeLookupString(row.servisAdi);
+            output.islemYapanFirma = toExportCell(islemYapanFirma);
+        }
+        return output;
+    });
+
+    const internalColumns = config.prismaModel === "arac"
+        ? [...columns, "calistigiKurum", "aciklama", "bedel"].filter((v, i, a) => a.indexOf(v) === i)
+        : config.prismaModel === "yakit"
+            ? [...columns, "bagliSirket", "calistigiKurum"].filter((v, i, a) => a.indexOf(v) === i)
+            : columns;
+    
+    const finalColumns = applyExportProfile(config.prismaModel, internalColumns);
+    const exportRows = normalizedRows.map((row) => {
+        const output: Record<string, unknown> = {};
+        for (const key of finalColumns) {
+            output[getExportHeaderLabel(config.prismaModel, key)] = row[key] ?? null;
+        }
+        return output;
+    });
+
+    return { 
+        data: exportRows, 
+        sheetName: config.sheetName, 
+        headers: finalColumns.map(key => getExportHeaderLabel(config.prismaModel, key)) 
+    };
+}
+
+export async function importEntity(entityKey: string, records: any[], tx: any) {
+    const config = getEntityOrNull(entityKey);
+    if (!config) throw new Error("Desteklenmeyen import modeli.");
+
+    const modelMeta = getModelMeta(config.prismaModel);
+    if (!modelMeta) throw new Error("Model metadata bulunamadi.");
+
+    const fields = getColumnFields(modelMeta);
+    const fieldsByName = new Map(fields.map((field) => [field.name, field]));
+    const relationFieldByForeignKey = buildRelationFieldByForeignKeyMap(modelMeta);
+    const exportColumns = buildExportColumns(fields, relationFieldByForeignKey, modelMeta.name);
+    const scalarImportColumns = exportColumns.filter((c): c is any => c.type === "scalar");
+    const relationImportColumns = exportColumns.filter((c): c is any => c.type === "relationLookup");
+    const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name);
+    const enumMap = getEnumValueMap();
+
+    const firstRecord = records[0] || {};
+    const availableHeaders = new Set(Object.keys(firstRecord).map(h => h.trim()).filter(h => h.length > 0));
+    const normalizedHeaderIndex = buildHeaderIndex([...availableHeaders]);
+
+    const missingGroups = requiredGroups.filter((group) => {
+        const groupCandidates = group.candidates.flatMap((candidate) => getHeaderCandidates(config.prismaModel, candidate));
+        return !findHeaderByCandidates(availableHeaders, normalizedHeaderIndex, groupCandidates);
+    });
+    
+    if (missingGroups.length > 0) {
+        throw new Error(`Eksik zorunlu sutun(lar): ${missingGroups.map(g => g.fieldName).join(", ")}`);
+    }
+
+    const model = getModelDelegate(tx, config.prismaModel);
+    if (!model?.create || !model?.update || !model?.findUnique) throw new Error("Model import islemi desteklenmiyor.");
+
+    let created = 0, updated = 0, skipped = 0;
+    const relationCache = new Map<string, string>();
+    const bakimExistingColumns = config.prismaModel === "bakim" ? await getExistingTableColumns(tx, "Bakim") : null;
+    const kmCache = new Map<string, number>();
+
+    for (let index = 0; index < records.length; index++) {
+        const record = records[index];
+        const parsedRow: Record<string, unknown> = {};
+        if (!hasAnyNonEmptyCell(record)) { skipped++; continue; }
+
+        let skipRow = false;
+        try {
+            for (const column of scalarImportColumns) {
+                const field = fieldsByName.get(column.fieldName)!;
+                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, column.key));
+                parsedRow[field.name] = header ? coerceValue(field, record[header], enumMap) : undefined;
+            }
+
+            for (const column of relationImportColumns) {
+                const field = fieldsByName.get(column.foreignKeyFieldName)!;
+                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, column.key, getRelationImportHeaderAliases(config.prismaModel, field.name)));
+                if (!header) { parsedRow[field.name] = undefined; continue; }
+                
+                const rawVal = record[header];
+                if (rawVal === null) { parsedRow[field.name] = null; continue; }
+
+                const resolved = await resolveRelationValueToForeignKey({
+                    tx, relationModelName: column.relationModelName, relationColumnKey: column.key,
+                    rawRelationValue: rawVal, rowIndex: index, cache: relationCache, allowNotFound: true,
+                    context: { importModelName: config.prismaModel, foreignKeyFieldName: field.name, parsedRow }
+                });
+
+                if (resolved === null && field.name === "aracId") { skipRow = true; break; }
+                parsedRow[field.name] = coerceValue(field, resolved, enumMap);
+            }
+
+            if (skipRow) { skipped++; continue; }
+
+            // Business Logic Specifics (Yakit/Bakim/Arac)
+            if (config.prismaModel === "yakit") {
+                parsedRow.tutar = parsedRow.tutar || 0;
+                if (!parsedRow.aracId) { skipped++; continue; }
+                if (parsedRow.km === undefined || parsedRow.km === null) {
+                    let km = kmCache.get(parsedRow.aracId as string);
+                    if (km === undefined) {
+                        const arac = await (getModelDelegate(tx, "arac") as any).findUnique({ where: { id: parsedRow.aracId }, select: { guncelKm: true } });
+                        km = arac?.guncelKm || 0;
+                    }
+                    parsedRow.km = km;
+                }
+                kmCache.set(parsedRow.aracId as string, parsedRow.km as number);
+            }
+
+            if (config.prismaModel === "bakim") {
+                if (!parsedRow.aracId) { skipped++; continue; }
+                parsedRow.tutar = (parsedRow.tutar as number) || 0;
+                const islemYapanFirma = normalizeLookupString(parsedRow.islemYapanFirma) || normalizeLookupString(parsedRow.servisAdi);
+                parsedRow.islemYapanFirma = islemYapanFirma || null;
+                parsedRow.servisAdi = islemYapanFirma || null;
+                parsedRow.kategori = parsedRow.kategori || (parsedRow.arizaSikayet ? "ARIZA" : "PERIYODIK_BAKIM");
+                parsedRow.tur = parsedRow.tur || (parsedRow.kategori === "ARIZA" ? "ARIZA" : "PERIYODIK");
+            }
+
+            if (config.prismaModel === "arac") {
+                parsedRow.plaka = normalizeAracPlaka(parsedRow.plaka);
+                parsedRow.saseNo = normalizeAracSaseNo(parsedRow.saseNo);
+                sanitizeAracImportRow(parsedRow);
+            }
+
+            validateRequiredFields(fields, parsedRow, modelMeta.name);
+
+            const whereUnique = getWhereUnique(fields, parsedRow, config.prismaModel);
+            const createData = config.prismaModel === "yakit" ? applyYakitRelationWritesForCreate(buildCreateData(fields, parsedRow)) : buildCreateData(fields, parsedRow);
+            const updateData = config.prismaModel === "yakit" ? applyYakitRelationWritesForUpdate(buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName), parsedRow) : buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
+
+            if (config.prismaModel === "bakim") {
+                const prunedC = pruneDataByExistingColumns(createData, bakimExistingColumns);
+                const prunedU = pruneDataByExistingColumns(updateData, bakimExistingColumns);
+                Object.keys(createData).forEach(k => { if(!(k in prunedC)) delete createData[k]; });
+                Object.keys(updateData).forEach(k => { if(!(k in prunedU)) delete updateData[k]; });
+            }
+
+            if (whereUnique) {
+                const exists = await model.findUnique({ where: whereUnique.where, select: { id: true } });
+                if (exists) {
+                    await model.update({ where: whereUnique.where, data: updateData });
+                    updated++;
+                } else {
+                    await model.create({ data: createData });
+                    created++;
+                }
+            } else if (config.prismaModel === "arac" && !parsedRow.plaka) {
+                const id = await findExistingNoPlateAracId(tx, createData);
+                if (id) { await model.update({ where: { id }, data: updateData }); updated++; }
+                else { await createAracWithoutPlakaRaw(tx, createData); created++; }
+            } else {
+                await model.create({ data: createData });
+                created++;
+            }
+
+        } catch (err) {
+            console.error(`Import error at row ${index + 2}:`, err);
+            throw err;
+        }
+    }
+
+    return { created, updated, skipped, total: records.length };
+}

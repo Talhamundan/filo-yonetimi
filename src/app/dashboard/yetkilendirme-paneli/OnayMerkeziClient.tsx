@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUserAccount, deleteUserAccount, updateUserAccount } from "./actions";
 import { toast } from "sonner";
-import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff } from "lucide-react";
+import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2 } from "lucide-react";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -61,6 +61,78 @@ export default function OnayMerkeziClient({
         kullaniciAdi: "",
         sifre: "",
     });
+    const [isBulkExporting, setIsBulkExporting] = useState(false);
+    const [isBulkImporting, setIsBulkImporting] = useState(false);
+
+    const handleBulkExport = async () => {
+        setIsBulkExporting(true);
+        try {
+            const response = await fetch("/api/excel/bulk");
+            if (!response.ok) throw new Error("Yedekleme dosyası oluşturulamadı.");
+            
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            const now = new Date();
+            const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+            a.download = `filo-yonetimi-yedek-${stamp}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            document.body.removeChild(a);
+            toast.success("Sistem yedeği başarıyla indirildi.");
+        } catch (error) {
+            console.error(error);
+            toast.error("Yedekleme sırasında hata oluştu.");
+        } finally {
+            setIsBulkExporting(false);
+        }
+    };
+
+    const handleBulkImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file) return;
+
+        const confirmed = await openConfirm({
+            title: "Tüm Verileri Geri Yükle",
+            message: "Bu işlem sistemdeki tüm verileri (araç, personel, yakıt, servis vb.) güncelleyecek veya yeni kayıtlar ekleyecektir. Devam etmek istiyor musunuz?",
+            confirmText: "Evet, Geri Yükle",
+            variant: "danger",
+        });
+
+        if (!confirmed) {
+            event.target.value = "";
+            return;
+        }
+
+        setIsBulkImporting(true);
+        const loadingToast = toast.loading("Veriler geri yükleniyor, lütfen bekleyin...");
+
+        try {
+            const formData = new FormData();
+            formData.append("file", file);
+
+            const response = await fetch("/api/excel/bulk", {
+                method: "POST",
+                body: formData,
+            });
+
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || "Geri yükleme başarısız.");
+
+            toast.success("Sistem verileri başarıyla geri yüklendi.");
+            router.refresh();
+        } catch (error) {
+            console.error(error);
+            toast.error((error as Error).message || "Geri yükleme sırasında hata oluştu.");
+        } finally {
+            toast.dismiss(loadingToast);
+            setIsBulkImporting(false);
+            event.target.value = "";
+        }
+    };
+
     const createFieldLabelClass = "inline-flex h-5 items-center text-xs font-semibold text-slate-600";
     const createFieldControlClass =
         "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm leading-5 outline-none focus:border-indigo-500";
@@ -377,6 +449,62 @@ export default function OnayMerkeziClient({
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Veri Yönetimi Bölümü */}
+            <section className="mt-8 rounded-2xl border border-rose-100 bg-rose-50/10 p-6 overflow-hidden relative">
+                <div className="absolute top-0 right-0 w-64 h-64 bg-rose-100/20 rounded-full -mr-32 -mt-32 blur-3xl pointer-events-none" />
+                
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                    <div className="max-w-2xl">
+                        <div className="mb-3 flex items-center gap-2">
+                            <Database size={22} className="text-rose-600" />
+                            <h2 className="text-xl font-bold text-slate-900">Genel Veri Yönetimi</h2>
+                            <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">ADMIN</span>
+                        </div>
+                        <p className="text-sm text-slate-600 leading-relaxed">
+                            Sistemdeki tüm tabloları (Şirketler, Personel, Araçlar, Yakıt ve Servis kayıtları vb.) tek bir Excel dosyası olarak indirip yedekleyebilir veya bu dosyayı kullanarak toplu veri aktarımı yapabilirsiniz.
+                        </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3 shrink-0">
+                        <button
+                            onClick={handleBulkExport}
+                            disabled={isBulkExporting}
+                            className="group flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600 disabled:opacity-50"
+                        >
+                            {isBulkExporting ? (
+                                <Loader2 size={18} className="animate-spin text-indigo-600" />
+                            ) : (
+                                <Download size={18} className="transition-transform group-hover:-translate-y-0.5" />
+                            )}
+                            <span>Sistem Yedeği İndir (Excel)</span>
+                        </button>
+
+                        <label className={`group flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-lg transition-all hover:bg-slate-800 disabled:opacity-50 ${isBulkImporting ? "pointer-events-none opacity-50" : ""}`}>
+                            {isBulkImporting ? (
+                                <Loader2 size={18} className="animate-spin text-indigo-400" />
+                            ) : (
+                                <Upload size={18} className="transition-transform group-hover:-translate-y-0.5" />
+                            )}
+                            <span>Verileri Geri Yükle</span>
+                            <input
+                                type="file"
+                                accept=".xlsx,.xls"
+                                className="hidden"
+                                onChange={handleBulkImport}
+                                disabled={isBulkImporting}
+                            />
+                        </label>
+                    </div>
+                </div>
+                
+                <div className="mt-4 flex items-start gap-2 rounded-lg bg-white/60 border border-slate-200/50 p-3 relative z-10">
+                    <ShieldCheck size={16} className="mt-0.5 shrink-0 text-amber-600" />
+                    <p className="text-[11px] font-medium text-slate-500">
+                        <strong className="text-slate-700 uppercase">Önemli:</strong> Geri yükleme işlemi sırasında Excel dosyasındaki sekmelerin (Şirketler, Personel, Araçlar vb.) isimlerini değiştirmeyiniz. Sistem ilişkileri korumak için verileri belirli bir sırayla işler.
+                    </p>
+                </div>
+            </section>
         </div>
     );
 }
