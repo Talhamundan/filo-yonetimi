@@ -199,6 +199,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "yapilanIslemler",
             "degisenParca",
             "islemYapanFirma",
+            "yapilanKm",
             "tutar",
         ],
         strictVisibleColumns: true,
@@ -210,6 +211,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             yapilanIslemler: "Yapılan İşlem",
             degisenParca: "Değişen Parça",
             islemYapanFirma: "İşlem Yapan Firma",
+            yapilanKm: "Yapılan KM",
             tutar: "Masraf Tutarı",
         },
         aliases: {
@@ -220,19 +222,26 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             yapilanIslemler: ["Yapılan İşlem", "Yapılan İşlemler", "Yapilan Islem", "Yapilan Islemler", "İşlem", "Islem"],
             degisenParca: ["Değişen Parça", "Degisen Parca", "Değişen Parçalar", "Degisen Parcalar"],
             islemYapanFirma: ["İşlem Yapan Firma", "Islem Yapan Firma", "Servis Adı", "Servis Adi", "Servis Firması", "Servis Firmasi"],
+            yapilanKm: ["Yapılan KM", "Yapilan KM", "KM", "Yapılan Kilometre", "Servis KM"],
             tutar: ["Tutar", "Masraf", "Masraf Tutarı", "Masraf Tutari"],
         },
     },
     muayene: {
-        visibleColumns: ["arac", "gecerlilikTarihi"],
+        visibleColumns: ["arac", "muayeneTarihi", "gecerlilikTarihi", "km", "tutar"],
         strictVisibleColumns: true,
         labels: {
-            arac: "Araç Plakası",
+            arac: "Araç Plakas",
+            muayeneTarihi: "Muayene Tarihi",
             gecerlilikTarihi: "Geçerlilik Tarihi",
+            km: "KM",
+            tutar: "Tutar",
         },
         aliases: {
             arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
-            gecerlilikTarihi: ["Tarih", "Geçerlilik Bitiş", "Gecerlilik Bitis", "Bitiş Tarihi", "Bitis Tarihi"],
+            muayeneTarihi: ["Tarih", "Muayene Tarihi", "Yapıldığı Tarih", "Yapildigi Tarih"],
+            gecerlilikTarihi: ["Vize Bitiş", "Geçerlilik Bitiş", "Gecerlilik Bitis", "Bitiş Tarihi", "Bitis Tarihi"],
+            km: ["KM", "Muayene KM", "Kilometre"],
+            tutar: ["Tutar", "Muayene Ücreti", "Ucret"],
         },
     },
     kasko: {
@@ -330,18 +339,24 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         },
     },
     kullaniciZimmet: {
-        visibleColumns: ["arac", "kullanici", "baslangic", "bitis", "notlar"],
+        visibleColumns: ["arac", "kullanici", "baslangic", "bitis", "baslangicKm", "bitisKm", "notlar"],
         strictVisibleColumns: true,
         labels: {
             arac: "Plaka",
             kullanici: "Zimmetlenen Personel",
             baslangic: "Başlangıç Tarihi",
             bitis: "Bitiş Tarihi",
+            baslangicKm: "Başlangıç KM",
+            bitisKm: "Bitiş KM",
             notlar: "Açıklama",
         },
         aliases: {
             arac: ["Araç", "Arac", "Plaka"],
             kullanici: ["Personel", "Şoför", "Sofor", "Kullanıcı"],
+            baslangic: ["Başlangıç", "Baslangic", "Zimmet Tarihi"],
+            bitis: ["Bitiş", "Bitis", "İade Tarihi"],
+            baslangicKm: ["Başlangıç KM", "Baslangic KM", "KM", "Teslim KM"],
+            bitisKm: ["Bitiş KM", "Bitis KM", "İade KM"],
             notlar: ["Açıklama", "Not", "Notlar", "aciklama"],
         },
     },
@@ -1782,6 +1797,36 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                 parsedRow.servisAdi = islemYapanFirma || null;
                 parsedRow.kategori = parsedRow.kategori || (parsedRow.arizaSikayet ? "ARIZA" : "PERIYODIK_BAKIM");
                 parsedRow.tur = parsedRow.tur || (parsedRow.kategori === "ARIZA" ? "ARIZA" : "PERIYODIK");
+                
+                if (parsedRow.yapilanKm === undefined || parsedRow.yapilanKm === null) {
+                    let km = kmCache.get(parsedRow.aracId as string);
+                    if (km === undefined) {
+                        const arac = await (getModelDelegate(tx, "arac") as any).findUnique({ where: { id: parsedRow.aracId }, select: { guncelKm: true } });
+                        km = arac?.guncelKm || 0;
+                    }
+                    parsedRow.yapilanKm = km;
+                }
+                kmCache.set(parsedRow.aracId as string, parsedRow.yapilanKm as number);
+            }
+
+            if (config.prismaModel === "muayene") {
+                if (!parsedRow.aracId) { skipped++; continue; }
+                if (!parsedRow.muayeneTarihi) {
+                    parsedRow.muayeneTarihi = parsedRow.gecerlilikTarihi || new Date();
+                }
+            }
+
+            if (config.prismaModel === "kullaniciZimmet") {
+                if (!parsedRow.aracId) { skipped++; continue; }
+                if (parsedRow.baslangicKm === undefined || parsedRow.baslangicKm === null) {
+                    let km = kmCache.get(parsedRow.aracId as string);
+                    if (km === undefined) {
+                        const arac = await (getModelDelegate(tx, "arac") as any).findUnique({ where: { id: parsedRow.aracId }, select: { guncelKm: true } });
+                        km = arac?.guncelKm || 0;
+                    }
+                    parsedRow.baslangicKm = km;
+                }
+                kmCache.set(parsedRow.aracId as string, parsedRow.baslangicKm as number);
             }
 
             if (config.prismaModel === "arac") {
