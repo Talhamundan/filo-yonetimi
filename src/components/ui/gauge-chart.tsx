@@ -9,6 +9,7 @@ type GaugeChartProps = {
     min?: number;
     max?: number;
     valueText?: string;
+    secondaryText?: string;
     helperText?: string;
     sublabel?: string;
     color?: string;
@@ -29,6 +30,7 @@ export function GaugeChart({
     min = 0,
     max = 100,
     valueText,
+    secondaryText,
     helperText,
     sublabel,
     color = "#2563EB",
@@ -73,7 +75,7 @@ export function GaugeChart({
                 <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center pt-5">
                     <p className="text-xl font-black text-slate-900">{valueText || `${percentage}%`}</p>
                     <p className="text-[11px] font-medium text-slate-500">
-                        {min.toLocaleString("tr-TR")} - {max.toLocaleString("tr-TR")}
+                        {secondaryText || `${min.toLocaleString("tr-TR")} - ${max.toLocaleString("tr-TR")}`}
                     </p>
                 </div>
             </div>

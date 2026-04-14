@@ -3,9 +3,10 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUserAccount, deleteUserAccount, updateUserAccount } from "./actions";
+import { createUserAccount, deleteUserAccount, updateUserAccount, createYakitTank, updateYakitTank, deleteYakitTank } from "./actions";
 import { toast } from "sonner";
-import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2 } from "lucide-react";
+import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2, Fuel } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -14,6 +15,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import type { ColumnDef } from "@tanstack/react-table";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
+import type { YakitTank } from "@prisma/client";
 
 type AssignablePersonel = {
     id: string;
@@ -42,9 +44,11 @@ type RegisteredUserRow = {
 export default function OnayMerkeziClient({
     registeredUsers,
     assignablePersoneller,
+    yakitTanklar,
 }: {
     registeredUsers: RegisteredUser[];
     assignablePersoneller: AssignablePersonel[];
+    yakitTanklar: YakitTank[];
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const router = useRouter();
@@ -63,6 +67,71 @@ export default function OnayMerkeziClient({
     });
     const [isBulkExporting, setIsBulkExporting] = useState(false);
     const [isBulkImporting, setIsBulkImporting] = useState(false);
+    
+    // Yakit Tank States
+    const [isAddingTank, setIsAddingTank] = useState(false);
+    const [editTankRow, setEditTankRow] = useState<YakitTank | null>(null);
+    const [isSavingTank, setIsSavingTank] = useState(false);
+    const [tankForm, setTankForm] = useState({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+
+    const handleCreateTank = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0) {
+            toast.warning("Tank adı ve geçerli kapasite zorunludur.");
+            return;
+        }
+        setIsSavingTank(true);
+        const res = await createYakitTank({
+            ad: tankForm.ad,
+            kapasiteLitre: tankForm.kapasiteLitre,
+            mevcutLitre: tankForm.mevcutLitre
+        });
+        if (res.success) {
+            toast.success("Yakıt tankı tanımlandı.");
+            setIsAddingTank(false);
+            setTankForm({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+            router.refresh();
+        } else {
+            toast.error(res.error || "Tank eklenemedi.");
+        }
+        setIsSavingTank(false);
+    };
+
+    const handleSaveTank = async () => {
+        if (!editTankRow) return;
+        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0) {
+            toast.warning("Tank adı ve geçerli kapasite zorunludur.");
+            return;
+        }
+        setIsSavingTank(true);
+        const res = await updateYakitTank(editTankRow.id, tankForm);
+        if (res.success) {
+            toast.success("Yakıt tankı güncellendi.");
+            setEditTankRow(null);
+            router.refresh();
+        } else {
+            toast.error(res.error || "Tank güncellenemedi.");
+        }
+        setIsSavingTank(false);
+    };
+
+    const handleDeleteTank = async (tank: YakitTank) => {
+        const confirmed = await openConfirm({
+            title: "Tankı Sil",
+            message: `${tank.ad} isimli yakıt tankını silmek istediğinizden emin misiniz?`,
+            confirmText: "Evet, Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+
+        const res = await deleteYakitTank(tank.id);
+        if (res.success) {
+            toast.success("Yakıt tankı silindi.");
+            router.refresh();
+        } else {
+            toast.error(res.error || "Tank silinemedi.");
+        }
+    };
 
     const handleBulkExport = async () => {
         setIsBulkExporting(true);
@@ -232,6 +301,55 @@ export default function OnayMerkeziClient({
         }
     };
 
+    const tankColumns: ColumnDef<YakitTank>[] = [
+        {
+            accessorKey: "ad",
+            header: "Tank Adı",
+            cell: ({ row }) => <span className="font-bold text-slate-900">{row.original.ad}</span>,
+        },
+        {
+            accessorKey: "kapasiteLitre",
+            header: "Kapasite",
+            cell: ({ row }) => <span>{row.original.kapasiteLitre.toLocaleString("tr-TR")} Litre</span>,
+        },
+        {
+            accessorKey: "mevcutLitre",
+            header: "Mevcut",
+            cell: ({ row }) => (
+                <span className={cn("font-medium", row.original.mevcutLitre < row.original.kapasiteLitre * 0.1 ? "text-rose-600" : "text-emerald-600")}>
+                    {row.original.mevcutLitre.toLocaleString("tr-TR")} Litre
+                </span>
+            ),
+        },
+        {
+            accessorKey: "aktifMi",
+            header: "Durum",
+            cell: ({ row }) => (
+                <span className={cn("inline-flex rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider", row.original.aktifMi ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600")}>
+                    {row.original.aktifMi ? "AKTİF" : "PASİF"}
+                </span>
+            ),
+        },
+        {
+            id: "actions",
+            header: "İşlemler",
+            cell: ({ row }) => (
+                <div className="flex items-center gap-2">
+                    <RowActionButton variant="edit" onClick={() => {
+                        setEditTankRow(row.original);
+                        setTankForm({
+                            ad: row.original.ad,
+                            kapasiteLitre: row.original.kapasiteLitre,
+                            mevcutLitre: row.original.mevcutLitre,
+                            aktifMi: row.original.aktifMi
+                        });
+                    }} />
+                    <RowActionButton variant="delete" onClick={() => handleDeleteTank(row.original)} />
+                </div>
+            ),
+        },
+    ];
+
     const registeredColumns: ColumnDef<RegisteredUserRow>[] = [
         {
             accessorKey: "adSoyad",
@@ -287,9 +405,9 @@ export default function OnayMerkeziClient({
                 <div className="min-w-0">
                     <h1 className="text-3xl font-extrabold text-slate-900 flex items-start gap-3 leading-tight lg:whitespace-nowrap">
                         <ShieldCheck className="mt-1 shrink-0 text-indigo-600" size={32} />
-                        <span>Yetkilendirme Paneli</span>
+                        <span>Admin Panel</span>
                     </h1>
-                    <p className="mt-2 whitespace-nowrap text-[14px] font-medium text-slate-500">Sistemdeki personele giriş hesabı tanımlayın ve mevcut hesapları yönetin.</p>
+                    <p className="mt-2 whitespace-nowrap text-[14px] font-medium text-slate-500">Sistem yetkilendirme ayarlarını yönetin ve yakıt tankı tanımlamalarını yapın.</p>
                 </div>
                 <ExcelTransferToolbar options={[{ entity: "personel", label: "Personel" }]} hideEntitySelect />
             </header>
@@ -376,6 +494,44 @@ export default function OnayMerkeziClient({
                 />
             </section>
 
+            {/* Yakit Tanki Yonetimi Bolumu */}
+            <section className="mt-8 rounded-2xl border border-slate-200 bg-white p-5">
+                <div className="mb-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="flex items-center gap-2">
+                        <Fuel size={20} className="text-indigo-600" />
+                        <h2 className="text-xl font-bold text-slate-900">Yakıt Tankı Yönetimi</h2>
+                    </div>
+                    <button
+                        onClick={() => {
+                            setTankForm({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+                            setIsAddingTank(true);
+                        }}
+                        className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
+                    >
+                        <UserPlus size={16} /> {/* Actually TankPlus would be better but UserPlus matches style */}
+                        Yeni Tank Tanımla
+                    </button>
+                </div>
+                
+                {yakitTanklar.length > 0 ? (
+                    <DataTable
+                        columns={tankColumns}
+                        data={yakitTanklar}
+                        searchKey="ad"
+                        searchPlaceholder="Tank ara..."
+                        tableClassName="min-w-[800px]"
+                    />
+                ) : (
+                    <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                        <Fuel size={40} className="text-slate-300 mb-3" />
+                        <h3 className="text-sm font-bold text-slate-900">Tanımlı Tank Yok</h3>
+                        <p className="text-xs text-slate-500 max-w-[280px] mt-1">
+                            Sistemde henüz yakıt tankı tanımlanmamış. Yeni bir depo veya tank ekleyerek başlayın.
+                        </p>
+                    </div>
+                )}
+            </section>
+
             <Dialog
                 open={!!editRow}
                 onOpenChange={(open) => {
@@ -445,6 +601,121 @@ export default function OnayMerkeziClient({
                             className="inline-flex h-10 items-center justify-center rounded-md bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50"
                         >
                             {isSavingUser ? "Güncelleniyor..." : "Güncelle"}
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Yeni Tank Ekle Dialog */}
+            <Dialog open={isAddingTank} onOpenChange={setIsAddingTank}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Yeni Yakıt Tankı Tanımla</DialogTitle>
+                        <DialogDescription>
+                            Sanal yakıt stoğu takibi için yeni bir depo veya tank tanımlayın.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleCreateTank} className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-700 italic">Tank / Depo Adı</label>
+                            <input
+                                value={tankForm.ad}
+                                onChange={(e) => setTankForm({ ...tankForm, ad: e.target.value })}
+                                placeholder="Örn: Ana Depo, Şantiye Tankı"
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Kapasite (Litre)</label>
+                                <input
+                                    type="number"
+                                    value={tankForm.kapasiteLitre || ""}
+                                    onChange={(e) => setTankForm({ ...tankForm, kapasiteLitre: Number(e.target.value) })}
+                                    placeholder="5000"
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Mevcut Miktar (Litre)</label>
+                                <input
+                                    type="number"
+                                    value={tankForm.mevcutLitre || ""}
+                                    onChange={(e) => setTankForm({ ...tankForm, mevcutLitre: Number(e.target.value) })}
+                                    placeholder="0"
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter className="mt-2">
+                            <button
+                                type="submit"
+                                disabled={isSavingTank}
+                                className="inline-flex h-11 items-center justify-center rounded-lg bg-indigo-600 px-6 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                            >
+                                {isSavingTank ? "Tanımlanıyor..." : "Tankı Kaydet"}
+                            </button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Tank Düzenle Dialog */}
+            <Dialog open={!!editTankRow} onOpenChange={(open) => !open && setEditTankRow(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Yakıt Tankını Düzenle</DialogTitle>
+                        <DialogDescription>
+                            {editTankRow?.ad} tankının bilgilerini güncelleyin.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="space-y-2">
+                            <label className="text-sm font-bold text-slate-700 italic">Tank Adı</label>
+                            <input
+                                value={tankForm.ad}
+                                onChange={(e) => setTankForm({ ...tankForm, ad: e.target.value })}
+                                className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                            />
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Kapasite (Litre)</label>
+                                <input
+                                    type="number"
+                                    value={tankForm.kapasiteLitre || ""}
+                                    onChange={(e) => setTankForm({ ...tankForm, kapasiteLitre: Number(e.target.value) })}
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Mevcut Miktar (Litre)</label>
+                                <input
+                                    type="number"
+                                    value={tankForm.mevcutLitre || ""}
+                                    onChange={(e) => setTankForm({ ...tankForm, mevcutLitre: Number(e.target.value) })}
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex items-center gap-2 py-2">
+                            <input
+                                type="checkbox"
+                                id="tank-active"
+                                checked={tankForm.aktifMi}
+                                onChange={(e) => setTankForm({ ...tankForm, aktifMi: e.target.checked })}
+                                className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                            />
+                            <label htmlFor="tank-active" className="text-sm font-medium text-slate-700">Tank Aktif (Yakıt girişlerinde görünür)</label>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <button
+                            onClick={handleSaveTank}
+                            disabled={isSavingTank}
+                            className="inline-flex h-11 items-center justify-center rounded-lg bg-indigo-600 px-6 text-sm font-bold text-white hover:bg-indigo-700 disabled:opacity-50"
+                        >
+                            {isSavingTank ? "Güncelleniyor..." : "Değişiklikleri Kaydet"}
                         </button>
                     </DialogFooter>
                 </DialogContent>

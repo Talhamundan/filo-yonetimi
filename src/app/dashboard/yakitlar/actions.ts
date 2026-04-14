@@ -378,26 +378,32 @@ export async function createYakit(data: CreateYakitInput) {
                     enforceMaxKnownKm: false,
                 });
 
-        const isTanker = data.istasyon === "Mithra" || data.istasyon === "Binlik Bidon";
-        let finalTutar = parsedTutar;
-        let selectedTankId: string | null = null;
+        // Dynamic tank matching
+        const inputIstasyon = data.istasyon?.trim();
+        const matchingTank = inputIstasyon 
+            ? await (prisma as any).yakitTank.findFirst({ 
+                where: { 
+                    ad: { equals: inputIstasyon, mode: 'insensitive' },
+                    aktifMi: true
+                } 
+              })
+            : null;
 
-        if (isTanker) {
-            if (data.istasyon === "Binlik Bidon") {
-                const binlik = await (prisma as any).yakitTank.findFirst({ where: { ad: "Binlik Bidon" } });
-                if (binlik) selectedTankId = binlik.id;
-            } else {
-                // Mithra case -> Use Ana Tank 1 then Ana Tank 2
-                const tank1 = await (prisma as any).yakitTank.findFirst({ where: { ad: "Ana Tank 1" } });
-                const tank2 = await (prisma as any).yakitTank.findFirst({ where: { ad: "Ana Tank 2" } });
-                
-                if (tank1 && tank1.mevcutLitre >= parsedLitre) {
-                    selectedTankId = tank1.id;
-                } else if (tank2 && tank2.mevcutLitre >= parsedLitre) {
-                    selectedTankId = tank2.id;
-                } else if (tank1) {
-                    selectedTankId = tank1.id; // Fallback to Tank 1
-                }
+        const isMithra = inputIstasyon?.toLocaleLowerCase("tr-TR") === "mithra";
+        
+        if (matchingTank) {
+            selectedTankId = matchingTank.id;
+        } else if (isMithra) {
+            // Mithra legacy logic: find first available Ana Tank
+            const tank1 = await (prisma as any).yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 1", mode: 'insensitive' } } });
+            const tank2 = await (prisma as any).yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 2", mode: 'insensitive' } } });
+            
+            if (tank1 && tank1.mevcutLitre >= parsedLitre) {
+                selectedTankId = tank1.id;
+            } else if (tank2 && tank2.mevcutLitre >= parsedLitre) {
+                selectedTankId = tank2.id;
+            } else if (tank1) {
+                selectedTankId = tank1.id;
             }
         }
 
@@ -546,17 +552,27 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             const newIstasyon = data.istasyon !== undefined ? data.istasyon : oldValue.istasyon;
             const newLitre = parsedLitre !== undefined ? parsedLitre : oldValue.litre;
 
-            if (newIstasyon === "Mithra" || newIstasyon === "Binlik Bidon") {
-                if (newIstasyon === "Binlik Bidon") {
-                    const binlik = await tx.yakitTank.findFirst({ where: { ad: "Binlik Bidon" } });
-                    if (binlik) selectedTankId = binlik.id;
-                } else {
-                    const tank1 = await tx.yakitTank.findFirst({ where: { ad: "Ana Tank 1" } });
-                    const tank2 = await tx.yakitTank.findFirst({ where: { ad: "Ana Tank 2" } });
-                    if (tank1 && tank1.mevcutLitre >= newLitre) selectedTankId = tank1.id;
-                    else if (tank2 && tank2.mevcutLitre >= newLitre) selectedTankId = tank2.id;
-                    else if (tank1) selectedTankId = tank1.id;
-                }
+            // Dynamic tank matching for update
+            const inputIstasyon = newIstasyon?.trim();
+            const matchingTank = inputIstasyon 
+                ? await tx.yakitTank.findFirst({ 
+                    where: { 
+                        ad: { equals: inputIstasyon, mode: 'insensitive' },
+                        aktifMi: true
+                    } 
+                  })
+                : null;
+
+            const isMithra = inputIstasyon?.toLocaleLowerCase("tr-TR") === "mithra";
+
+            if (matchingTank) {
+                selectedTankId = matchingTank.id;
+            } else if (isMithra) {
+                const tank1 = await tx.yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 1", mode: 'insensitive' } } });
+                const tank2 = await tx.yakitTank.findFirst({ where: { ad: "Ana Tank 2", mode: 'insensitive' } });
+                if (tank1 && tank1.mevcutLitre >= newLitre) selectedTankId = tank1.id;
+                else if (tank2 && tank2.mevcutLitre >= newLitre) selectedTankId = tank2.id;
+                else if (tank1) selectedTankId = tank1.id;
             }
 
             if (selectedTankId) {

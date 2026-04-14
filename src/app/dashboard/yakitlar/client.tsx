@@ -132,11 +132,18 @@ const FormFields = ({
         seciliPersonel?.sirketAd?.trim() ||
         "-";
     const alindigiYerOptions = React.useMemo(() => {
+        const defaultOptions = ["Mithra", "Binlik Bidon"];
+        const customTanks = tankGosterge.tanklar
+            .filter((t: any) => t.aktifMi && t.ad !== "Mithra" && t.ad !== "Binlik Bidon")
+            .map((t: any) => t.ad);
+        
+        const allOptions = Array.from(new Set([...defaultOptions, ...customTanks]));
         const current = typeof formData.istasyon === "string" ? formData.istasyon.trim() : "";
-        if (!current) return [...YAKIT_CIKISI_OPTIONS];
-        const exists = YAKIT_CIKISI_OPTIONS.some((item) => item.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0);
-        return exists ? [...YAKIT_CIKISI_OPTIONS] : [...YAKIT_CIKISI_OPTIONS, current];
-    }, [formData.istasyon]);
+        if (!current) return allOptions;
+        
+        const exists = allOptions.some((item) => item.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0);
+        return exists ? allOptions : [...allOptions, current];
+    }, [formData.istasyon, tankGosterge.tanklar]);
 
     return (
         <div className="grid gap-4 py-4">
@@ -216,18 +223,23 @@ const FormFields = ({
                         {alindigiYerOptions.map((item) => {
                             let label = item;
                             if (tankGosterge) {
-                                if (item === "Mithra") {
-                                    const anaTanklar = tankGosterge.tanklar.filter((t: any) => t.ad.startsWith("Ana Tank"));
-                                    const mxMevcut = anaTanklar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
-                                    const mxKapasite = anaTanklar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
-                                    const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
-                                    label = `Mithra (Ana Tanklar: %${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
-                                } else if (item === "Binlik Bidon") {
-                                    const binlik = tankGosterge.tanklar.find((t: any) => t.ad === "Binlik Bidon");
-                                    if (binlik) {
-                                        label = `Binlik Bidon (%${binlik.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${binlik.mevcutLitre.toLocaleString("tr-TR")}L)`;
+                                    if (item === "Mithra") {
+                                        const anaTanklar = tankGosterge.tanklar.filter((t: any) => t.ad.startsWith("Ana Tank"));
+                                        const mxMevcut = anaTanklar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
+                                        const mxKapasite = anaTanklar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
+                                        const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
+                                        label = `Mithra (Ana Tanklar: %${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
+                                    } else if (item === "Binlik Bidon") {
+                                        const binlik = tankGosterge.tanklar.find((t: any) => t.ad === "Binlik Bidon");
+                                        if (binlik) {
+                                            label = `Binlik Bidon (%${binlik.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${binlik.mevcutLitre.toLocaleString("tr-TR")}L)`;
+                                        }
+                                    } else {
+                                        const matchingTank = tankGosterge.tanklar.find((t: any) => t.ad === item);
+                                        if (matchingTank) {
+                                            label = `${item} (%${matchingTank.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${matchingTank.mevcutLitre.toLocaleString("tr-TR")}L)`;
+                                        }
                                     }
-                                }
                             }
                             return (
                                 <option key={item} value={item}>
@@ -931,7 +943,7 @@ export default function YakitlarClient({
                                     min={0}
                                     max={100}
                                     valueText={`%${doluluk.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}`}
-                                    helperText={`${formatLitre(Number(tank.mevcutLitre || 0))} / ${formatLitre(Number(tank.kapasiteLitre || 0))}`}
+                                    secondaryText={`${formatLitre(Number(tank.mevcutLitre || 0))} / ${formatLitre(Number(tank.kapasiteLitre || 0))}`}
                                     color={getGaugeColorForTank(doluluk)}
                                     className="h-full"
                                     headerRight={

@@ -330,3 +330,128 @@ export async function deleteUserAccount(userId: string) {
     return { success: false, error: message }
   }
 }
+
+// Yakit Tanki Yonetimi
+export async function createYakitTank(data: {
+  ad: string
+  kapasiteLitre: number
+  mevcutLitre: number
+}) {
+  try {
+    const actor = await assertAdmin()
+    const ad = data.ad.trim()
+    if (!ad || data.kapasiteLitre <= 0) {
+      return { success: false, error: "Tank adı ve geçerli kapasite zorunludur." }
+    }
+
+    const created = await prisma.yakitTank.create({
+      data: {
+        ad,
+        kapasiteLitre: data.kapasiteLitre,
+        mevcutLitre: data.mevcutLitre || 0,
+        aktifMi: true,
+      },
+    })
+
+    await logEntityActivity({
+      actionType: ActivityActionType.CREATE,
+      entityType: ActivityEntityType.DIGER,
+      entityId: created.id,
+      summary: `${created.ad} yakıt tankı sisteme tanımlandı.`,
+      actor,
+      companyId: actor.sirketId || null,
+      metadata: {
+        kapasite: created.kapasiteLitre,
+        baslangicLitre: created.mevcutLitre,
+      },
+    })
+
+    revalidatePath("/dashboard/yetkilendirme-paneli")
+    revalidatePath("/dashboard/yakitlar")
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Tank eklenemedi."
+    return { success: false, error: message }
+  }
+}
+
+export async function updateYakitTank(id: string, data: {
+  ad: string
+  kapasiteLitre: number
+  mevcutLitre: number
+  aktifMi: boolean
+}) {
+  try {
+    const actor = await assertAdmin()
+    const ad = data.ad.trim()
+    if (!ad || data.kapasiteLitre <= 0) {
+      return { success: false, error: "Tank adı ve geçerli kapasite zorunludur." }
+    }
+
+    const updated = await prisma.yakitTank.update({
+      where: { id },
+      data: {
+        ad,
+        kapasiteLitre: data.kapasiteLitre,
+        mevcutLitre: data.mevcutLitre,
+        aktifMi: data.aktifMi,
+      },
+    })
+
+    await logEntityActivity({
+      actionType: ActivityActionType.UPDATE,
+      entityType: ActivityEntityType.DIGER,
+      entityId: updated.id,
+      summary: `${updated.ad} yakıt tankı güncellendi.`,
+      actor,
+      companyId: actor.sirketId || null,
+      metadata: {
+        kapasite: updated.kapasiteLitre,
+        mevcutLitre: updated.mevcutLitre,
+        aktifMi: updated.aktifMi,
+      },
+    })
+
+    revalidatePath("/dashboard/yetkilendirme-paneli")
+    revalidatePath("/dashboard/yakitlar")
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Tank güncellenemedi."
+    return { success: false, error: message }
+  }
+}
+
+export async function deleteYakitTank(id: string) {
+  try {
+    const actor = await assertAdmin()
+    
+    // Check if there are any movements related to this tank
+    const movements = await prisma.yakitTankHareket.findFirst({
+      where: {
+        OR: [{ tankId: id }, { hedefTankId: id }],
+      },
+    })
+
+    if (movements) {
+      return { success: false, error: "Bu tanka ait hareket kayıtları bulunduğu için silinemez. Bunun yerine pasife alabilirsiniz." }
+    }
+
+    const deleted = await prisma.yakitTank.delete({ where: { id } })
+
+    await logEntityActivity({
+      actionType: ActivityActionType.DELETE,
+      entityType: ActivityEntityType.DIGER,
+      entityId: deleted.id,
+      summary: `${deleted.ad} yakıt tankı sistemden silindi.`,
+      actor,
+      companyId: actor.sirketId || null,
+    })
+
+    revalidatePath("/dashboard/yetkilendirme-paneli")
+    revalidatePath("/dashboard/yakitlar")
+    return { success: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Tank silinemedi."
+    return { success: false, error: message }
+  }
+}

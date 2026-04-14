@@ -1122,7 +1122,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/araclar");
                         }
                     }}
-                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-amber-200 "
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition-all duration-300 hover:border-amber-200 hover:-translate-y-1 hover:shadow-md"
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2 text-slate-500">
@@ -1149,7 +1149,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/personel?status=SOFOR");
                         }
                     }}
-                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 "
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition-all duration-300 hover:border-emerald-200 hover:-translate-y-1 hover:shadow-md"
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
@@ -1176,7 +1176,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             navigateWithScope("/dashboard/yakitlar");
                         }
                     }}
-                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-indigo-200 "
+                    className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition-all duration-300 hover:border-indigo-200 hover:-translate-y-1 hover:shadow-md"
                 >
                     <CardContent className="p-5">
                         <div className="flex justify-between items-start mb-2">
@@ -1209,7 +1209,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 navigateWithScope("/dashboard/servis-kayitlari");
                             }
                         }}
-                        className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition hover:border-emerald-200 "
+                        className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition-all duration-300 hover:border-emerald-200 hover:-translate-y-1 hover:shadow-md"
                     >
                         <CardContent className="p-5">
                             <div className="flex justify-between items-start mb-2">

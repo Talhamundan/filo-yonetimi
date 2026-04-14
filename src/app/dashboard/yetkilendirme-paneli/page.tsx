@@ -48,6 +48,9 @@ export default async function OnayMerkeziPage() {
         },
         orderBy: [{ ad: "asc" }, { soyad: "asc" }],
     });
+    const yakitTanklar = await prisma.yakitTank.findMany({
+        orderBy: { ad: "asc" },
+    });
     const assignableOptions = assignablePersoneller.map((row) => ({
         id: row.id,
         adSoyad: `${row.ad} ${row.soyad}`.trim(),
@@ -59,6 +62,7 @@ export default async function OnayMerkeziPage() {
         <OnayMerkeziClient
             registeredUsers={registeredUsers}
             assignablePersoneller={assignableOptions}
+            yakitTanklar={yakitTanklar}
         />
     );
 }

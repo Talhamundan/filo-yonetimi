@@ -35,6 +35,10 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
             .filter((item) => Boolean(item.sirketId))
             .map((item) => [item.sirketId as string, item])
     );
+    // İsim bazlı eşleşme için yedek harita (TR locale duyarlı)
+    const companyCostMapByName = new Map(
+        companyCostReport.map((item) => [(item.sirketAd || "").toLocaleLowerCase("tr-TR").trim(), item])
+    );
 
     const sirketler = await prisma.sirket.findMany({
         where: filter as Prisma.SirketWhereInput,
@@ -52,7 +56,7 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
     const formattedData = sirketler
         .filter((sirket) => !isKiralikSirketName(sirket.ad))
         .map((s) => {
-            const costDetail = companyCostMap.get(s.id);
+            const costDetail = companyCostMap.get(s.id) || companyCostMapByName.get(s.ad.toLocaleLowerCase("tr-TR").trim());
             const maliyetKalemleri = costDetail
                 ? [
                       { key: "bakim", label: "Bakım", tutar: costDetail.bakim },

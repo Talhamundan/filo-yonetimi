@@ -238,7 +238,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                     role="menuitem"
                                                 >
                                                     <ShieldCheck size={16} className="text-indigo-500" />
-                                                    Yetkilendirme Paneli
+                                                    Admin Panel
                                                 </Link>
                                                 <Link
                                                     href={activityHref}
@@ -381,7 +381,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                     role="menuitem"
                                                 >
                                                     <ShieldCheck size={16} className="text-indigo-500" />
-                                                    Yetkilendirme Paneli
+                                                    Admin Panel
                                                 </Link>
                                                 <Link
                                                     href={activityHref}

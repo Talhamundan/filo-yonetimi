@@ -96,20 +96,6 @@ export default function BakimlarClient({
         }));
     };
 
-    const handlePlakaChange = (value: string) => {
-        const nextPlaka = forceUppercase(value);
-        const normalizedNextPlaka = nextPlaka.replace(/\s+/g, "");
-        const matchedArac = activeAraclar.find((arac) => (arac.plaka || "").replace(/\s+/g, "").toLocaleUpperCase("tr-TR") === normalizedNextPlaka);
-
-        setFormData((prev) => ({
-            ...prev,
-            plaka: nextPlaka,
-            aracId: matchedArac?.id || "",
-            soforId: matchedArac
-                ? normalizeSoforId(matchedArac.aktifSoforId || matchedArac.kullaniciId)
-                : prev.soforId,
-        }));
-    };
 
     const handleCreate = async () => {
         if ((!formData.aracId && !formData.plaka.trim()) || !formData.bakimTarihi || !formData.tutar) {
@@ -259,16 +245,7 @@ export default function BakimlarClient({
                                 />
                                 <SelectedAracInfo arac={selectedArac} />
                             </div>
-                            <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
-                                <Input
-                                    value={formData.plaka}
-                                    onChange={(event) => handlePlakaChange(event.target.value)}
-                                    placeholder="34 ABC 123"
-                                    className="h-9 uppercase font-mono"
-                                />
-                            </div>
-                            <div className="space-y-1.5">
+                            <div className="space-y-1.5 col-span-2">
                                 <label className="text-sm font-medium">Servise Götüren Personel</label>
                                 <SearchableSelect
                                     value={formData.soforId}
@@ -370,16 +347,7 @@ export default function BakimlarClient({
                             />
                             <SelectedAracInfo arac={selectedArac} />
                         </div>
-                        <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
-                            <Input
-                                value={formData.plaka}
-                                onChange={(event) => handlePlakaChange(event.target.value)}
-                                placeholder="34 ABC 123"
-                                className="h-9 uppercase font-mono"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
+                        <div className="space-y-1.5 col-span-2">
                             <label className="text-sm font-medium">Servise Götüren Personel</label>
                             <SearchableSelect
                                 value={formData.soforId}

@@ -232,7 +232,8 @@ function normalizeCompanyId(value: string | null | undefined) {
 }
 
 function normalizeCompanyText(value: string | null | undefined) {
-    const normalized = typeof value === "string" ? value.trim() : "";
+    if (typeof value !== "string") return null;
+    const normalized = value.replace(/[\s\u200B\u00A0\t\r\n]+/g, " ").trim();
     return normalized || null;
 }
 
@@ -347,25 +348,20 @@ function mergeDuplicateCompanyAccumulators(values: CompanyCostAccumulator[]) {
     return [...mergedByPrimaryKey.values()];
 }
 
-function resolveUsageCompanyInfo(arac: AracCompanyResolveRow): UsageCompanyInfo {
+function resolveUsageCompanyInfo(
+    arac: AracCompanyResolveRow,
+    sirketMapByName: Map<string, string>
+): UsageCompanyInfo {
     const aktifZimmetKullanici = arac.kullaniciGecmisi?.[0]?.kullanici || null;
     const aktifKullanici = aktifZimmetKullanici || arac.kullanici || null;
     const gecerliKullanici = aktifKullanici?.deletedAt ? null : aktifKullanici;
-    
-    // Araçlar sayfasındaki "Kullanıcı Firma" mantığı:
-    // 1. arac.calistigiKurum var mı?
-    // 2. Yoksa zimmetli personelin kendi bağlı olduğu sirket (kullanici.sirket)
-    // Ruhsat sahibine (arac.sirket) ASLA dönülmez.
-    
+
     const manualFirma = normalizeCompanyText(arac.calistigiKurum);
     const kullaniciSirketAd = normalizeCompanyText(gecerliKullanici?.sirket?.ad);
     const kullaniciSirketId = normalizeCompanyId(gecerliKullanici?.sirket?.id);
 
-    // KULLANICI FİRMA ÖNCELİĞİ:
-    // 1. ZİMMETLİ PERSONELİN ASIL FİRMASI (kullaniciSirketAd)
-    // 2. BOŞTAYSA ARAÇ ÜZERİNDE ELLE BELİRTİLEN FİRMA (manualFirma)
     const sirketAd = kullaniciSirketAd || manualFirma || "Bağımsız";
-    const sirketId = kullaniciSirketAd ? kullaniciSirketId : (manualFirma ? null : null);
+    const sirketId = kullaniciSirketId || sirketMapByName.get(getCompanyLabelKey(sirketAd)) || null;
 
     return {
         key: getUsageCompanyKey({ sirketId, label: sirketAd }),
@@ -379,7 +375,7 @@ function getDefaultUsageCompanyInfo(): UsageCompanyInfo {
     return { key: getUsageCompanyKey({ sirketId: null, label }), sirketId: null, label };
 }
 
-async function getUsageCompanyByAracId(aracIds: string[]) {
+async function getUsageCompanyByAracId(aracIds: string[], sirketMapByName: Map<string, string>) {
     if (!aracIds.length) return new Map<string, UsageCompanyInfo>();
 
     const araclar = (await prisma.arac.findMany({
@@ -414,7 +410,7 @@ async function getUsageCompanyByAracId(aracIds: string[]) {
 
     const map = new Map<string, UsageCompanyInfo>();
     for (const arac of araclar) {
-        map.set(arac.id, resolveUsageCompanyInfo(arac));
+        map.set(arac.id, resolveUsageCompanyInfo(arac, sirketMapByName));
     }
 
     return map;
@@ -449,6 +445,14 @@ export async function getCompanyCostReportForPeriod(params: {
     const expenseScope = getExpenseScopedWhere(scope, vehicleScope);
     const expenseCezaScope = getExpenseScopedWhere(scope, vehicleScope);
     const groupedTotals = new Map<string, CompanyCostAccumulator>();
+
+    // Tüm şirketleri ve eşleştirme haritasını hazırla
+    const allSirketler = await prisma.sirket.findMany({ select: { id: true, ad: true } });
+    const sirketMapByName = new Map<string, string>();
+    for (const s of allSirketler) {
+        const key = getCompanyLabelKey(s.ad);
+        if (key) sirketMapByName.set(key, s.id);
+    }
 
     const [
         yakitRows,
@@ -514,7 +518,7 @@ export async function getCompanyCostReportForPeriod(params: {
             ].filter((aracId) => typeof aracId === "string" && aracId.length > 0)
         )
     );
-    const usageCompanyByAracId = await getUsageCompanyByAracId(aracIds);
+    const usageCompanyByAracId = await getUsageCompanyByAracId(aracIds, sirketMapByName);
     const sirketIds = Array.from(
         new Set(
             [
