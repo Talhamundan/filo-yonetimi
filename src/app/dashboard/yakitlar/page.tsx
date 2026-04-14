@@ -2,7 +2,7 @@ import { prisma } from "../../../lib/prisma";
 import YakitlarClient from "./client";
 import { YakitRow } from "./columns";
 import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
