@@ -46,6 +46,7 @@ import {
 import type { ExcelEntityKey } from "@/lib/excel-entities"
 import { cn } from "@/lib/utils"
 import { matchesTokenizedSearch } from "@/lib/search-query"
+import { EmptyState } from "./empty-state"
 
 interface DataTableProps<TData, TValue> {
     columns: ColumnDef<TData, TValue>[]
@@ -979,12 +980,12 @@ export function DataTable<TData, TValue>({
                             </TableRow>
                         ))
                     ) : (
-                        <TableRow>
+                        <TableRow className="hover:bg-transparent">
                             <TableCell
                                 colSpan={table.getVisibleLeafColumns().length}
-                                className="h-32 bg-slate-50/30 text-center font-medium text-slate-500"
+                                className="h-auto p-0 border-none"
                             >
-                                Kayıt bulunamadı.
+                                <EmptyState entity={excelEntity} />
                             </TableCell>
                         </TableRow>
                     )}

@@ -150,6 +150,8 @@ export interface DashboardData {
         aracMaliyetDegisimYuzdesi: number;
         soforMaliyetDegisimYuzdesi: number;
         yakitDegisimYuzdesi: number;
+        toplamTankKapasite: number;
+        toplamTankMevcut: number;
     };
     durumData: { name: string; value: number }[];
     alerts: { id: string; aracId: string; plaka: string; message: string; tarih: string }[];

@@ -512,6 +512,12 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
 
     const serviceCostRatioPercent = dashboardTotalExpense > 0 ? (dashboardServiceExpense / dashboardTotalExpense) * 100 : 0;
     const serviceCostRatioGaugeColor = serviceCostRatioPercent > 25 ? "#DC2626" : serviceCostRatioPercent > 15 ? "#F59E0B" : "#16A34A";
+    
+    const tankOccupancyPercent = metrics.toplamTankKapasite > 0 
+        ? (metrics.toplamTankMevcut / metrics.toplamTankKapasite) * 100 
+        : 0;
+    const tankGaugeColor = tankOccupancyPercent >= 20 ? "#16A34A" : tankOccupancyPercent >= 10 ? "#F59E0B" : "#DC2626";
+
     const isAdminOrYetkili = role === "ADMIN" || role === "YETKILI";
     const shouldShowVehicleAndDriverCostLists = isAdminOrYetkili;
     const shouldShowCompanyCostReport = role === "ADMIN" || (role === "YETKILI" && canAccessAllCompanies);
@@ -1277,14 +1283,14 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 />
 
                 <GaugeChart
-                    label="Servis Maliyet Payı"
-                    sublabel="Dönem İçi Maliyet Yoğunluğu"
-                    value={Math.min(100, Math.max(0, serviceCostRatioPercent))}
+                    label="Yakıt Stok Durumu"
+                    sublabel="Tankların Toplam Doluluk Oranı"
+                    value={Math.min(100, Math.max(0, tankOccupancyPercent))}
                     min={0}
                     max={100}
-                    valueText={`${serviceCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                    helperText={`Servis Gideri: ${formatCurrencyValue(dashboardServiceExpense)}`}
-                    color={serviceCostRatioGaugeColor}
+                    valueText={`${tankOccupancyPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                    helperText={`${Math.round(metrics.toplamTankMevcut || 0).toLocaleString("tr-TR")} L / ${Math.round(metrics.toplamTankKapasite || 0).toLocaleString("tr-TR")} L`}
+                    color={tankGaugeColor}
                 />
             </div>
 

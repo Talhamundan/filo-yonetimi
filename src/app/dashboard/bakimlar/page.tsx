@@ -24,11 +24,13 @@ function resolveBakimKategoriFilter(typeFilter: string | null, statusFilter: str
 }
 
 export default async function BakimlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
+    const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
     const [filter, aracFilter, personelFilter] = await Promise.all([
         getModelFilter('bakim', selectedSirketId).catch((error) => {
             console.warn("Servis kaydı filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
@@ -44,9 +46,13 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         }),
     ]);
     const bakimWhere = filter as any;
-    const bakimYearWhere = withYilDateFilter((bakimWhere || {}) as Record<string, unknown>, "bakimTarihi", selectedYil);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
-    const whereParts: Record<string, unknown>[] = [bakimYearWhere as Record<string, unknown>];
+    const whereParts: Record<string, unknown>[] = [
+        { 
+            ...bakimWhere,
+            bakimTarihi: { gte: rangeStart, lte: rangeEnd }
+        }
+    ];
 
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
         { arizaSikayet: { contains: token, mode: "insensitive" } },

@@ -27,11 +27,13 @@ function getVehicleUsageCompanyFilter(sirketId: string) {
 }
 
 export default async function YakitlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
+    const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const session = await auth();
     const role = session?.user?.rol || null;
@@ -59,9 +61,14 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             ? ({ deletedAt: null, ...(getVehicleUsageCompanyFilter(usageScopeSirketId) as any) } as Record<string, unknown>)
             : ({ deletedAt: null } as Record<string, unknown>);
 
-    const yakitWhere = withYilDateFilter((queryFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const yakitWhere = (queryFilter || {}) as Record<string, unknown>;
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
-    const whereParts: Record<string, unknown>[] = [yakitWhere as Record<string, unknown>];
+    const whereParts: Record<string, unknown>[] = [
+        {
+            ...yakitWhere,
+            tarih: { gte: rangeStart, lte: rangeEnd }
+        }
+    ];
 
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
         { istasyon: { contains: token, mode: "insensitive" } },

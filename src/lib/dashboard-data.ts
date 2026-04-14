@@ -5,6 +5,7 @@ import { getDashboardCalendarData } from "@/lib/dashboard-calendar.service";
 import { getDashboardVehicleData, getFleetStatusData } from "@/lib/dashboard-vehicle.service";
 import { getDashboardDriverData } from "@/lib/dashboard-driver.service";
 import { getDashboardFuelAverageData } from "@/lib/dashboard-fuel-average.service";
+import { prisma } from "@/lib/prisma";
 
 export type {
     DashboardCalendarEvent,
@@ -45,6 +46,8 @@ function getEmptyDashboardData(): DashboardData {
             aracMaliyetDegisimYuzdesi: 0,
             soforMaliyetDegisimYuzdesi: 0,
             yakitDegisimYuzdesi: 0,
+            toplamTankKapasite: 0,
+            toplamTankMevcut: 0,
         },
         durumData: [],
         alerts: [],
@@ -83,7 +86,7 @@ async function getDashboardDataUnsafe(
     const cezaScope = getCezaScopeWhere(scope);
     const dateContext = buildDateContext(selectedYil, selectedAy, comparisonGranularity);
 
-    const [fleetData, costData, fuelConsumptionData, calendarData, vehicleData, driverData, fuelAverageData] = await Promise.all([
+    const [fleetData, costData, fuelConsumptionData, calendarData, vehicleData, driverData, fuelAverageData, tankData] = await Promise.all([
         getFleetStatusData(scope, vehicleScope),
         getDashboardCostData({ scope, cezaScope, vehicleScope, dateContext, comparisonGranularity }),
         getDashboardFuelConsumptionData({ scope, vehicleScope, dateContext }),
@@ -91,6 +94,10 @@ async function getDashboardDataUnsafe(
         getDashboardVehicleData({ scope, cezaScope, dateContext, vehicleScope }),
         getDashboardDriverData({ scope, cezaScope, dateContext, vehicleScope }),
         getDashboardFuelAverageData({ scope, dateContext, vehicleScope }),
+        prisma.yakitTank.aggregate({
+            where: { aktifMi: true },
+            _sum: { kapasiteLitre: true, mevcutLitre: true }
+        }),
     ]);
 
     const aylikToplamGider = costData.current.toplam;
@@ -128,6 +135,8 @@ async function getDashboardDataUnsafe(
                 driverData.oncekiOrtalamaSoforMaliyeti
             ),
             yakitDegisimYuzdesi: getDegisimYuzdesi(ortalamaYakit, oncekiOrtalamaYakit),
+            toplamTankKapasite: tankData._sum.kapasiteLitre || 0,
+            toplamTankMevcut: tankData._sum.mevcutLitre || 0,
         },
         durumData: fleetData.durumData,
         alerts: calendarData.alerts,

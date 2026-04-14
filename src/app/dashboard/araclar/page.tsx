@@ -184,13 +184,13 @@ async function getAraclarWithTakipBilgileri(
     }
 
     const muayeneler = await (prisma as any).muayene.findMany({
-        where: { aracId: { in: aracIds }, muayeneTarihi: { gte: rangeStart, lte: rangeEnd } },
+        where: { aracId: { in: aracIds } },
         select: { aracId: true, gecerlilikTarihi: true, muayeneTarihi: true },
         orderBy: [{ muayeneTarihi: "desc" }],
     }).catch(async (error: any) => {
-        console.warn("Arac listesi muayene verisi yeni siralama ile okunamadi, fallback deneniyor.", error);
+        console.warn("Arac listesi muayene verisi okunamadi, fallback deneniyor.", error);
         return (prisma as any).muayene.findMany({
-            where: { aracId: { in: aracIds }, gecerlilikTarihi: { gte: rangeStart, lte: rangeEnd } },
+            where: { aracId: { in: aracIds } },
             select: { aracId: true, gecerlilikTarihi: true, muayeneTarihi: true },
             orderBy: [{ gecerlilikTarihi: "desc" }],
         }).catch((fallbackError: any) => {
@@ -203,11 +203,10 @@ async function getAraclarWithTakipBilgileri(
         (prisma as any).kasko.findMany({
             where: {
                 aracId: { in: aracIds },
-                baslangicTarihi: { lte: rangeEnd },
-                bitisTarihi: { gte: rangeStart },
+                aktifMi: true,
             },
             select: { aracId: true, bitisTarihi: true, aktifMi: true },
-            orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { bitisTarihi: "desc" }],
+            orderBy: [{ aracId: "asc" }, { bitisTarihi: "desc" }],
         }).catch((error: any) => {
             console.warn("Arac listesi kasko verisi okunamadi.", error);
             return [];
@@ -215,11 +214,10 @@ async function getAraclarWithTakipBilgileri(
         (prisma as any).trafikSigortasi.findMany({
             where: {
                 aracId: { in: aracIds },
-                baslangicTarihi: { lte: rangeEnd },
-                bitisTarihi: { gte: rangeStart },
+                aktifMi: true,
             },
             select: { aracId: true, bitisTarihi: true, aktifMi: true },
-            orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { bitisTarihi: "desc" }],
+            orderBy: [{ aracId: "asc" }, { bitisTarihi: "desc" }],
         }).catch((error: any) => {
             console.warn("Arac listesi trafik sigortasi verisi okunamadi.", error);
             return [];
