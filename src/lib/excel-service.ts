@@ -9,6 +9,7 @@ import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@
 
 export { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
 export { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
+export { syncAracGuncelKm } from "@/lib/km-consistency";
 
 // --- Types ---
 export type RowData = Record<string, unknown>;
@@ -49,6 +50,12 @@ export type ExcelModelProfile = {
 
 // --- Config & Constants ---
 export const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
+
+export function parseSelectedYil(val: string | null | undefined): number | null {
+    if (!val) return null;
+    const parsed = parseInt(val);
+    return isNaN(parsed) ? null : parsed;
+}
 
 export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
     arac: {
@@ -1596,7 +1603,10 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
     const modelDelegate = getModelDelegate(prisma, config.prismaModel);
     if (!modelDelegate?.findMany) throw new Error("Model export icin uygun degil.");
 
-    const orderByField = fields.find((field) => field.isId)?.name || columns[0];
+    const orderByField = 
+        fields.find((field) => field.isId)?.name || 
+        exportColumns.find(c => c.type === "scalar")?.key || 
+        "id";
     const include = Object.fromEntries(
         [...relationFieldByForeignKey.entries()].map(([, relationField]) => [
             relationField.name,
