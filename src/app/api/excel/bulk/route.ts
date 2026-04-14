@@ -14,7 +14,7 @@ import { EXCEL_ENTITY_CONFIG, ExcelEntityKey } from "@/lib/excel-entities";
 // Import hiyerarşisi: İlişkilerin bozulmaması için bu sıra ile import edilmeli.
 const BULK_IMPORT_ORDER: ExcelEntityKey[] = [
     "sirket",
-    "kullanici",
+    "personel",
     "arac",
     "zimmet",
     "yakit",
