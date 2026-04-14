@@ -19,7 +19,7 @@ const ACTION_LABELS: Record<ActivityActionType, string> = {
     STATUS_CHANGE: "Durum Değişimi",
 };
 
-const ENTITY_LABELS: Record<ActivityEntityType, string> = {
+const ENTITY_LABELS: Record<string, string> = {
     ARAC: "Araç",
     MASRAF: "Masraf",
     BAKIM: "Bakım",
