@@ -20,7 +20,9 @@ export default async function OnayMerkeziPage() {
             AND: [
                 baseKullaniciFilter,
                 {
-                    hesap: { isNot: null },
+                    hesap: {
+                        is: {},
+                    },
                 },
             ],
         },
@@ -32,7 +34,7 @@ export default async function OnayMerkeziPage() {
             AND: [
                 baseKullaniciFilter,
                 {
-                    hesap: null,
+                    hesap: { is: null },
                     rol: { not: "SOFOR" },
                 },
             ],

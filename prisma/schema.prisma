@@ -507,6 +507,7 @@ enum ActivityEntityType {
   DOKUMAN
   CEZA
   KULLANICI
+  TEDARKICI
   OTURUM
   DIGER
 }
