@@ -122,7 +122,7 @@ export async function POST(
             return NextResponse.json({ error: "Excel dosyasi bos." }, { status: 400 });
         }
 
-        let result;
+        let result: { created: number; updated: number; skipped: number; total: number } | undefined;
         await prisma.$transaction(async (tx) => {
             result = await importEntity(entity, records, tx);
         });
@@ -135,7 +135,7 @@ export async function POST(
 
         return NextResponse.json({
             success: true,
-            ...result
+            ...(result || { created: 0, updated: 0, skipped: 0, total: 0 })
         });
     } catch (error) {
         console.error("Excel import hatasi:", error);
