@@ -18,7 +18,7 @@ import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 
 const ACENTE_OPTIONS = [
-    "Hisar Sigorta Aracılık Hizmetleri",
+    "Hisar Sigorta",
     "Erçal Sigorta"
 ];
 
@@ -76,17 +76,25 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
             />
             <SelectedAracInfo arac={selectedArac} />
         </div>
+        
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Sigorta Şirketi</label>
                 <Input value={formData.sirket} onChange={e => setFormData({...formData, sirket: e.target.value})} placeholder="Örn: Allianz" className="h-9" />
             </div>
             <div className="space-y-1.5">
+                <label className="text-sm font-medium">Poliçe No</label>
+                <Input value={formData.policeNo} onChange={e => setFormData({...formData, policeNo: e.target.value})} placeholder="12345/0" className="h-9" />
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
                 <label className="text-sm font-medium">Acente</label>
                 <select 
                     value={formData.acente} 
                     onChange={e => setFormData({...formData, acente: e.target.value})}
-                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
                     <option value="">Seçiniz...</option>
                     {ACENTE_OPTIONS.map(opt => (
@@ -94,11 +102,12 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                     ))}
                 </select>
             </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Poliçe Tutarı (₺)</label>
+                <Input type="number" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
+            </div>
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Poliçe No</label>
-            <Input value={formData.policeNo} onChange={e => setFormData({...formData, policeNo: e.target.value})} placeholder="12345/0" className="h-9" />
-        </div>
+
         <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Başlangıç Tarihi</label>
@@ -109,13 +118,10 @@ const FormFields = ({ formData, setFormData, araclar }: { formData: any, setForm
                 <Input type="datetime-local" value={formData.bitisTarihi} onChange={e => setFormData({...formData, bitisTarihi: e.target.value})} className="h-9" />
             </div>
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Tutar (₺)</label>
-            <Input type="number" value={formData.tutar} onChange={e => setFormData({...formData, tutar: e.target.value})} placeholder="0.00" className="h-9" />
-        </div>
-        <div className="flex items-center gap-2">
-            <input type="checkbox" id="aktifMi" checked={formData.aktifMi} onChange={e => setFormData({...formData, aktifMi: e.target.checked})} className="h-4 w-4 rounded border-slate-300" />
-            <label htmlFor="aktifMi" className="text-sm font-medium">Poliçe Aktif</label>
+
+        <div className="flex items-center gap-2 pt-2">
+            <input type="checkbox" id="aktifMi" checked={formData.aktifMi} onChange={e => setFormData({...formData, aktifMi: e.target.checked})} className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500" />
+            <label htmlFor="aktifMi" className="text-sm font-medium text-slate-700">Poliçe Aktif</label>
         </div>
     </div>
     );

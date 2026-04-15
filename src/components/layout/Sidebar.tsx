@@ -47,9 +47,11 @@ const NavItem = ({
     const active = isActive(href);
     const selectedSirketId = searchParams.get("sirket");
     const selectedYil = searchParams.get("yil");
+    const selectedAy = searchParams.get("ay");
     const scopedParams = new URLSearchParams();
     if (selectedSirketId) scopedParams.set("sirket", selectedSirketId);
     if (selectedYil) scopedParams.set("yil", selectedYil);
+    if (selectedAy) scopedParams.set("ay", selectedAy);
     const scopedQuery = scopedParams.toString();
     const scopedHref = scopedQuery ? `${href}?${scopedQuery}` : href;
     const collapsedNavClass = "h-10 w-full rounded-lg";

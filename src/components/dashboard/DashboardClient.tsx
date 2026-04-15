@@ -282,6 +282,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     }, [isAllMonthSelected, monthForMonthlyPie, monthlyExpenseTrend]);
 
     const monthlyPieData = useMemo(() => {
+        if (isAllMonthSelected) return yearlyPieData;
         if (!selectedMonthRow) return [];
         return COST_CATEGORY_LEGEND
             .map((category) => ({
@@ -291,7 +292,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 value: getCategoryDisplayValue(selectedMonthRow, category.key),
             }))
             .filter((item) => item.value > 0);
-    }, [selectedMonthRow]);
+    }, [isAllMonthSelected, yearlyPieData, selectedMonthRow]);
 
     const dailyTotalData = useMemo(
         () =>
@@ -541,7 +542,10 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         () => [...driverCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)),
         [driverCostReport]
     );
-    const monthlyServiceCost = Number(selectedMonthRow?.bakim || 0);
+    const monthlyServiceCost = useMemo(
+        () => vehicleCostReport.reduce((sum: number, row: any) => sum + Number(row?.bakim || 0), 0),
+        [vehicleCostReport]
+    );
     const monthlyServiceVehicleCount = useMemo(
         () => vehicleCostReport.filter((row: any) => Number(row?.bakim || 0) > 0).length,
         [vehicleCostReport]
@@ -1272,17 +1276,6 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 />
 
                 <GaugeChart
-                    label="Yakıt Maliyet Payı"
-                    sublabel="Dönem İçi Maliyet Yoğunluğu"
-                    value={Math.min(100, Math.max(0, fuelCostRatioPercent))}
-                    min={0}
-                    max={100}
-                    valueText={`${fuelCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                    helperText={`Yakıt Gideri: ${formatCurrencyValue(dashboardFuelExpense)}`}
-                    color={fuelCostRatioGaugeColor}
-                />
-
-                <GaugeChart
                     label="Yakıt Stok Durumu"
                     sublabel="Tankların Toplam Doluluk Oranı"
                     value={Math.min(100, Math.max(0, tankOccupancyPercent))}
@@ -1291,6 +1284,18 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     valueText={`${tankOccupancyPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
                     helperText={`${Math.round(metrics.toplamTankMevcut || 0).toLocaleString("tr-TR")} L / ${Math.round(metrics.toplamTankKapasite || 0).toLocaleString("tr-TR")} L`}
                     color={tankGaugeColor}
+                    icon={<Fuel size={32} />}
+                />
+
+                <GaugeChart
+                    label="Yakıt Maliyet Payı"
+                    sublabel="Dönem İçi Maliyet Yoğunluğu"
+                    value={Math.min(100, Math.max(0, fuelCostRatioPercent))}
+                    min={0}
+                    max={100}
+                    valueText={`${fuelCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
+                    helperText={`Yakıt Gideri: ${formatCurrencyValue(dashboardFuelExpense)}`}
+                    color={fuelCostRatioGaugeColor}
                 />
             </div>
 
@@ -1506,7 +1511,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 Ay Bazlı Kategori Dağılımı
                             </CardTitle>
                             <p className="text-xs text-slate-500">
-                                {selectedMonthRow?.name || "-"} • Yakıt: {formatLitreValue(monthlyFuelTotal)} • Diğer gider: {formatCurrencyValue(monthlyOtherCostTotal)}
+                                {isAllMonthSelected ? "Tümü" : (selectedMonthRow?.name || "-")} • Yakıt: {formatLitreValue(monthlyFuelTotal)} • Diğer gider: {formatCurrencyValue(monthlyOtherCostTotal)}
                             </p>
                         </CardHeader>
                         <CardContent className="px-4 pb-4 pt-2 flex flex-col">

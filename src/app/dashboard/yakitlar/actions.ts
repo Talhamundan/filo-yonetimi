@@ -49,6 +49,7 @@ type CreateYakitInput = {
     litre: number;
     tutar: number;
     km?: number | null;
+    endeks?: number | null;
     soforId?: string | null;
     istasyon?: string;
     odemeYontemi?: OdemeYontemi | string;
@@ -283,22 +284,35 @@ export async function transferFuelToBidon(data: {
         const parsedTarih = parseDateInput(data.tarih, "Aktarım tarihi");
         const parsedLitre = Number(data.litre);
 
-        // Find Binlik Bidon
-        const bidon = await (prisma as any).yakitTank.findFirst({ where: { ad: "Binlik Bidon" } });
+        // Find Binlik Bidon Group
+        const bidon = await (prisma as any).yakitTank.findFirst({ 
+            where: { 
+                ad: { contains: "bidon", mode: 'insensitive' },
+                aktifMi: true
+            },
+            orderBy: { kapasiteLitre: 'desc' }
+        }) || await (prisma as any).yakitTank.findFirst({ 
+            where: { 
+                ad: { contains: "binlik", mode: 'insensitive' },
+                aktifMi: true
+            }
+        });
+
         if (!bidon) throw new Error("Binlik Bidon bulunamadı.");
 
-        // Mithra logic to find source tank
-        const tank1 = await (prisma as any).yakitTank.findFirst({ where: { ad: "Ana Tank 1" } });
-        const tank2 = await (prisma as any).yakitTank.findFirst({ where: { ad: "Ana Tank 2" } });
+        // Find best source tank (Mithra/Ana Tank group)
+        const allMainTanks = await (prisma as any).yakitTank.findMany({
+            where: {
+                OR: [
+                    { ad: { contains: "ana tank", mode: 'insensitive' } },
+                    { ad: { contains: "mithra", mode: 'insensitive' } }
+                ],
+                aktifMi: true
+            },
+            orderBy: { mevcutLitre: 'desc' }
+        });
         
-        let sourceTank = null;
-        if (tank1 && tank1.mevcutLitre >= parsedLitre) {
-            sourceTank = tank1;
-        } else if (tank2 && tank2.mevcutLitre >= parsedLitre) {
-            sourceTank = tank2;
-        } else if (tank1) {
-            sourceTank = tank1; // Fallback
-        }
+        const sourceTank = allMainTanks.find((t: any) => t.mevcutLitre >= parsedLitre) || allMainTanks[0];
 
         if (!sourceTank) throw new Error("Kaynak tank bulunamadı.");
         if (sourceTank.mevcutLitre < parsedLitre) {
@@ -357,13 +371,11 @@ export async function createYakit(data: CreateYakitInput) {
             kullaniciId: true,
             kullanici: { select: { id: true, sirketId: true } },
         });
-        const fallbackUsageContext = {
+        const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
             kullanimSirketId: normalizeSirketId((arac as any)?.kullanici?.sirketId),
-        };
-        const usageContext = await getAracUsageContext(arac.id, fallbackUsageContext);
-        const fallbackSoforId = usageContext.soforId;
-        const resolvedSoforId = await resolveYakitSoforId(data.soforId, fallbackSoforId);
+        });
+        const resolvedSoforId = await resolveYakitSoforId(data.soforId, null);
         const parsedTarih = parseDateInput(data.tarih, "Yakıt tarihi");
         const parsedLitre = parseDecimalInput(data.litre, "Litre");
         const parsedTutar = parseDecimalInput(data.tutar, "Toplam tutar");
@@ -391,21 +403,45 @@ export async function createYakit(data: CreateYakitInput) {
               })
             : null;
 
-        const isMithra = inputIstasyon?.toLocaleLowerCase("tr-TR") === "mithra";
+        const normalizedIstasyon = inputIstasyon?.toLocaleLowerCase("tr-TR") || "";
+        const isMithraGroup = normalizedIstasyon === "mithra" || normalizedIstasyon.includes("ana tank");
+        const isBinlikGroup = normalizedIstasyon === "binlik bidon" || normalizedIstasyon.includes("binlik") || normalizedIstasyon.includes("bidon") || normalizedIstasyon.includes("gezici");
         
         if (matchingTank) {
             selectedTankId = matchingTank.id;
-        } else if (isMithra) {
-            // Mithra legacy logic: find first available Ana Tank
-            const tank1 = await (prisma as any).yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 1", mode: 'insensitive' } } });
-            const tank2 = await (prisma as any).yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 2", mode: 'insensitive' } } });
+        } else if (isMithraGroup) {
+            // Mithra Group: find first available Ana Tank
+            const allMainTanks = await (prisma as any).yakitTank.findMany({
+                where: {
+                    OR: [
+                        { ad: { contains: "ana tank", mode: 'insensitive' } },
+                        { ad: { contains: "mithra", mode: 'insensitive' } }
+                    ],
+                    aktifMi: true
+                },
+                orderBy: { mevcutLitre: 'desc' }
+            });
             
-            if (tank1 && tank1.mevcutLitre >= parsedLitre) {
-                selectedTankId = tank1.id;
-            } else if (tank2 && tank2.mevcutLitre >= parsedLitre) {
-                selectedTankId = tank2.id;
-            } else if (tank1) {
-                selectedTankId = tank1.id;
+            if (allMainTanks.length > 0) {
+                const sufficient = allMainTanks.find((t: any) => t.mevcutLitre >= parsedLitre);
+                selectedTankId = sufficient ? sufficient.id : allMainTanks[0].id;
+            }
+        } else if (isBinlikGroup) {
+            // Binlik/Bidon Group
+            const allBidons = await (prisma as any).yakitTank.findMany({
+                where: {
+                    OR: [
+                        { ad: { contains: "binlik", mode: 'insensitive' } },
+                        { ad: { contains: "gezici", mode: 'insensitive' } },
+                        { ad: { contains: "bidon", mode: 'insensitive' } }
+                    ],
+                    aktifMi: true
+                },
+                orderBy: { mevcutLitre: 'desc' }
+            });
+            if (allBidons.length > 0) {
+                const sufficient = allBidons.find((b: any) => b.mevcutLitre >= parsedLitre);
+                selectedTankId = sufficient ? sufficient.id : allBidons[0].id;
             }
         }
 
@@ -425,6 +461,7 @@ export async function createYakit(data: CreateYakitInput) {
                     litre: parsedLitre,
                     tutar: finalTutar,
                     km: Number(km),
+                    endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : null,
                     ...(YAKIT_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                     istasyon: data.istasyon || null,
                     odemeYontemi: resolveOdemeYontemi(data.odemeYontemi),
@@ -448,7 +485,8 @@ export async function createYakit(data: CreateYakitInput) {
                         tankId: selectedTankId,
                         aracId: arac.id,
                         soforId: resolvedSoforId,
-                        yakitId: yakit.id
+                        yakitId: yakit.id,
+                        endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : null
                     }
                 });
             }
@@ -520,15 +558,11 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             });
             normalizedKm = checkedKm === null ? undefined : Number(checkedKm);
         }
-        const fallbackUsageContext = {
+        const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
             kullanimSirketId: normalizeSirketId((arac as any)?.kullanici?.sirketId),
-        };
-        const usageContext = await getAracUsageContext(arac.id, fallbackUsageContext);
-        const fallbackSoforId = vehicleChanged
-            ? usageContext.soforId
-            : ((mevcutKayit as any).soforId ?? usageContext.soforId);
-        const resolvedSoforId = await resolveYakitSoforId(data.soforId, fallbackSoforId);
+        });
+        const resolvedSoforId = await resolveYakitSoforId(data.soforId, null);
         const parsedTarih = data.tarih ? parseDateInput(data.tarih, "Yakıt tarihi") : undefined;
         const parsedLitre = data.litre !== undefined ? parseDecimalInput(data.litre, "Litre") : undefined;
         const parsedTutar = data.tutar !== undefined ? parseDecimalInput(data.tutar, "Toplam tutar") : undefined;
@@ -565,16 +599,43 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                   })
                 : null;
 
-            const isMithra = inputIstasyon?.toLocaleLowerCase("tr-TR") === "mithra";
+            const normalizedIstasyon = inputIstasyon?.toLocaleLowerCase("tr-TR") || "";
+            const isMithraGroup = normalizedIstasyon === "mithra" || normalizedIstasyon.includes("ana tank");
+            const isBinlikGroup = normalizedIstasyon === "binlik bidon" || normalizedIstasyon.includes("binlik") || normalizedIstasyon.includes("bidon") || normalizedIstasyon.includes("gezici");
 
             if (matchingTank) {
                 selectedTankId = matchingTank.id;
-            } else if (isMithra) {
-                const tank1 = await tx.yakitTank.findFirst({ where: { ad: { contains: "Ana Tank 1", mode: 'insensitive' } } });
-                const tank2 = await tx.yakitTank.findFirst({ where: { ad: "Ana Tank 2", mode: 'insensitive' } });
-                if (tank1 && tank1.mevcutLitre >= newLitre) selectedTankId = tank1.id;
-                else if (tank2 && tank2.mevcutLitre >= newLitre) selectedTankId = tank2.id;
-                else if (tank1) selectedTankId = tank1.id;
+            } else if (isMithraGroup) {
+                const allMainTanks = await tx.yakitTank.findMany({
+                    where: {
+                        OR: [
+                            { ad: { contains: "ana tank", mode: 'insensitive' } },
+                            { ad: { contains: "mithra", mode: 'insensitive' } }
+                        ],
+                        aktifMi: true
+                    },
+                    orderBy: { mevcutLitre: 'desc' }
+                });
+                if (allMainTanks.length > 0) {
+                    const sufficient = allMainTanks.find((t: any) => t.mevcutLitre >= newLitre);
+                    selectedTankId = sufficient ? sufficient.id : allMainTanks[0].id;
+                }
+            } else if (isBinlikGroup) {
+                const allBidons = await tx.yakitTank.findMany({
+                    where: {
+                        OR: [
+                            { ad: { contains: "binlik", mode: 'insensitive' } },
+                            { ad: { contains: "gezici", mode: 'insensitive' } },
+                            { ad: { contains: "bidon", mode: 'insensitive' } }
+                        ],
+                        aktifMi: true
+                    },
+                    orderBy: { mevcutLitre: 'desc' }
+                });
+                if (allBidons.length > 0) {
+                    const sufficient = allBidons.find((b: any) => b.mevcutLitre >= newLitre);
+                    selectedTankId = sufficient ? sufficient.id : allBidons[0].id;
+                }
             }
 
             if (selectedTankId) {
@@ -591,6 +652,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                     litre: parsedLitre,
                     tutar: finalTutar,
                     km: normalizedKm !== undefined ? Number(normalizedKm) : undefined,
+                    endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : undefined,
                     ...(YAKIT_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                     istasyon: data.istasyon !== undefined ? data.istasyon || null : undefined,
                     odemeYontemi: data.odemeYontemi ? resolveOdemeYontemi(data.odemeYontemi) : undefined,
@@ -614,7 +676,8 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                         tankId: selectedTankId,
                         aracId: arac.id,
                         soforId: resolvedSoforId || oldValue.soforId,
-                        yakitId: id
+                        yakitId: id,
+                        endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : (oldValue.endeks || null)
                     }
                 });
             }

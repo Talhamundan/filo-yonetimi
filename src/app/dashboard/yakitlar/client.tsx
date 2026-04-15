@@ -1,6 +1,7 @@
 "use client"
 import { toast } from "sonner";
-
+import { format } from "date-fns";
+import { tr } from "date-fns/locale";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import React, { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -21,9 +22,10 @@ import { GaugeChart } from "@/components/ui/gauge-chart";
 const EMPTY = {
     aracId: '',
     soforId: '',
-    tarih: new Date().toISOString().slice(0, 16),
+    tarih: new Date().toISOString().slice(0, 10),
     litre: '',
     km: '',
+    endeks: '',
     istasyon: '',
     odemeYontemi: 'NAKIT'
 };
@@ -133,8 +135,14 @@ const FormFields = ({
         "-";
     const alindigiYerOptions = React.useMemo(() => {
         const defaultOptions = ["Mithra", "Binlik Bidon"];
-        const customTanks = tankGosterge.tanklar
-            .filter((t: any) => t.aktifMi && t.ad !== "Mithra" && t.ad !== "Binlik Bidon")
+        const customTanks = (tankGosterge?.tanklar || [])
+            .filter((t: any) => {
+                const name = String(t.ad || "").toLocaleLowerCase("tr-TR");
+                return t.aktifMi && 
+                       name !== "mithra" && 
+                       name !== "binlik bidon" && 
+                       !["ana tank", "binlik", "gezici", "bidon"].some(key => name.includes(key));
+            })
             .map((t: any) => t.ad);
         
         const allOptions = Array.from(new Set([...defaultOptions, ...customTanks]));
@@ -143,7 +151,7 @@ const FormFields = ({
         
         const exists = allOptions.some((item) => item.localeCompare(current, "tr-TR", { sensitivity: "base" }) === 0);
         return exists ? allOptions : [...allOptions, current];
-    }, [formData.istasyon, tankGosterge.tanklar]);
+    }, [formData.istasyon, tankGosterge]);
 
     return (
         <div className="grid gap-4 py-4">
@@ -187,21 +195,13 @@ const FormFields = ({
             </div>
             <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Bağlı Şirket</label>
-                    <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
-                        {bagliSirket}
-                    </div>
+                    <label className="text-sm font-medium">Endeks (Mithra)</label>
+                    <Input type="number" value={formData.endeks} onChange={e => setFormData({...formData, endeks: e.target.value})} placeholder="0" className="h-9" />
                 </div>
                 <div className="space-y-1.5">
-                    <label className="text-sm font-medium">Çalıştığı Kurum</label>
-                    <div className="h-9 flex items-center px-3 rounded-md border border-slate-200 bg-slate-50 text-sm font-medium text-slate-700">
-                        {calistigiKurum}
-                    </div>
+                    <label className="text-sm font-medium">Alım Tarihi</label>
+                    <Input type="date" value={formData.tarih} onChange={e => setFormData({...formData, tarih: e.target.value})} className="h-9" />
                 </div>
-            </div>
-            <div className="space-y-1.5">
-                <label className="text-sm font-medium">Alım Tarihi & Saati</label>
-                <Input type="datetime-local" value={formData.tarih} onChange={e => setFormData({...formData, tarih: e.target.value})} className="h-9" />
             </div>
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Alınan Litre</label>
@@ -223,23 +223,29 @@ const FormFields = ({
                         {alindigiYerOptions.map((item) => {
                             let label = item;
                             if (tankGosterge) {
-                                    if (item === "Mithra") {
-                                        const anaTanklar = tankGosterge.tanklar.filter((t: any) => t.ad.startsWith("Ana Tank"));
-                                        const mxMevcut = anaTanklar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
-                                        const mxKapasite = anaTanklar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
-                                        const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
-                                        label = `Mithra (Ana Tanklar: %${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
-                                    } else if (item === "Binlik Bidon") {
-                                        const binlik = tankGosterge.tanklar.find((t: any) => t.ad === "Binlik Bidon");
-                                        if (binlik) {
-                                            label = `Binlik Bidon (%${binlik.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${binlik.mevcutLitre.toLocaleString("tr-TR")}L)`;
-                                        }
-                                    } else {
-                                        const matchingTank = tankGosterge.tanklar.find((t: any) => t.ad === item);
-                                        if (matchingTank) {
-                                            label = `${item} (%${matchingTank.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${matchingTank.mevcutLitre.toLocaleString("tr-TR")}L)`;
-                                        }
+                                if (item === "Mithra") {
+                                    const anaTanklar = tankGosterge.tanklar.filter((t: any) => 
+                                        String(t.ad || "").toLocaleLowerCase("tr-TR").includes("ana tank")
+                                    );
+                                    const mxMevcut = anaTanklar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
+                                    const mxKapasite = anaTanklar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
+                                    const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
+                                    label = `Mithra (Ana Tanklar: %${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
+                                } else if (item === "Binlik Bidon") {
+                                    const bidonlar = tankGosterge.tanklar.filter((t: any) => {
+                                        const name = String(t.ad || "").toLocaleLowerCase("tr-TR");
+                                        return name.includes("binlik") || name.includes("gezici");
+                                    });
+                                    const mxMevcut = bidonlar.reduce((s: number, t: any) => s + t.mevcutLitre, 0);
+                                    const mxKapasite = bidonlar.reduce((s: number, t: any) => s + t.kapasiteLitre, 0);
+                                    const mxYuzde = mxKapasite > 0 ? (mxMevcut / mxKapasite) * 100 : 0;
+                                    label = `Binlik Bidon (%${mxYuzde.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${mxMevcut.toLocaleString("tr-TR")}L)`;
+                                } else {
+                                    const matchingTank = tankGosterge.tanklar.find((t: any) => t.ad === item);
+                                    if (matchingTank) {
+                                        label = `${item} (%${matchingTank.dolulukOrani.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} / ${matchingTank.mevcutLitre.toLocaleString("tr-TR")}L)`;
                                     }
+                                }
                             }
                             return (
                                 <option key={item} value={item}>
@@ -565,6 +571,7 @@ export default function YakitlarClient({
     const shouldOpenCreate = searchParams.get("add") === "true";
     const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
     const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
+    const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
 
     const tankGosterge = React.useMemo(() => {
         const tanklar = yakitTanklari.map((tank) => {
@@ -616,13 +623,13 @@ export default function YakitlarClient({
         };
 
         const result: Array<{ id: string; title: string; sublabel: string; tank: any }> = [];
-        const tank1 = pickByKeywords(["ana tank 1", "tank 1"]);
-        const tank2 = pickByKeywords(["ana tank 2", "tank 2"]);
-        const gezici = pickByKeywords(["binlik", "gezici"]);
+        const tank1 = pickByKeywords(["ana tank 1", "tank 1", "mithra"]);
+        const tank2 = pickByKeywords(["ana tank 2", "tank 2", "ana tank"]);
+        const gezici = pickByKeywords(["binlik", "gezici", "bidon", "mobil", "tanker"]);
 
-        if (tank1) result.push({ id: tank1.id, title: "Tank 1", sublabel: tank1.ad, tank: tank1 });
-        if (tank2) result.push({ id: tank2.id, title: "Tank 2", sublabel: tank2.ad, tank: tank2 });
-        if (gezici) result.push({ id: gezici.id, title: "Gezici Araç", sublabel: gezici.ad, tank: gezici });
+        if (tank1) result.push({ id: tank1.id, title: "Ana Tank", sublabel: tank1.ad, tank: tank1 });
+        if (tank2) result.push({ id: tank2.id, title: "Yardımcı Tank", sublabel: tank2.ad, tank: tank2 });
+        if (gezici) result.push({ id: gezici.id, title: "Gezici/Bidon", sublabel: gezici.ad, tank: gezici });
 
         if (result.length === 0) {
             return list.slice(0, 3).map((tank) => ({
@@ -655,7 +662,8 @@ export default function YakitlarClient({
         () =>
             initialYakitlar.reduce((sum, row) => {
                 const istasyon = String(row?.istasyon || "").trim().toLocaleLowerCase("tr-TR");
-                if (istasyon !== "mithra") return sum;
+                const isMatch = istasyon === "mithra" || istasyon.includes("ana tank");
+                if (!isMatch) return sum;
                 return sum + Number(row?.litre || 0);
             }, 0),
         [initialYakitlar]
@@ -665,7 +673,8 @@ export default function YakitlarClient({
         () =>
             initialYakitlar.reduce((sum, row) => {
                 const istasyon = String(row?.istasyon || "").trim().toLocaleLowerCase("tr-TR");
-                if (istasyon !== "binlik bidon") return sum;
+                const isMatch = istasyon === "binlik bidon" || istasyon.includes("binlik") || istasyon.includes("bidon") || istasyon.includes("gezici");
+                if (!isMatch) return sum;
                 return sum + Number(row?.litre || 0);
             }, 0),
         [initialYakitlar]
@@ -728,6 +737,7 @@ export default function YakitlarClient({
             litre,
             tutar: 0,
             km,
+            endeks: formData.endeks ? Math.trunc(Number(formData.endeks)) : null,
             soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
         });
@@ -756,6 +766,7 @@ export default function YakitlarClient({
             litre,
             tutar: 0,
             km,
+            endeks: formData.endeks ? Math.trunc(Number(formData.endeks)) : null,
             soforId: formData.soforId || null,
             odemeYontemi: formData.odemeYontemi
         });
@@ -787,9 +798,10 @@ export default function YakitlarClient({
         setFormData({
             aracId: row.arac.id,
             soforId: normalizeSoforId(row.soforId || (row as any).kullanici?.id || row.arac.kullanici?.id),
-            tarih: new Date(row.tarih).toISOString().slice(0, 16).replace('T', ' '),
+            tarih: new Date(row.tarih).toISOString().slice(0, 10),
             litre: row.litre.toString(),
             km: row.km.toString(),
+            endeks: row.endeks?.toString() || '',
             istasyon: row.istasyon || '',
             odemeYontemi: row.odemeYontemi || 'NAKIT'
         });
@@ -946,6 +958,7 @@ export default function YakitlarClient({
                                     secondaryText={`${formatLitre(Number(tank.mevcutLitre || 0))} / ${formatLitre(Number(tank.kapasiteLitre || 0))}`}
                                     color={getGaugeColorForTank(doluluk)}
                                     className="h-full"
+                                    icon={<Fuel size={32} />}
                                     headerRight={
                                         <button
                                             onClick={() => {

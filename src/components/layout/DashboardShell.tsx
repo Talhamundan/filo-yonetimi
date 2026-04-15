@@ -90,31 +90,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
         setIsMobileHeaderToolsOpen(true);
     }, [pathname]);
 
-    React.useEffect(() => {
-        if (didNormalizeDateQueryRef.current) return;
-        didNormalizeDateQueryRef.current = true;
-
-        const nextParams = new URLSearchParams(searchParams.toString());
-        let changed = false;
-
-        if (searchParams.has("yil")) {
-            nextParams.delete("yil");
-            changed = true;
-        }
-
-        if (searchParams.has("ay")) {
-            nextParams.delete("ay");
-            changed = true;
-        }
-
-        window.localStorage.removeItem("dashboard-scope-year");
-        window.localStorage.removeItem("dashboard-scope-month");
-
-        if (!changed) return;
-
-        const query = nextParams.toString();
-        router.replace(query ? `${pathname}?${query}` : pathname);
-    }, [pathname, router, searchParams]);
+    // No more automatic filter cleanup logic here as we want them to persist.
 
     const toggleSidebar = React.useCallback(() => {
         setIsSidebarCollapsed((current) => {
@@ -191,7 +167,8 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                 </div>
                             </div>
 
-                            <Link href={dashboardHref} className="mx-auto flex items-center shrink-0">
+                             <Link href={dashboardHref} className="mx-auto flex items-center gap-3 shrink-0">
+                                <img src="/icon.png" alt="Bera Filo" className="h-9 md:h-11 w-auto rounded-lg shadow-sm" />
                                 <h1 className="text-[2rem] font-bold tracking-tight text-slate-900 md:text-[2.15rem]">
                                     Bera <span className="text-[#6366F1]">Filo</span>
                                 </h1>

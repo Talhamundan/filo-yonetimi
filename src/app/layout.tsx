@@ -18,6 +18,11 @@ const montserrat = Montserrat({
 export const metadata: Metadata = {
   title: "Bera Filo - Filo Yönetim Sistemi",
   description: "Filo Yönetim Sistemi",
+  manifest: "/manifest.json",
+  icons: {
+    icon: "/icon.png?v=2",
+    apple: "/apple-touch-icon.png?v=2",
+  },
 };
 
 export const viewport: Viewport = {

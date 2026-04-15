@@ -25,6 +25,8 @@ export type YakitRow = {
         calistigiKurum?: string | null;
         sirket?: { ad: string } | null;
     } | null;
+    odendiMi: boolean;
+    endeks?: number | null;
     kullanici?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
     arac: { 
         id: string; 
@@ -41,14 +43,14 @@ export type YakitRow = {
     isStokHareketi?: boolean;
 }
 
-const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
+const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
 
 export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
     void showCompanyInfo;
     const columns: ColumnDef<YakitRow>[] = [
         {
             accessorKey: "tarih",
-            header: "Tarih Saat",
+            header: "Tarih",
             cell: ({ row }) => {
                 return <div className="text-slate-700 font-medium">{formatDate(row.getValue("tarih"))}</div>
             },
@@ -84,28 +86,12 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
             },
         },
         {
-            accessorKey: "bagliSirket",
-            header: "Bağlı Şirket",
-            accessorFn: (row) => row.arac?.sirket?.ad || "-",
+            accessorKey: "endeks",
+            header: "Endeks",
             cell: ({ row }) => {
-                const sirketAd = row.original.arac?.sirket?.ad?.trim();
-                return <span className={sirketAd ? "text-sm font-medium text-slate-700" : "text-sm text-slate-400"}>{sirketAd || "-"}</span>;
-            },
-        },
-        {
-            accessorKey: "calistigiKurum",
-            header: "Çalıştığı Kurum",
-            accessorFn: (row) =>
-                row.arac?.calistigiKurum?.trim() ||
-                row.sofor?.calistigiKurum?.trim() ||
-                row.sofor?.sirket?.ad?.trim() ||
-                "-",
-            cell: ({ row }) => {
-                const kurum =
-                    row.original.arac?.calistigiKurum?.trim() ||
-                    row.original.sofor?.calistigiKurum?.trim() ||
-                    row.original.sofor?.sirket?.ad?.trim();
-                return <span className={kurum ? "text-sm font-medium text-slate-700" : "text-sm text-slate-400"}>{kurum || "-"}</span>;
+                const val = row.original.endeks;
+                if (val === undefined || val === null) return <span className="text-sm text-slate-400">-</span>;
+                return <div className="text-sm font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 w-fit">{val.toLocaleString('tr-TR')}</div>
             },
         },
         {

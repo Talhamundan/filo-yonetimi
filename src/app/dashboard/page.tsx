@@ -15,7 +15,8 @@ export default async function DashboardOverview(props: { searchParams?: Promise<
         getCurrentUserRole(),
         getCurrentUserId(),
     ]);
-    const comparisonGranularity = selectedAy == null ? "YIL" : "AY";
+    const isAllMonths = selectedAy == null;
+    const comparisonGranularity = isAllMonths ? "YIL" : "AY";
     const [sirketFilter, baseAracFilter] = await Promise.all([
         getSirketFilter(selectedSirketId),
         getAracUsageFilter(selectedSirketId),

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { startTransition, useMemo, useState } from "react";
+import React, { startTransition, useMemo, useState, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsUpDown } from "lucide-react";
 
@@ -24,6 +24,8 @@ export default function MonthScopeSwitcher() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [pending, setPending] = useState(false);
+    const didRestoreRef = useRef(false);
+    const STORAGE_KEY = "dashboard-scope-month";
 
     const currentYear = new Date().getFullYear();
     const currentMonth = new Date().getMonth() + 1;
@@ -61,6 +63,30 @@ export default function MonthScopeSwitcher() {
         () => (selectedValue === "all" ? "Tümü" : MONTHS.find((month) => String(month.value) === selectedValue)?.label || "Ay"),
         [selectedValue]
     );
+
+    // Persist to localStorage when URL changes
+    useEffect(() => {
+        const ay = searchParams.get("ay");
+        if (ay) {
+            window.localStorage.setItem(STORAGE_KEY, ay);
+        }
+    }, [searchParams]);
+
+    // Restore from localStorage on initial mount if missing in URL
+    useEffect(() => {
+        if (didRestoreRef.current) return;
+        didRestoreRef.current = true;
+
+        const urlAy = searchParams.get("ay");
+        const storedAy = window.localStorage.getItem(STORAGE_KEY);
+        
+        if (!urlAy && storedAy) {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.set("ay", storedAy);
+            const query = nextParams.toString();
+            router.replace(`${pathname}?${query}`);
+        }
+    }, [pathname, router, searchParams]);
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const value = event.target.value;

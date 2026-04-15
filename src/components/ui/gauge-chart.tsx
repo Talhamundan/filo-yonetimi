@@ -17,6 +17,7 @@ type GaugeChartProps = {
     className?: string;
     headerRight?: React.ReactNode;
     footer?: React.ReactNode;
+    icon?: React.ReactNode;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -38,6 +39,7 @@ export function GaugeChart({
     className,
     headerRight,
     footer,
+    icon,
 }: GaugeChartProps) {
     const safeRange = max > min ? max - min : 1;
     const normalized = clamp((value - min) / safeRange, 0, 1);
@@ -50,7 +52,14 @@ export function GaugeChart({
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
                     {sublabel ? <p className="mt-1 text-[11px] text-slate-500">{sublabel}</p> : null}
                 </div>
-                {headerRight}
+                <div className="flex items-center gap-2">
+                    {React.isValidElement(icon) && (
+                        <div className="p-1.5 bg-slate-50 rounded-md text-slate-600 border border-slate-100 flex items-center justify-center">
+                            {React.cloneElement(icon as React.ReactElement<any>, { size: 16 })}
+                        </div>
+                    )}
+                    {headerRight}
+                </div>
             </div>
 
             <div className="relative mx-auto w-full max-w-[260px]">

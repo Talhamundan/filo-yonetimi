@@ -70,25 +70,41 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         }
     ];
 
-    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
-        { istasyon: { contains: token, mode: "insensitive" } },
-        { arac: { plaka: { contains: token, mode: "insensitive" } } },
-        { arac: { marka: { contains: token, mode: "insensitive" } } },
-        { arac: { model: { contains: token, mode: "insensitive" } } },
-        { arac: { calistigiKurum: { contains: token, mode: "insensitive" } } },
-        { sofor: { ad: { contains: token, mode: "insensitive" } } },
-        { sofor: { soyad: { contains: token, mode: "insensitive" } } },
-    ]);
+    const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => {
+        const filters: any[] = [
+            { istasyon: { contains: token, mode: "insensitive" } },
+            { arac: { plaka: { contains: token, mode: "insensitive" } } },
+            { arac: { marka: { contains: token, mode: "insensitive" } } },
+            { arac: { model: { contains: token, mode: "insensitive" } } },
+            { arac: { calistigiKurum: { contains: token, mode: "insensitive" } } },
+            { sofor: { ad: { contains: token, mode: "insensitive" } } },
+            { sofor: { soyad: { contains: token, mode: "insensitive" } } },
+        ];
+
+        const numToken = Number(token.replace(/[^\d]/g, ""));
+        if (!isNaN(numToken) && token.length > 0) {
+            filters.push({ endeks: numToken });
+        }
+
+        return filters;
+    });
+
     if (qFilter) {
         whereParts.push(qFilter);
     }
     if (commonFilters.status && (commonFilters.status === "NAKIT" || commonFilters.status === "TASIT_TANIMA")) {
-        whereParts.push({ odemeYontemi: commonFilters.status });
+        whereParts.push({ odemeYontemi: commonFilters.status as any });
     }
     if (dateRange) {
         whereParts.push({ tarih: dateRange });
     }
-    const scopedYakitWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
+
+    // Always use AND if we have multiple filters, otherwise just return the first one
+    const scopedYakitWhere = whereParts.length === 0 
+        ? {} 
+        : whereParts.length === 1 
+            ? whereParts[0] 
+            : { AND: whereParts };
 
     const [yakitlar, araclar, personeller, yakitTanklari, tankHareketleri] = await Promise.all([
         (prisma as any).yakit.findMany({ 

@@ -16,6 +16,18 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
     const filter = await getModelFilter('kasko', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
+
+    const [sirketList, aktifZimmetler] = await Promise.all([
+        prisma.sirket.findMany({ select: { id: true, ad: true } }),
+        prisma.kullaniciZimmet.findMany({
+            where: { bitis: null },
+            include: { kullanici: { include: { sirket: { select: { id: true, ad: true } } } } }
+        })
+    ]);
+
+    const sirketById = new Map(sirketList.map(s => [s.id, s]));
+    const aktifZimmetByAracId = new Map(aktifZimmetler.map(z => [z.aracId, z]));
+
     const now = new Date();
     now.setHours(0, 0, 0, 0);
     const criticalDate = new Date(now);
@@ -29,10 +41,12 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
     ];
 
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
-        { sirket: { contains: token, mode: "insensitive" } },
+        { sigortaSirketi: { contains: token, mode: "insensitive" } },
         { acente: { contains: token, mode: "insensitive" } },
         { policeNo: { contains: token, mode: "insensitive" } },
         { arac: { plaka: { contains: token, mode: "insensitive" } } },
+        { arac: { ruhsatSahibi: { contains: token, mode: "insensitive" } } },
+        { arac: { calistigiKurum: { contains: token, mode: "insensitive" } } },
     ]);
     if (qFilter) {
         whereParts.push(qFilter);
@@ -74,7 +88,14 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
                 { aracId: "asc" },
                 { bitisTarihi: "desc" },
             ],
-            include: { arac: { include: { sirket: { select: { ad: true } } } } }
+            include: { 
+                arac: { 
+                    include: { 
+                        sirket: { select: { ad: true } },
+                        kullanici: { include: { sirket: { select: { ad: true } } } }
+                    } 
+                } 
+            }
         }),
         (prisma as any).arac.findMany({
             where: aracFilter as any,
@@ -87,6 +108,19 @@ export default async function KaskoPage(props: { searchParams?: Promise<Dashboar
         if (!item?.aracId || seenAracIds.has(item.aracId)) return false;
         seenAracIds.add(item.aracId);
         return true;
+    }).map((item) => {
+        const aktifZimmet = aktifZimmetByAracId.get(item.aracId);
+        const inferredKullanici = (item.arac as any).kullanici || aktifZimmet?.kullanici || null;
+        const inferredSirket = (item.arac as any).sirket || (item.arac.sirketId ? sirketById.get(item.arac.sirketId) || null : null);
+
+        return {
+            ...item,
+            arac: {
+                ...item.arac,
+                kullanici: inferredKullanici,
+                sirket: inferredSirket,
+            }
+        };
     }).sort((a, b) => new Date(b.bitisTarihi).getTime() - new Date(a.bitisTarihi).getTime());
 
     return <KaskoClient initialKaskolar={kaskolar as unknown as KaskoRow[]} araclar={araclar} />;

@@ -20,7 +20,6 @@ export type AracRow = {
     kategori: string;
     saseNo?: string | null;
     calistigiKurum?: string | null;
-    calistigiKurumSirketId?: string | null;
     kullanici?: { id: string; ad: string, soyad: string; sirket?: { id: string; ad: string } | null } | null;
     kullaniciId?: string | null;
     sirket?: { id: string; ad: string } | null;
@@ -124,31 +123,20 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
                           );
                       },
                   },
-                  {
-                      accessorKey: "kullaniciFirma",
-                      header: "Kullanıcı Firma",
-                      accessorFn: (row: AracRow) => row.kullanici?.sirket?.ad || row.calistigiKurum?.trim() || "-",
-                      cell: ({ row }) => {
-                          const manualFirma = row.original.calistigiKurum?.trim();
-                          const sirketId = row.original.kullanici?.sirket?.id || row.original.calistigiKurumSirketId;
-                          const sirketAd = row.original.kullanici?.sirket?.ad || manualFirma || "-";
-                          if (!sirketId) {
-                              return (
-                                  <span className={manualFirma ? "text-sm font-medium text-slate-700" : "text-sm text-slate-500"}>
-                                      {sirketAd}
-                                  </span>
-                              );
-                          }
-                          return (
-                              <SirketLink
-                                  sirketId={sirketId}
-                                  className="text-sm font-medium text-indigo-600 hover:text-indigo-700 hover:underline"
-                              >
-                                  {sirketAd}
-                              </SirketLink>
-                          );
-                      },
-                  },
+                    {
+                        accessorKey: "kullaniciFirma",
+                        header: "Kullanıcı Firma",
+                        accessorFn: (row: AracRow) => row.calistigiKurum?.trim() || "-",
+                        cell: ({ row }) => {
+                            const sirketAd = row.original.calistigiKurum?.trim() || "-";
+                            
+                            return (
+                                <span className={sirketAd !== "-" ? "text-sm font-medium text-slate-700" : "text-sm text-slate-500"}>
+                                    {sirketAd}
+                                </span>
+                            );
+                        },
+                    },
               ] as ColumnDef<AracRow>[])
             : []),
         {

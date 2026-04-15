@@ -32,9 +32,9 @@ export function buildDateContext(
     const normalizedYear =
         Number.isInteger(selectedYil) && selectedYil >= 2000 && selectedYil <= 2100 ? selectedYil : currentYear;
     const normalizedMonth =
-        Number.isInteger(selectedAy) && selectedAy >= 1 && selectedAy <= 12
-            ? selectedAy
-            : now.getMonth() + 1;
+        (typeof selectedAy === "number" || (typeof selectedAy === "string" && !isNaN(Number(selectedAy)))) && Number(selectedAy) >= 1 && Number(selectedAy) <= 12
+            ? Number(selectedAy)
+            : (comparisonGranularity === "YIL" ? 1 : now.getMonth() + 1);
 
     const referenceDate = new Date(normalizedYear, normalizedMonth - 1, 1);
     const previousReferenceDate =

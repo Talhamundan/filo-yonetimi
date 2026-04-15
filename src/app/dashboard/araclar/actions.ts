@@ -123,11 +123,7 @@ export async function createArac(data: {
         const sirketId = requestedSirketId || (selectedKiralik ? null : (kullanici?.sirketId || null));
         const guncelKm = normalizeKmInput(data.guncelKm) ?? 0;
         const bedel = normalizeBedelInput(data.bedel);
-        const personelKurum =
-            typeof kullanici?.calistigiKurum === "string" && kullanici.calistigiKurum.trim().length > 0
-                ? kullanici.calistigiKurum.trim()
-                : null;
-        const resolvedCalistigiKurum = personelKurum || data.calistigiKurum?.trim() || null;
+        const resolvedCalistigiKurum = data.calistigiKurum?.trim() || null;
 
         const existingByPlaka = await prisma.arac.findUnique({
             where: { plaka: normalizedPlaka },
@@ -272,14 +268,7 @@ export async function updateArac(id: string, data: any) {
             : null;
         const selectedKiralik = data.sirketId !== undefined && normalizeSirketSelection(data.sirketId) === KIRALIK_SIRKET_OPTION_VALUE;
         const nextSirketId = requestedSirketId || (selectedKiralik ? null : (kullanici?.sirketId || null));
-        const personelKurum =
-            typeof kullanici?.calistigiKurum === "string" && kullanici.calistigiKurum.trim().length > 0
-                ? kullanici.calistigiKurum.trim()
-                : null;
-        const resolvedCalistigiKurum =
-            data.kullaniciId !== undefined
-                ? (personelKurum || (data.calistigiKurum?.trim() || null))
-                : (data.calistigiKurum !== undefined ? (data.calistigiKurum?.trim() || null) : undefined);
+        const resolvedCalistigiKurum = data.calistigiKurum !== undefined ? (data.calistigiKurum?.trim() || null) : undefined;
         const requestedGuncelKm = normalizeKmInput(data.guncelKm);
         const previousGuncelKm = Number(oldArac.guncelKm || 0);
 

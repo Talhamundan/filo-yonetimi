@@ -168,8 +168,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         visibleColumns: [
             "tarih",
             "arac",
-            "bagliSirket",
-            "calistigiKurum",
+            "endeks",
             "sofor",
             "km",
             "litre",
@@ -181,6 +180,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             arac: "Araç Plakası",
             bagliSirket: "Bağlı Şirket",
             calistigiKurum: "Çalıştığı Kurum",
+            endeks: "Endeks",
             sofor: "Yakıt Alan Personel",
             km: "KM/Saat",
             litre: "Alınan Litre",
@@ -191,7 +191,8 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
             bagliSirket: ["Bağlı Şirket", "Bagli Sirket", "Ruhsat Sahibi", "Şirket", "Sirket"],
             calistigiKurum: ["Çalıştığı Kurum", "Calistigi Kurum", "Kullanıcı Firma", "Kullanici Firma"],
-            sofor: ["Yakıtı Alan", "Yakit Alan", "Yakıt Alan Personel", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici"],
+            endeks: ["Endeks", "Mithra Endeks", "Sayaç", "Sayac"],
+            sofor: ["Yakıtı Alan", "Yakit Alan", "Yakıtı Alan Personel", "Yakıt Alan Personel", "Şoför", "Sofor", "Personel", "Kullanıcı", "Kullanici", "Sürücü", "Surucu"],
             km: ["KM", "Km", "km", "KM/Saat", "Alım KM", "Alim KM"],
             litre: ["Litre", "Alınan Litre", "Alinan Litre"],
             istasyon: ["Yakıt Çıkışı", "Yakit Cikisi", "Alındığı Yer", "Alindigi Yer", "İstasyon", "Istasyon", "Yakıt Alım Yeri", "Yakit Alim Yeri"],
@@ -252,10 +253,21 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         },
     },
     kasko: {
-        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        visibleColumns: [
+            "arac",
+            "sirket",
+            "policeNo",
+            "acente",
+            "baslangicTarihi",
+            "bitisTarihi",
+            "tutar",
+        ],
         strictVisibleColumns: true,
         labels: {
+            aktifMi: "Mevcut Durum",
             arac: "Araç Plakası",
+            bagliSirket: "Ruhsat Sahibi",
+            calistigiKurum: "Kullanıcı Firma",
             sirket: "Sigorta Şirketi",
             policeNo: "Poliçe No",
             acente: "Acente",
@@ -264,6 +276,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             tutar: "Poliçe Tutarı",
         },
         aliases: {
+            aktifMi: ["Durum", "AktifMi", "Poliçe Durumu"],
             arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
             sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Kasko Firması", "Kasko Firmasi"],
             policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
@@ -274,10 +287,21 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         },
     },
     trafikSigortasi: {
-        visibleColumns: ["arac", "sirket", "policeNo", "acente", "baslangicTarihi", "bitisTarihi", "tutar"],
+        visibleColumns: [
+            "arac",
+            "sirket",
+            "policeNo",
+            "acente",
+            "baslangicTarihi",
+            "bitisTarihi",
+            "tutar",
+        ],
         strictVisibleColumns: true,
         labels: {
+            aktifMi: "Mevcut Durum",
             arac: "Araç Plakası",
+            bagliSirket: "Ruhsat Sahibi",
+            calistigiKurum: "Kullanıcı Firma",
             sirket: "Sigorta Şirketi",
             policeNo: "Poliçe No",
             acente: "Acente",
@@ -286,6 +310,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             tutar: "Poliçe Tutarı",
         },
         aliases: {
+            aktifMi: ["Durum", "AktifMi", "Poliçe Durumu"],
             arac: ["Araç", "Arac", "Plaka", "Araç Plakası", "Arac Plakasi"],
             sirket: ["Şirket", "Sigorta Şirketi", "Sigorta Sirketi", "Sigorta Firması", "Sigorta Firmasi"],
             policeNo: ["Poliçe No", "Police No", "Poliçe Numarası", "Police Numarasi", "Police"],
@@ -1389,6 +1414,160 @@ export async function findExistingNoPlateAracId(tx: unknown, createData: Record<
     return typeof id === "string" && id.trim().length > 0 ? id : null;
 }
 
+export async function findExistingBusinessRecord(tx: unknown, modelName: string, parsedRow: Record<string, unknown>) {
+    const delegate = getModelDelegate(tx, lowerFirst(modelName));
+    if (!delegate?.findMany) return null;
+
+    const where: WhereData = {};
+
+    if (modelName === "yakit") {
+        if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.litre === undefined) return null;
+        
+        // Match by day instead of exact second for better Excel compatibility
+        const targetDate = parsedRow.tarih as Date;
+        const startOfDay = new Date(targetDate);
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate);
+        endOfDay.setHours(23, 59, 59, 999);
+
+        const candidates = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                tarih: {
+                    gte: startOfDay,
+                    lte: endOfDay
+                },
+                // Use a small range for liters to handle Excel floating point issues
+                litre: {
+                    gte: Number(parsedRow.litre) - 0.01,
+                    lte: Number(parsedRow.litre) + 0.01
+                }
+            },
+            select: { id: true, km: true, endeks: true }
+        });
+
+        if (candidates.length === 0) return null;
+        
+        // If we have KM or Endeks, use them for a tighter match
+        if (parsedRow.km !== undefined || parsedRow.endeks !== undefined) {
+            const matches = candidates.filter((c: any) => {
+                const kmMatch = parsedRow.km === undefined || c.km === parsedRow.km;
+                const endeksMatch = parsedRow.endeks === undefined || c.endeks === parsedRow.endeks;
+                return kmMatch && endeksMatch;
+            });
+            if (matches.length > 0) return matches[0].id;
+        }
+
+        return candidates[0].id;
+    } else if (modelName === "bakim") {
+        if (!parsedRow.aracId || !parsedRow.bakimTarihi || parsedRow.yapilanKm === undefined) return null;
+        const targetDate = parsedRow.bakimTarihi as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+        
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                bakimTarihi: { gte: startOfDay, lte: endOfDay },
+                yapilanKm: Number(parsedRow.yapilanKm)
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else if (modelName === "muayene") {
+        if (!parsedRow.aracId || !parsedRow.muayeneTarihi) return null;
+        const targetDate = parsedRow.muayeneTarihi as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                muayeneTarihi: { gte: startOfDay, lte: endOfDay }
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else if (modelName === "ceza") {
+        if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.tutar === undefined) return null;
+        const targetDate = parsedRow.tarih as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                tarih: { gte: startOfDay, lte: endOfDay },
+                tutar: Number(parsedRow.tutar)
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else if (modelName === "masraf") {
+        if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.tutar === undefined || !parsedRow.tur) return null;
+        const targetDate = parsedRow.tarih as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                tarih: { gte: startOfDay, lte: endOfDay },
+                tutar: Number(parsedRow.tutar),
+                tur: parsedRow.tur as any
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else if (modelName === "hgsYukleme") {
+        if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.tutar === undefined) return null;
+        const targetDate = parsedRow.tarih as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                tarih: { gte: startOfDay, lte: endOfDay },
+                tutar: Number(parsedRow.tutar)
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else if (modelName === "trafikSigortasi" || modelName === "kasko") {
+        if (!parsedRow.aracId || !parsedRow.policeNo) return null;
+        Object.assign(where, {
+            aracId: parsedRow.aracId,
+            policeNo: String(parsedRow.policeNo)
+        });
+    } else if (modelName === "kullaniciZimmet") {
+        if (!parsedRow.aracId || !parsedRow.kullaniciId || !parsedRow.baslangic) return null;
+        const targetDate = parsedRow.baslangic as Date;
+        const startOfDay = new Date(targetDate); startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date(targetDate); endOfDay.setHours(23, 59, 59, 999);
+
+        const existing = await delegate.findMany({
+            where: {
+                aracId: parsedRow.aracId as string,
+                kullaniciId: parsedRow.kullaniciId as string,
+                baslangic: { gte: startOfDay, lte: endOfDay }
+            },
+            select: { id: true }
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    } else {
+        return null;
+    }
+
+    const matches = await delegate.findMany({
+        where,
+        select: { id: true },
+        take: 1
+    });
+
+    return matches?.[0]?.id || null;
+}
+
 export function sanitizeAracImportRow(parsedRow: Record<string, unknown>) {
     const nullableToUndefined: Array<keyof typeof parsedRow> = ["guncelKm", "durum", "kategori", "bulunduguIl"];
     for (const key of nullableToUndefined) {
@@ -1676,12 +1855,12 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
             output.kullanici = toExportCell(adSoyad || zimmet?.adSoyad || null);
             output.calistigiKurum = toExportCell(row.calistigiKurum || kullaniciSirketAd || zimmet?.sirketAd || null);
         }
-        if (config.prismaModel === "yakit") {
+        if (config.prismaModel === "yakit" || config.prismaModel === "kasko" || config.prismaModel === "trafikSigortasi") {
             const aracObj = row.arac as any;
             const soforObj = row.sofor as any;
-            const bagliSirket = aracObj?.sirket?.ad || yakitSirketNameById.get(aracObj?.sirketId) || null;
+            const bagliSirket = aracObj?.sirket?.ad || yakitSirketNameById.get(aracObj?.sirketId) || aracObj?.ruhsatSahibi || null;
             output.arac = toExportCell(aracObj?.plaka || relationDisplayValue(aracObj));
-            output.sofor = toExportCell(relationDisplayValue(soforObj));
+            if (config.prismaModel === "yakit") output.sofor = toExportCell(relationDisplayValue(soforObj));
             output.bagliSirket = toExportCell(bagliSirket);
             output.calistigiKurum = toExportCell(aracObj?.calistigiKurum || soforObj?.calistigiKurum || soforObj?.sirket?.ad || null);
         }
@@ -1694,7 +1873,7 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
 
     const internalColumns = config.prismaModel === "arac"
         ? [...columns, "calistigiKurum", "aciklama", "bedel"].filter((v, i, a) => a.indexOf(v) === i)
-        : config.prismaModel === "yakit"
+        : (config.prismaModel === "yakit" || config.prismaModel === "kasko" || config.prismaModel === "trafikSigortasi")
             ? [...columns, "bagliSirket", "calistigiKurum"].filter((v, i, a) => a.indexOf(v) === i)
             : columns;
     
@@ -1858,15 +2037,19 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                 Object.keys(updateData).forEach(k => { if(!(k in prunedU)) delete updateData[k]; });
             }
 
+            let existingId: string | null = null;
             if (whereUnique) {
-                const exists = await model.findUnique({ where: whereUnique.where, select: { id: true } });
-                if (exists) {
-                    await model.update({ where: whereUnique.where, data: updateData });
-                    updated++;
-                } else {
-                    await model.create({ data: createData });
-                    created++;
-                }
+                const exists = await model.findUnique({ where: whereUnique.where, select: { id: true } }) as { id: string } | null;
+                existingId = exists?.id || null;
+            }
+
+            if (!existingId) {
+                existingId = await findExistingBusinessRecord(tx, config.prismaModel, parsedRow) as string | null;
+            }
+
+            if (existingId) {
+                await model.update({ where: { id: existingId }, data: updateData });
+                updated++;
             } else if (config.prismaModel === "arac" && !parsedRow.plaka) {
                 const id = await findExistingNoPlateAracId(tx, createData);
                 if (id) { await model.update({ where: { id }, data: updateData }); updated++; }

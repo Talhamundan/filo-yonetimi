@@ -16,7 +16,15 @@ export type KaskoRow = {
     bitisTarihi: Date;
     tutar: number | null;
     aktifMi: boolean;
-    arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
+    arac: { 
+        id: string; 
+        plaka: string; 
+        marka: string; 
+        model: string; 
+        calistigiKurum?: string | null;
+        sirket?: { ad: string } | null;
+        kullanici?: { sirket?: { ad: string } | null } | null;
+    };
 }
 
 const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
@@ -47,6 +55,18 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<KaskoRow>[] => [
         },
     },
     {
+        accessorKey: "arac_ruhsatSahibi",
+        header: "Ruhsat Sahibi",
+        accessorFn: (row) => row.arac.sirket?.ad || "Bağımsız",
+        cell: ({ row }) => <span className="text-xs font-medium text-slate-600 truncate max-w-[150px] inline-block">{row.original.arac.sirket?.ad || 'Bağımsız'}</span>,
+    },
+    {
+        accessorKey: "arac_calistigiKurum",
+        header: "Kullanıcı Firma",
+        accessorFn: (row) => row.arac.calistigiKurum || "-",
+        cell: ({ row }) => <span className="text-xs font-medium text-slate-600 truncate max-w-[150px] inline-block">{row.original.arac.calistigiKurum || '-'}</span>,
+    },
+    {
         accessorKey: "arac_plaka",
         header: "Araç",
         accessorFn: (row) => row.arac.plaka,
@@ -62,35 +82,42 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<KaskoRow>[] => [
     },
     {
         accessorKey: "sirket",
-        header: "Sigorta Şirketi / Acente",
+        header: "Sigorta Şirketi",
         cell: ({ row }) => {
             const sirket = row.getValue("sirket") as string;
-            return (
-                <div className="flex flex-col">
-                    <span className="font-bold text-slate-800">{sirket || <span className="italic text-slate-400 font-normal">Belirtilmedi</span>}</span>
-                    <span className="text-xs text-slate-500">{row.original.acente || '-'}</span>
-                </div>
-            );
+            return <span className="font-bold text-slate-800">{sirket || <span className="italic text-slate-400 font-normal">Belirtilmedi</span>}</span>
         },
     },
     {
         accessorKey: "policeNo",
-        header: "Poliçe / Belge No",
+        header: "Poliçe No",
         cell: ({ row }) => {
             const p = row.getValue("policeNo") as string;
             return <div className="text-slate-600 font-mono text-sm">{p || '-'}</div>
         },
     },
     {
+        accessorKey: "acente",
+        header: "Acente",
+        cell: ({ row }) => <span className="text-xs font-medium text-slate-500">{row.original.acente || '-'}</span>,
+    },
+    {
+        accessorKey: "baslangicTarihi",
+        header: "Başlangıç Tarihi",
+        cell: ({ row }) => {
+            return <div className="text-slate-600 text-sm">{formatDate(row.getValue("baslangicTarihi"))}</div>
+        },
+    },
+    {
         accessorKey: "bitisTarihi",
-        header: "Kasko Bitiş Tarihi",
+        header: "Bitiş Tarihi",
         cell: ({ row }) => {
             return <div className="font-bold text-slate-900">{formatDate(row.getValue("bitisTarihi"))}</div>
         },
     },
     {
         accessorKey: "tutar",
-        header: () => <div className="text-right">Prim Tutarı (₺)</div>,
+        header: () => <div className="text-right">Poliçe Tutarı (₺)</div>,
         cell: ({ row }) => {
             const tutar = row.original.tutar;
             return tutar

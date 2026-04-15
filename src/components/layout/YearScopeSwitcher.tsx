@@ -1,6 +1,6 @@
 "use client";
 
-import React, { startTransition, useMemo, useState } from "react";
+import React, { startTransition, useMemo, useState, useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsUpDown } from "lucide-react";
 import useSWR from "swr";
@@ -15,6 +15,8 @@ export default function YearScopeSwitcher() {
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [pending, setPending] = useState(false);
+    const didRestoreRef = useRef(false);
+    const STORAGE_KEY = "dashboard-scope-year";
 
     const currentYear = new Date().getFullYear();
     const selectedSirketId = searchParams.get("sirket");
@@ -49,6 +51,30 @@ export default function YearScopeSwitcher() {
         return Array.from(mergedYears).sort((a, b) => b - a);
     }, [currentYear, dataYears, rawSelectedYear]);
     const effectiveSelectedYear = years.includes(selectedYear) ? selectedYear : currentYear;
+    
+    // Persist to localStorage when URL changes
+    useEffect(() => {
+        const yil = searchParams.get("yil");
+        if (yil) {
+            window.localStorage.setItem(STORAGE_KEY, yil);
+        }
+    }, [searchParams]);
+
+    // Restore from localStorage on initial mount if missing in URL
+    useEffect(() => {
+        if (didRestoreRef.current) return;
+        didRestoreRef.current = true;
+
+        const urlYil = searchParams.get("yil");
+        const storedYil = window.localStorage.getItem(STORAGE_KEY);
+        
+        if (!urlYil && storedYil) {
+            const nextParams = new URLSearchParams(searchParams.toString());
+            nextParams.set("yil", storedYil);
+            const query = nextParams.toString();
+            router.replace(`${pathname}?${query}`);
+        }
+    }, [pathname, router, searchParams]);
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
         const value = Number(event.target.value);

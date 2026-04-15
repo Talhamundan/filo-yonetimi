@@ -79,7 +79,6 @@ export async function createZimmet(data: {
                 where: { id: arac.id },
                 data: {
                     kullaniciId: kullanici.id,
-                    calistigiKurum: kullanici.calistigiKurum?.trim() || null,
                 },
             });
 
