@@ -110,6 +110,7 @@ export async function createArac(data: {
     kullaniciId?: string | null;
     ruhsatSeriNo?: string | null;
     saseNo?: string | null;
+    motorNo?: string | null;
     kategori?: any;
 }) {
     try {
@@ -164,6 +165,7 @@ export async function createArac(data: {
                 kullaniciId: kullanici?.id || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
+                motorNo: data.motorNo || null,
                 durum: kullanici ? "AKTIF" : "BOSTA",
                 kategori: data.kategori || 'BINEK'
             }
@@ -309,6 +311,7 @@ export async function updateArac(id: string, data: any) {
                 kullaniciId: kullanici?.id || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
+                motorNo: data.motorNo || null,
                 kategori: data.kategori || undefined
             }
         });
@@ -555,7 +558,9 @@ export async function importAraclarFromExcel(formData: FormData) {
             aciklama: row.Aciklama || row.aciklama || null,
             sirketId,
             durum: 'BOSTA' as const,
-            kategori: (row.Kategori || row.kategori || 'BINEK') as any
+            kategori: (row.Kategori || row.kategori || 'BINEK') as any,
+            saseNo: row.SaseNo || row.saseno || row.saseNo || null,
+            motorNo: row.MotorNo || row.motorno || row.motorNo || null,
         })).filter(r => r.plaka && r.marka);
         
         if (formattedData.length === 0) {

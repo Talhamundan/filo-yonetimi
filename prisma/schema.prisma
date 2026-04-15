@@ -33,6 +33,7 @@ model Arac {
   guncellemeTarihi     DateTime           @default(now()) @updatedAt
   kategori             AracKategori       @default(BINEK)
   saseNo               String?
+  motorNo              String?
   deletedAt            DateTime?
   deletedBy            String?
   aciklama             String?

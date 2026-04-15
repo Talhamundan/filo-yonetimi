@@ -3,13 +3,15 @@ import * as XLSX from "xlsx";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/excel-entities";
-import { syncAracGuncelKm } from "@/lib/km-consistency";
-import { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
-import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
 
+// --- Re-exports ---
 export { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
 export { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@/lib/ceza-schema-compat";
 export { syncAracGuncelKm } from "@/lib/km-consistency";
+
+export function getEntityOrNull(entity: string) {
+    return isExcelEntityKey(entity) ? EXCEL_ENTITY_CONFIG[entity] : null;
+}
 
 // --- Types ---
 export type RowData = Record<string, unknown>;
@@ -65,6 +67,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "ruhsatSahibi",
             "calistigiKurum",
             "saseNo",
+            "motorNo",
             "kategori",
             "marka",
             "model",
@@ -83,6 +86,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             ruhsatSahibi: "Ruhsat Sahibi",
             calistigiKurum: "Kullanıcı Firma",
             saseNo: "Şase No",
+            motorNo: "Motor No",
             kategori: "Kategori",
             marka: "Marka",
             model: "Model",
@@ -122,6 +126,8 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             yil: ["Yıl", "yil"],
             bedel: ["Bedel", "alış bedeli", "alis bedeli", "alış maliyeti", "alis maliyeti"],
             aciklama: ["Açiklama", "aciklama"],
+            saseNo: ["Şase No", "Şase Numarası", "Sase No", "Sase Numarası"],
+            motorNo: ["Motor No", "Motor Numarası", "Motor", "motor"],
         },
     },
     kullanici: {
@@ -460,6 +466,7 @@ const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "calistigiKurum",
     "kategori",
     "saseNo",
+    "motorNo",
     "deletedAt",
     "deletedBy",
 ]);
@@ -602,9 +609,6 @@ export function applyExportProfile(modelName: string, columnKeys: string[]) {
     return next;
 }
 
-export function getEntityOrNull(entity: string) {
-    return isExcelEntityKey(entity) ? EXCEL_ENTITY_CONFIG[entity] : null;
-}
 
 export function getModelMeta(prismaModel: string) {
     return Prisma.dmmf.datamodel.models.find((model) => lowerFirst(model.name) === prismaModel) || null;
@@ -1271,7 +1275,7 @@ export async function getExistingTableColumns(db: unknown, tableName: string) {
                 .filter((name) => name.length > 0)
         );
     } catch (error) {
-        console.warn(`${tableName} tablo kolonlari okunamadi, import kolon uyumluluk fallback'i atlandi.`, error);
+        console.warn(`${tableName} tablo kolonlari okunamadi, import kolon uyumluluk fallbacki atlandi.`, error);
         return null;
     }
 }
@@ -1343,6 +1347,14 @@ export function normalizeAracPlaka(value: unknown) {
 }
 
 export function normalizeAracSaseNo(value: unknown) {
+    const normalized = normalizeCell(value);
+    if (normalized === null) return null;
+    if (isNullishCellValue(normalized)) return null;
+    const text = String(normalized).replace(/\s+/g, "").toLocaleUpperCase("tr-TR");
+    return text || null;
+}
+
+export function normalizeAracMotorNo(value: unknown) {
     const normalized = normalizeCell(value);
     if (normalized === null) return null;
     if (isNullishCellValue(normalized)) return null;
@@ -2021,6 +2033,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             if (config.prismaModel === "arac") {
                 parsedRow.plaka = normalizeAracPlaka(parsedRow.plaka);
                 parsedRow.saseNo = normalizeAracSaseNo(parsedRow.saseNo);
+                parsedRow.motorNo = normalizeAracMotorNo(parsedRow.motorNo);
                 sanitizeAracImportRow(parsedRow);
             }
 

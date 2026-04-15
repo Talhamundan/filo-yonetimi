@@ -280,6 +280,7 @@ export default function AracDetailClient({
         ruhsatSeriNo: arac.ruhsatSeriNo || "",
         aciklama: arac.aciklama || "",
         saseNo: arac.saseNo || "",
+        motorNo: arac.motorNo || "",
         kullaniciId: arac.kullanici?.id || "",
     });
     const sortedKullanicilar = React.useMemo(
@@ -394,6 +395,7 @@ export default function AracDetailClient({
             ruhsatSeriNo: arac.ruhsatSeriNo || "",
             aciklama: arac.aciklama || "",
             saseNo: arac.saseNo || "",
+            motorNo: arac.motorNo || "",
             kullaniciId: arac.kullanici?.id || "",
         });
     }, [arac]);
@@ -431,6 +433,7 @@ export default function AracDetailClient({
             ruhsatSeriNo: aracEditForm.ruhsatSeriNo || null,
             aciklama: aracEditForm.aciklama || null,
             saseNo: forceUppercase(aracEditForm.saseNo || ""),
+            motorNo: forceUppercase(aracEditForm.motorNo || ""),
             kullaniciId: aracEditForm.kullaniciId || null,
         });
         setUpdatingArac(false);
@@ -1708,6 +1711,10 @@ export default function AracDetailClient({
                                         <label className="text-sm font-medium">Şase No</label>
                                         <Input value={aracEditForm.saseNo} onChange={e => setAracEditForm({ ...aracEditForm, saseNo: forceUppercase(e.target.value) })} className="h-9 text-xs uppercase" />
                                     </div>
+                                    <div className="space-y-1.5">
+                                        <label className="text-sm font-medium">Motor No</label>
+                                        <Input value={aracEditForm.motorNo} onChange={e => setAracEditForm({ ...aracEditForm, motorNo: forceUppercase(e.target.value) })} className="h-9 text-xs uppercase" />
+                                    </div>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Ek Notlar / Açıklama</label>
@@ -2374,6 +2381,10 @@ export default function AracDetailClient({
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Şase No</span>
                                                 <span className="text-sm font-semibold text-slate-800">{arac.saseNo || '-'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Motor No</span>
+                                                <span className="text-sm font-semibold text-slate-800">{arac.motorNo || '-'}</span>
                                             </li>
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Filoya Katılım</span>

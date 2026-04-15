@@ -19,6 +19,7 @@ export type AracRow = {
     durum: string;
     kategori: string;
     saseNo?: string | null;
+    motorNo?: string | null;
     calistigiKurum?: string | null;
     kullanici?: { id: string; ad: string, soyad: string; sirket?: { id: string; ad: string } | null } | null;
     kullaniciId?: string | null;
@@ -145,6 +146,14 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
             cell: ({ row }) => {
                 const saseNo = row.original.saseNo?.trim();
                 return <div className="font-mono text-xs text-slate-600">{saseNo || "-"}</div>;
+            },
+        },
+        {
+            accessorKey: "motorNo",
+            header: "Motor No",
+            cell: ({ row }) => {
+                const motorNo = row.original.motorNo?.trim();
+                return <div className="font-mono text-xs text-slate-600">{motorNo || "-"}</div>;
             },
         },
         {

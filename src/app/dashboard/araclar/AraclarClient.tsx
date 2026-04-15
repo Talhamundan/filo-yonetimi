@@ -47,6 +47,7 @@ const EMPTY = {
     kullaniciId: '',
     ruhsatSeriNo: '',
     saseNo: '',
+    motorNo: '',
     kategori: 'BINEK'
 };
 
@@ -119,6 +120,10 @@ const FormFields = ({
         <div className="space-y-1.5 col-span-2">
             <label className="text-sm font-medium">Şase No</label>
             <Input value={formData.saseNo} onChange={e => setFormData({...formData, saseNo: forceUppercase(e.target.value)})} className="h-9 uppercase" placeholder="Opsiyonel" />
+        </div>
+        <div className="space-y-1.5 col-span-2">
+            <label className="text-sm font-medium">Motor No</label>
+            <Input value={formData.motorNo} onChange={e => setFormData({...formData, motorNo: forceUppercase(e.target.value)})} className="h-9 uppercase" placeholder="Opsiyonel" />
         </div>
 
         <div className="col-span-2 pt-2">
@@ -390,6 +395,7 @@ export default function AraclarClient({
             kullaniciId: (row as any).kullaniciId || row.kullanici?.id || '',
             ruhsatSeriNo: (row as any).ruhsatSeriNo || '',
             saseNo: (row as any).saseNo || '',
+            motorNo: (row as any).motorNo || '',
             kategori: row.kategori || 'BINEK'
         });
         setEditRow(row);
