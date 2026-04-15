@@ -957,6 +957,35 @@ export function getEnumValueMap() {
     return map;
 }
 
+const ENUM_DB_MAPPINGS: Record<string, Record<string, string>> = {
+    iller: {
+        SANLIURFA: "ŞANLIURFA",
+        ISTANBUL: "İSTANBUL",
+        DIGER: "DİĞER",
+    },
+};
+
+export function getDatabaseEnumValue(enumName: string, internalValue: string | null | undefined): string | null {
+    if (internalValue === null || internalValue === undefined) return null;
+    
+    // Check manual mappings first (reliable fallback)
+    if (ENUM_DB_MAPPINGS[enumName]?.[internalValue]) {
+        return ENUM_DB_MAPPINGS[enumName][internalValue];
+    }
+
+    try {
+        const dmmfEnums = (Prisma as any).dmmf?.datamodel?.enums || [];
+        const enumDef = dmmfEnums.find((e: any) => e.name === enumName);
+        if (!enumDef) return internalValue;
+
+        const valueDef = enumDef.values.find((v: any) => v.name === internalValue);
+        return valueDef?.dbName || internalValue;
+    } catch (error) {
+        // We've already checked manual mappings, so just return internalValue
+        return internalValue;
+    }
+}
+
 export function normalizeEnumText(value: string) {
     return value
         .trim()
@@ -1230,10 +1259,21 @@ export async function createAracWithoutPlakaRaw(tx: unknown, data: Record<string
         throw new Error("Plakasiz arac importu icin SQL baglami bulunamadi.");
     }
 
+    const modelMeta = getModelMeta("arac");
+    const fieldsByName = modelMeta ? new Map(modelMeta.fields.map(f => [f.name, f])) : null;
+
     const entries = Object.entries(data).filter(([key, value]) => {
         if (!ARAC_IMPORT_ALLOWED_COLUMNS.has(key)) return false;
         if (value === undefined) return false;
         return true;
+    }).map(([key, value]) => {
+        // Handle enum mapping for raw SQL
+        const field = fieldsByName?.get(key);
+        if (field?.kind === "enum" && typeof value === "string") {
+            const dbValue = getDatabaseEnumValue(field.type, value);
+            return [key, dbValue];
+        }
+        return [key, value];
     });
 
     if (!entries.some(([key]) => key === "id")) {
