@@ -379,6 +379,8 @@ export async function createYakit(data: CreateYakitInput) {
                 });
 
         // Dynamic tank matching
+        let selectedTankId: string | null = null;
+        let finalTutar = parsedTutar;
         const inputIstasyon = data.istasyon?.trim();
         const matchingTank = inputIstasyon 
             ? await (prisma as any).yakitTank.findFirst({ 
