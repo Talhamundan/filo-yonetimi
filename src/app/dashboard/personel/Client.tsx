@@ -16,7 +16,7 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
 
-const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'SOFOR', sirketId: '', calistigiKurum: '', tcNo: '' };
+const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'PERSONEL', sirketId: '', calistigiKurum: '', tcNo: '' };
 
 export default function PersonelClient({
     initialData,

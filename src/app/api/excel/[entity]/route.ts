@@ -25,7 +25,7 @@ export async function GET(
         if (!role) {
             return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
         }
-        if (role === "SOFOR") {
+        if (role === "PERSONEL") {
             return NextResponse.json({ error: "Excel dışa aktarma yetkiniz bulunmuyor." }, { status: 403 });
         }
 
@@ -77,7 +77,7 @@ export async function POST(
         if (!role) {
             return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
         }
-        if (role === "SOFOR") {
+        if (role === "PERSONEL") {
             return NextResponse.json({ error: "Excel import yetkiniz bulunmuyor." }, { status: 403 });
         }
 

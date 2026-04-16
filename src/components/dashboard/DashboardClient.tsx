@@ -1152,11 +1152,11 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 <Card
                     role="button"
                     tabIndex={0}
-                    onClick={() => navigateWithScope("/dashboard/personel?status=SOFOR")}
+                    onClick={() => navigateWithScope("/dashboard/personel?status=PERSONEL")}
                     onKeyDown={(event) => {
                         if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            navigateWithScope("/dashboard/personel?status=SOFOR");
+                            navigateWithScope("/dashboard/personel?status=PERSONEL");
                         }
                     }}
                     className="shadow-none border border-[#E2E8F0] bg-white rounded-xl cursor-pointer transition-all duration-300 hover:border-emerald-200 hover:-translate-y-1 hover:shadow-md"

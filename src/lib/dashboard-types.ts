@@ -1,135 +1,32 @@
+// ──────────────────────────────────────────────
+// Genel yardımcı tipler
+// ──────────────────────────────────────────────
+
+/** Prisma where koşullarında kullanılan genel anahtar-değer tipi */
 export type GenericWhere = Record<string, unknown>;
 
-export type DashboardEventType = "TRAFIK" | "KASKO" | "MUAYENE" | "CEZA";
-export type DashboardEventStatus = "GECIKTI" | "YUKSEK" | "KRITIK" | "YAKLASTI" | "PLANLI";
-export type DashboardArizaOncelik = "KRITIK" | "YUKSEK" | "ORTA" | "DUSUK";
-export type DashboardArizaDurumu = "ACIK" | "SERVISTE";
+/** Dashboard karşılaştırma granülaritesi: aylık veya yıllık */
+export type DashboardComparisonGranularity = "AY" | "YIL";
 
-export interface DashboardCalendarEvent {
-    id: string;
-    aracId: string;
-    plaka: string;
-    aracMarka: string;
-    sirketAd?: string | null;
-    type: DashboardEventType;
-    status: DashboardEventStatus;
-    title: string;
-    date: string;
-    daysLeft: number;
-    href: string;
-}
+// ──────────────────────────────────────────────
+// Tarih bağlamı
+// ──────────────────────────────────────────────
 
-export interface DashboardOperationArizaItem {
-    id: string;
-    aracId: string;
-    plaka: string;
-    oncelik: DashboardArizaOncelik;
-    durum: DashboardArizaDurumu;
-    aciklama: string;
-    bildirimTarihi: string;
-}
+export type DashboardDateContext = {
+    bugun: Date;
+    seciliAyBasi: Date;
+    seciliAySonu: Date;
+    oncekiDonemBasi: Date;
+    oncekiDonemSonu: Date;
+    normalizedYear: number;
+    normalizedMonth: number;
+};
 
-export interface DashboardMonthlyTrendItem {
-    name: string;
-    yakit: number;
-    yakitLitre?: number;
-    bakim: number;
-    muayene: number;
-    ceza: number;
-    kasko: number;
-    trafik: number;
-    diger: number;
-    toplam: number;
-}
+// ──────────────────────────────────────────────
+// Dashboard ana veri yapısı
+// ──────────────────────────────────────────────
 
-export interface DashboardDailyTrendItem {
-    dateKey: string;
-    gun: number;
-    name: string;
-    yakit: number;
-    yakitLitre?: number;
-    bakim: number;
-    muayene: number;
-    ceza: number;
-    kasko: number;
-    trafik: number;
-    diger: number;
-    toplam: number;
-}
-
-export interface DashboardWeeklyTrendItem {
-    weekKey: string;
-    hafta: number;
-    name: string;
-    rangeLabel: string;
-    yakit: number;
-    yakitLitre?: number;
-    bakim: number;
-    muayene: number;
-    ceza: number;
-    kasko: number;
-    trafik: number;
-    diger: number;
-    toplam: number;
-}
-
-export interface DashboardVehicleCostItem {
-    aracId: string;
-    plaka: string;
-    markaModel: string;
-    toplam: number;
-    yakit: number;
-    yakitLitre?: number;
-    bakim: number;
-    muayene: number;
-    ceza: number;
-    kasko: number;
-    trafik: number;
-    diger: number;
-}
-
-export interface DashboardDriverCostItem {
-    soforId: string | null;
-    adSoyad: string;
-    toplam: number;
-    ceza: number;
-    yakit: number;
-    yakitLitre?: number;
-    ariza: number;
-}
-
-export interface DashboardCompanyCostItem {
-    sirketId: string | null;
-    sirketAd: string;
-    toplam: number;
-    yakit: number;
-    yakitLitre?: number;
-    bakim: number;
-    muayene: number;
-    ceza: number;
-    kasko: number;
-    trafik: number;
-    diger: number;
-}
-
-export interface DashboardVehicleFuelAverageItem {
-    aracId: string;
-    plaka: string;
-    markaModel: string;
-    averageLitresPer100Km: number;
-    intervalCount: number;
-}
-
-export interface DashboardDriverFuelAverageItem {
-    soforId: string;
-    adSoyad: string;
-    averageLitresPer100Km: number;
-    intervalCount: number;
-    fleetAverageLitresPer100Km?: number;
-    isAboveFleetAverage?: boolean;
-}
-
-export interface DashboardData {
+export type DashboardData = {
     metrics: {
         aylikToplamGider: number;
         oncekiDonemToplamGider: number;
@@ -154,7 +51,13 @@ export interface DashboardData {
         toplamTankMevcut: number;
     };
     durumData: { name: string; value: number }[];
-    alerts: { id: string; aracId: string; plaka: string; message: string; tarih: string }[];
+    alerts: {
+        id: string;
+        aracId: string;
+        plaka: string;
+        message: string;
+        tarih: string;
+    }[];
     operationSummary: {
         kritik: number;
         yuksek: number;
@@ -175,19 +78,11 @@ export interface DashboardData {
     companyCostReport: DashboardCompanyCostItem[];
     vehicleFuelAverageReport: DashboardVehicleFuelAverageItem[];
     driverFuelAverageReport: DashboardDriverFuelAverageItem[];
-}
-
-export type DashboardComparisonGranularity = "AY" | "YIL";
-
-export type DashboardDateContext = {
-    bugun: Date;
-    seciliAyBasi: Date;
-    seciliAySonu: Date;
-    oncekiDonemBasi: Date;
-    oncekiDonemSonu: Date;
-    normalizedYear: number;
-    normalizedMonth: number;
 };
+
+// ──────────────────────────────────────────────
+// Maliyet dökümü
+// ──────────────────────────────────────────────
 
 export type CostBreakdown = {
     yakit: number;
@@ -198,4 +93,150 @@ export type CostBreakdown = {
     trafik: number;
     diger: number;
     toplam: number;
+};
+
+// ──────────────────────────────────────────────
+// Takvim etkinlikleri
+// ──────────────────────────────────────────────
+
+export type DashboardEventType = "MUAYENE" | "KASKO" | "TRAFIK" | "CEZA";
+export type DashboardEventStatus = "GECIKTI" | "YUKSEK" | "KRITIK" | "YAKLASTI" | "PLANLI";
+
+export type DashboardCalendarEvent = {
+    id: string;
+    aracId: string;
+    plaka: string;
+    aracMarka: string;
+    sirketAd: string | null;
+    type: DashboardEventType;
+    status: DashboardEventStatus;
+    title: string;
+    date: string;
+    daysLeft: number;
+    href: string;
+};
+
+// ──────────────────────────────────────────────
+// Arıza önceliği
+// ──────────────────────────────────────────────
+
+export type DashboardArizaOncelik = "KRITIK" | "YUKSEK" | "ORTA" | "DUSUK";
+
+export type DashboardOperationArizaItem = {
+    id: string;
+    aracId: string;
+    plaka: string;
+    oncelik: DashboardArizaOncelik;
+    durum: "ACIK" | "SERVISTE";
+    aciklama: string;
+    bildirimTarihi: string;
+};
+
+// ──────────────────────────────────────────────
+// Trend verileri
+// ──────────────────────────────────────────────
+
+export type DashboardMonthlyTrendItem = {
+    ay?: number;
+    name: string;
+    yakit: number;
+    yakitLitre?: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+};
+
+export type DashboardDailyTrendItem = {
+    dateKey: string;
+    gun: number;
+    name: string;
+    yakit: number;
+    yakitLitre?: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+};
+
+export type DashboardWeeklyTrendItem = {
+    weekKey: string;
+    hafta: number;
+    name: string;
+    rangeLabel: string;
+    yakit: number;
+    yakitLitre?: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+};
+
+// ──────────────────────────────────────────────
+// Rapor öğeleri
+// ──────────────────────────────────────────────
+
+export type DashboardVehicleCostItem = {
+    aracId: string;
+    plaka: string;
+    markaModel: string;
+    toplam: number;
+    yakit: number;
+    yakitLitre: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+};
+
+export type DashboardDriverCostItem = {
+    soforId: string;
+    adSoyad: string;
+    ceza: number;
+    yakit: number;
+    yakitLitre: number;
+    ariza: number;
+    toplam: number;
+};
+
+export type DashboardCompanyCostItem = {
+    sirketId: string | null;
+    sirketAd: string;
+    yakit: number;
+    yakitLitre: number;
+    bakim: number;
+    muayene: number;
+    ceza: number;
+    kasko: number;
+    trafik: number;
+    diger: number;
+    toplam: number;
+};
+
+export type DashboardVehicleFuelAverageItem = {
+    aracId: string;
+    plaka: string;
+    markaModel: string;
+    averageLitresPer100Km: number;
+    intervalCount: number;
+};
+
+export type DashboardDriverFuelAverageItem = {
+    soforId: string;
+    adSoyad: string;
+    averageLitresPer100Km: number;
+    intervalCount: number;
+    fleetAverageLitresPer100Km?: number;
+    isAboveFleetAverage?: boolean;
 };

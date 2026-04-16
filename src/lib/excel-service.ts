@@ -432,7 +432,7 @@ const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {
         BOS: "BOSTA",
     },
     Rol: {
-        SURUCU: "SOFOR",
+        SURUCU: "PERSONEL",
     },
 };
 

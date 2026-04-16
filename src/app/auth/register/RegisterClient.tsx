@@ -18,7 +18,7 @@ export default function RegisterPage({ sirketler }: { sirketler: any[] }) {
         telefon: "",
         tcNo: "",
         sirketId: "",
-        rolTalebi: "SOFOR"
+        rolTalebi: "PERSONEL"
     });
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -148,7 +148,7 @@ export default function RegisterPage({ sirketler }: { sirketler: any[] }) {
                                 onChange={(e) => setFormData({...formData, rolTalebi: e.target.value})}
                                 className="w-full h-11 px-3 rounded-xl border border-slate-200 focus:border-indigo-500 outline-none bg-transparent text-sm"
                             >
-                                <option value="SOFOR">Personel</option>
+                                <option value="PERSONEL">Personel</option>
                                 <option value="YETKILI">Yetkili</option>
                             </select>
                         </div>

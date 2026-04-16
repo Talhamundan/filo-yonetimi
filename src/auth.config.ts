@@ -21,7 +21,7 @@ export const authConfig = {
       const typedToken = token as JWT & { rol?: string; sirketId?: string | null; onayDurumu?: string }
       if (token) {
         session.user.id = token.sub || ""
-        session.user.rol = typedToken.rol || "SOFOR"
+        session.user.rol = typedToken.rol || "PERSONEL"
         session.user.sirketId = typedToken.sirketId || null
         session.user.onayDurumu = typedToken.onayDurumu || "BEKLIYOR"
       }

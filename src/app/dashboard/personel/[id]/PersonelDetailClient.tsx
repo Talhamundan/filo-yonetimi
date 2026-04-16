@@ -194,7 +194,7 @@ export default function PersonelDetailClient({
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
             case 'YETKILI': return <Badge className="bg-indigo-100 text-indigo-800 border-0">Yetkili</Badge>;
             case 'TEKNIK': return <Badge className="bg-emerald-100 text-emerald-800 border-0">Teknik</Badge>;
-            case 'SOFOR': return <Badge className="bg-amber-100 text-amber-800 border-0">{getRoleLabel(rol)}</Badge>;
+            case 'PERSONEL': return <Badge className="bg-amber-100 text-amber-800 border-0">{getRoleLabel(rol)}</Badge>;
             default: return <Badge variant="outline">{getRoleLabel(rol)}</Badge>;
         }
     };

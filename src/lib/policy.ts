@@ -29,7 +29,7 @@ const DRIVER_RESTRICTED_DASHBOARD_PATHS = [
     "/dashboard/cop-kutusu",
 ] as const;
 
-const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YETKILI", "SOFOR", "TEKNIK"] as const;
+const ROLE_VALUES: readonly Rol[] = ["ADMIN", "YETKILI", "PERSONEL", "TEKNIK"] as const;
 const LEGACY_ROLE_ALIASES: Record<string, Rol> = {
     YONETICI: "YETKILI",
     MUDUR: "YETKILI",
@@ -92,7 +92,7 @@ export function canRoleAssignIndependentRecords(
 }
 
 export function isDriverRole(role: string | null | undefined) {
-    return normalizeRole(role) === "SOFOR";
+    return normalizeRole(role) === "PERSONEL";
 }
 
 export function isAdminRole(role: string | null | undefined) {
@@ -279,7 +279,7 @@ export function getModelFilterByPolicy(params: {
         );
     }
 
-    if (normalizedRole === "SOFOR") {
+    if (normalizedRole === "PERSONEL") {
         if (!currentUserId) return getBlockedFilter(modelName);
         return withActiveVehicleFilter(
             modelName,

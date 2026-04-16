@@ -3,7 +3,7 @@ import OnayMerkeziClient from "./OnayMerkeziClient";
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getPersonnelSelectFilter } from "@/lib/auth-utils";
-import type { Prisma } from "@prisma/client";
+import { Rol, type Prisma } from "@prisma/client";
 
 export default async function OnayMerkeziPage() {
     const session = await auth();
@@ -35,7 +35,7 @@ export default async function OnayMerkeziPage() {
                 baseKullaniciFilter,
                 {
                     hesap: { is: null },
-                    rol: { not: "SOFOR" },
+                    rol: { not: Rol.PERSONEL },
                 },
             ],
         },

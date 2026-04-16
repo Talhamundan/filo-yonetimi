@@ -15,7 +15,7 @@ const EMPTY: PersonelFormData = {
     ad: '',
     soyad: '',
     telefon: '',
-    rol: 'SOFOR',
+    rol: 'PERSONEL',
     sirketId: '',
     calistigiKurum: '',
     tcNo: ''

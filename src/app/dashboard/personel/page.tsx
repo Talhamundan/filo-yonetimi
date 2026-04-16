@@ -8,11 +8,10 @@ import { getCommonListFilters } from "@/lib/list-filters";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
-const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "SOFOR" | "TEKNIK"> = {
+const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "PERSONEL" | "TEKNIK"> = {
     ADMIN: "ADMIN",
     YETKILI: "YETKILI",
-    SOFOR: "SOFOR",
-    PERSONEL: "SOFOR",
+    PERSONEL: "PERSONEL",
     TEKNIK: "TEKNIK",
     YONETICI: "YETKILI",
     MUDUR: "YETKILI",

@@ -9,9 +9,9 @@ datasource db {
 model Sirket {
   id              String      @id @default(cuid())
   ad              String
-  bulunduguIl     String      @default("BURSA")
   vergiNo         String?
   olusturmaTarihi DateTime    @default(now())
+  bulunduguIl     String      @default("BURSA")
   araclar         Arac[]
   kullanicilar    Kullanici[]
 }
@@ -22,7 +22,6 @@ model Arac {
   marka                String
   model                String
   yil                  Int
-  bulunduguIl          String             @default("BURSA")
   guncelKm             Int                @default(0)
   hgsNo                String?
   ruhsatSeriNo         String?
@@ -33,12 +32,13 @@ model Arac {
   guncellemeTarihi     DateTime           @default(now()) @updatedAt
   kategori             AracKategori       @default(BINEK)
   saseNo               String?
-  motorNo              String?
   deletedAt            DateTime?
   deletedBy            String?
   aciklama             String?
   bedel                Float?
   calistigiKurum       String?
+  motorNo              String?
+  bulunduguIl          String             @default("BURSA")
   kullanici            Kullanici?         @relation(fields: [kullaniciId], references: [id])
   sirket               Sirket?            @relation(fields: [sirketId], references: [id])
   arizaKayitlari       ArizaKaydi[]
@@ -69,7 +69,7 @@ model Kullanici {
   calistigiKurum       String?
   eposta               String?            @unique
   sifre                String?
-  rol                  Rol                @default(SOFOR)
+  rol                  Rol                @default(PERSONEL)
   sirketId             String?
   onayDurumu           OnayDurumu         @default(BEKLIYOR)
   deletedAt            DateTime?
@@ -190,12 +190,12 @@ model Bakim {
   saseNo          String?
   deletedAt       DateTime?
   deletedBy       String?
-  soforId         String?
   arizaSikayet    String?
   degisenParca    String?
   islemYapanFirma String?
   plaka           String?
   odendiMi        Boolean        @default(false)
+  soforId         String?
   arizaKaydi      ArizaKaydi?
   arac            Arac?          @relation(fields: [aracId], references: [id])
   sofor           Kullanici?     @relation("BakimSoforRelation", fields: [soforId], references: [id])
@@ -290,10 +290,10 @@ model Yakit {
   aracId       String
   sirketId     String?
   odemeYontemi OdemeYontemi      @default(NAKIT)
-  soforId      String?
   saseNo       String?
   odendiMi     Boolean           @default(false)
   endeks       Int?
+  soforId      String?
   arac         Arac              @relation(fields: [aracId], references: [id])
   sofor        Kullanici?        @relation("YakitSoforRelation", fields: [soforId], references: [id])
   tankHareketi YakitTankHareket?
@@ -329,13 +329,13 @@ model YakitTankHareket {
   tankId          String
   hedefTankId     String?
   aracId          String?
-  soforId         String?
   yakitId         String?             @unique
   istasyon        String?
   km              Int?
   aciklama        String?
   olusturmaTarihi DateTime            @default(now())
   endeks          Int?
+  soforId         String?
   arac            Arac?               @relation(fields: [aracId], references: [id])
   hedefTank       YakitTank?          @relation("YakitTankHedef", fields: [hedefTankId], references: [id])
   sofor           Kullanici?          @relation(fields: [soforId], references: [id])
@@ -406,9 +406,8 @@ model Dokuman {
 enum Rol {
   ADMIN
   YETKILI
-  SOFOR
-  TEKNIK
   PERSONEL
+  TEKNIK
 }
 
 enum AracDurumu {
@@ -469,8 +468,6 @@ enum ArizaOncelik {
   YUKSEK
   KRITIK
 }
-
-
 
 enum OnayDurumu {
   BEKLIYOR

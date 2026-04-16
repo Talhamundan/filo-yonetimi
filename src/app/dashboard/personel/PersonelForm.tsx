@@ -15,7 +15,7 @@ export type PersonelFormData = {
     tcNo: string;
 };
 
-export const ROLLER: Rol[] = ['ADMIN', 'YETKILI', 'TEKNIK', 'SOFOR'];
+export const ROLLER: Rol[] = ['ADMIN', 'YETKILI', 'TEKNIK', 'PERSONEL'];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 export const FormFields = ({

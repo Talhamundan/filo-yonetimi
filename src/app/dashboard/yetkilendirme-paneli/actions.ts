@@ -64,7 +64,7 @@ export async function createUserAccount(data: {
     if (!personel || personel.deletedAt) {
       return { success: false, error: "Personel bulunamadı." }
     }
-    if (personel.rol === Rol.SOFOR) {
+    if (personel.rol === Rol.PERSONEL) {
       return { success: false, error: "Personel rolündeki kullanıcı için giriş hesabı tanımlanamaz." }
     }
     if (personel.hesap) {

@@ -236,7 +236,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             console.warn("Arac detay birlesik sorgu basarisiz, legacy minimal sorgu ile devam ediliyor.", error);
             return getSafeAracDetailLegacy(queryFilter);
         }),
-        rol === "SOFOR"
+        rol === "PERSONEL"
             ? []
             : (prisma as any).kullanici.findMany({
                 where: {

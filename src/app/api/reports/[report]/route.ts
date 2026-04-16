@@ -559,7 +559,7 @@ export async function GET(req: NextRequest, context: { params: Promise<{ report:
         if (!role) {
             return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
         }
-        if (role === "SOFOR") {
+        if (role === "PERSONEL") {
             return NextResponse.json({ error: "Rapor export yetkiniz bulunmuyor." }, { status: 403 });
         }
 

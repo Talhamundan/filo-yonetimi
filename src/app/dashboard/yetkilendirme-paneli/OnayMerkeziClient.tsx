@@ -58,7 +58,7 @@ export default function OnayMerkeziClient({
     const [isSavingUser, setIsSavingUser] = useState(false);
     const [showCreatePassword, setShowCreatePassword] = useState(false);
     const [showEditPassword, setShowEditPassword] = useState(false);
-    const [editForm, setEditForm] = useState({ kullaniciAdi: "", sifre: "", rol: "SOFOR" as Rol });
+    const [editForm, setEditForm] = useState({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" as Rol });
     const hasAssignablePersonel = assignablePersoneller.length > 0;
     const [createForm, setCreateForm] = useState({
         personelId: "",
@@ -273,7 +273,7 @@ export default function OnayMerkeziClient({
         if (result.success) {
             toast.success("Personel bilgileri güncellendi.");
             setEditRow(null);
-            setEditForm({ kullaniciAdi: "", sifre: "", rol: "SOFOR" });
+            setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" });
             setShowEditPassword(false);
             router.refresh();
         } else {
@@ -537,7 +537,7 @@ export default function OnayMerkeziClient({
                 onOpenChange={(open) => {
                     if (!open) {
                         setEditRow(null);
-                        setEditForm({ kullaniciAdi: "", sifre: "", rol: "SOFOR" });
+                        setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" });
                         setShowEditPassword(false);
                     }
                 }}
@@ -587,7 +587,7 @@ export default function OnayMerkeziClient({
                                 onChange={(event) => setEditForm((prev) => ({ ...prev, rol: event.target.value as Rol }))}
                                 className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none focus:border-indigo-500"
                             >
-                                <option value="SOFOR">Personel</option>
+                                <option value="PERSONEL">Personel</option>
                                 <option value="TEKNIK">Teknik</option>
                                 <option value="YETKILI">Yetkili</option>
                                 <option value="ADMIN">Admin</option>

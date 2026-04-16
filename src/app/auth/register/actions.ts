@@ -34,7 +34,7 @@ export async function registerUser(formData: any) {
                 telefon,
                 tcNo,
                 sirketId,
-                rol: (rolTalebi as Rol) || Rol.SOFOR,
+                rol: (rolTalebi as Rol) || Rol.PERSONEL,
                 onayDurumu: OnayDurumu.BEKLIYOR
             }
         })

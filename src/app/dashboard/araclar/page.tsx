@@ -429,7 +429,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         ? { AND: [(rawFilter || {}) as Record<string, unknown>, ...filterParts] }
         : ((rawFilter || {}) as Record<string, unknown>);
 
-    const isSfr = rol === 'SOFOR';
+    const isSfr = rol === 'PERSONEL';
 
     const araclarPromise = getAraclarWithTakipBilgileri(
         filter as Record<string, unknown>,
