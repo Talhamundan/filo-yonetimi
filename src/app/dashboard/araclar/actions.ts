@@ -3,7 +3,7 @@
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import * as xlsx from "xlsx";
-import { ActivityActionType, ActivityEntityType, iller } from "@prisma/client";
+import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { canAccessAllCompanies, getCurrentSirketId, getModelFilter } from "@/lib/auth-utils";
 import { assertAuthenticatedUser, getScopedKullaniciOrThrow, resolveActionSirketId } from "@/lib/action-scope";
 import { assertKmWriteConsistency, normalizeKmInput, resolveAracGuncelKmForUpdate, syncAracGuncelKm } from "@/lib/km-consistency";
@@ -54,7 +54,7 @@ async function resolveRuhsatSahibiSirketId(inputSirketId?: string | null) {
     return resolveActionSirketId(normalized);
 }
 
-function normalizeIlEnum(value: unknown): iller {
+function normalizeIlEnum(value: unknown): string {
     const raw = String(value || "")
         .trim()
         .toLocaleUpperCase("tr-TR")

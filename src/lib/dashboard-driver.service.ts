@@ -210,8 +210,8 @@ export async function getDashboardDriverData(params: {
             select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { 
-                ...(expenseScope as Prisma.CezaWhereInput), 
+            where: {
+                ...(expenseScope as Prisma.CezaWhereInput),
                 tarih: { gte: seciliAyBasi, lte: seciliAySonu },
                 deletedAt: null,
             },
@@ -230,8 +230,8 @@ export async function getDashboardDriverData(params: {
             select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
-            where: { 
-                ...(expenseScope as Prisma.CezaWhereInput), 
+            where: {
+                ...(expenseScope as Prisma.CezaWhereInput),
                 tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
                 deletedAt: null,
             },

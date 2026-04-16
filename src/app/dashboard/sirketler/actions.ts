@@ -1,6 +1,5 @@
 "use server";
 
-import { iller } from "@prisma/client";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
@@ -26,7 +25,7 @@ export async function createSirket(data: { ad: string; bulunduguIl: string; verg
         await prisma.sirket.create({
             data: {
                 ad: data.ad,
-                bulunduguIl: data.bulunduguIl as iller,
+                bulunduguIl: data.bulunduguIl as string,
                 vergiNo: data.vergiNo || null
             }
         });
@@ -46,7 +45,7 @@ export async function updateSirket(id: string, data: { ad: string; bulunduguIl: 
             where: { id },
             data: {
                 ad: data.ad,
-                bulunduguIl: data.bulunduguIl as iller,
+                bulunduguIl: data.bulunduguIl as string,
                 vergiNo: data.vergiNo || null
             }
         });

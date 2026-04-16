@@ -46,10 +46,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: formatVehicleSummary({ ...row, plaka: row.plaka || '-' }),
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: formatVehicleSummary({ ...row, plaka: row.plaka || '-' }),
+                }
                 : null;
         }
         case "masraf": {
@@ -59,10 +59,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: `${row.tur} - ${row.tutar.toLocaleString("tr-TR")} TL`,
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: `${row.tur} - ${row.tutar.toLocaleString("tr-TR")} TL`,
+                }
                 : null;
         }
         case "bakim": {
@@ -72,10 +72,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: `${row.kategori}${row.servisAdi ? ` - ${row.servisAdi}` : ""}`,
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: `${row.kategori}${row.servisAdi ? ` - ${row.servisAdi}` : ""}`,
+                }
                 : null;
         }
         case "dokuman": {
@@ -85,10 +85,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: `${row.ad} (${row.tur})`,
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: `${row.ad} (${row.tur})`,
+                }
                 : null;
         }
         case "ceza": {
@@ -98,10 +98,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: `${row.cezaMaddesi} - ${row.tutar.toLocaleString("tr-TR")} TL`,
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: `${row.cezaMaddesi} - ${row.tutar.toLocaleString("tr-TR")} TL`,
+                }
                 : null;
         }
         case "kullanici": {
@@ -111,10 +111,10 @@ export async function getSoftDeleteSnapshot(entity: SoftDeleteEntity, id: string
             });
             return row
                 ? {
-                      id: row.id,
-                      companyId: row.sirketId,
-                      summary: `${row.ad} ${row.soyad}`.trim(),
-                  }
+                    id: row.id,
+                    companyId: row.sirketId,
+                    summary: `${row.ad} ${row.soyad}`.trim(),
+                }
                 : null;
         }
         default:

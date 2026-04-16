@@ -9,7 +9,7 @@ datasource db {
 model Sirket {
   id              String      @id @default(cuid())
   ad              String
-  bulunduguIl     iller       @default(BURSA)
+  bulunduguIl     String      @default("BURSA")
   vergiNo         String?
   olusturmaTarihi DateTime    @default(now())
   araclar         Arac[]
@@ -22,7 +22,7 @@ model Arac {
   marka                String
   model                String
   yil                  Int
-  bulunduguIl          iller              @default(BURSA)
+  bulunduguIl          String             @default("BURSA")
   guncelKm             Int                @default(0)
   hgsNo                String?
   ruhsatSeriNo         String?
@@ -408,6 +408,7 @@ enum Rol {
   YETKILI
   SOFOR
   TEKNIK
+  PERSONEL
 }
 
 enum AracDurumu {
@@ -469,13 +470,7 @@ enum ArizaOncelik {
   KRITIK
 }
 
-enum iller {
-  ISTANBUL  @map("İSTANBUL")
-  BURSA
-  SANLIURFA @map("ŞANLIURFA")
-  ANKARA
-  DIGER     @map("DİĞER")
-}
+
 
 enum OnayDurumu {
   BEKLIYOR
