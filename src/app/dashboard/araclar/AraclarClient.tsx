@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { CitySelect } from "@/components/ui/city-select";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, AracRow } from "./columns";
@@ -16,13 +17,6 @@ import { sortByTextValue } from "@/lib/sort-utils";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
-const ILLER = [
-    { value: 'ISTANBUL', label: 'İSTANBUL' },
-    { value: 'BURSA', label: 'BURSA' },
-    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
-    { value: 'ANKARA', label: 'ANKARA' },
-    { value: 'DIGER', label: 'DİĞER' }
-];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const toDateTimeLocalInput = (value?: Date | string | null) => {
     if (!value) return "";
@@ -56,7 +50,6 @@ const FormFields = ({
     setFormData,
     sirketler,
     kullanicilar,
-    ILLER,
     kullaniciFirmaOptions,
     showInitialMuayeneField = false,
     allowIndependentOption = true,
@@ -65,7 +58,6 @@ const FormFields = ({
     setFormData: any,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
-    ILLER: { value: string; label: string }[],
     kullaniciFirmaOptions: string[],
     showInitialMuayeneField?: boolean,
     allowIndependentOption?: boolean,
@@ -199,13 +191,10 @@ const FormFields = ({
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-            <select 
-                value={formData.bulunduguIl} 
-                onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-            </select>
+            <CitySelect
+                value={formData.bulunduguIl}
+                onValueChange={value => setFormData({ ...formData, bulunduguIl: value })}
+            />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Araç Kategorisi</label>
@@ -458,7 +447,6 @@ export default function AraclarClient({
                                 setFormData={setFormData}
                                 sirketler={sirketler}
                                 kullanicilar={sortedKullanicilar}
-                                ILLER={ILLER}
                                 kullaniciFirmaOptions={kullaniciFirmaOptions}
                                 showInitialMuayeneField={true}
                                 allowIndependentOption={canAssignIndependentRecords}
@@ -495,7 +483,6 @@ export default function AraclarClient({
                         setFormData={setFormData}
                         sirketler={sirketler}
                         kullanicilar={editFormKullanicilar}
-                        ILLER={ILLER}
                         kullaniciFirmaOptions={kullaniciFirmaOptions}
                         showInitialMuayeneField={true}
                         allowIndependentOption={canAssignIndependentRecords}

@@ -12,16 +12,9 @@ import { columns, SirketRow } from "./columns";
 import { createSirket, updateSirket, deleteSirket } from "./actions";
 import { RowActionButton } from "@/components/ui/row-action-button";
 
-const ILLER = [
-    { value: 'ISTANBUL', label: 'İSTANBUL' },
-    { value: 'BURSA', label: 'BURSA' },
-    { value: 'SANLIURFA', label: 'ŞANLIURFA' },
-    { value: 'ANKARA', label: 'ANKARA' },
-    { value: 'DIGER', label: 'DİĞER' }
-];
 const EMPTY = { ad: '', bulunduguIl: 'BURSA', vergiNo: '' };
 
-const FormFields = ({ formData, setFormData, ILLER }: { formData: any, setFormData: any, ILLER: { value: string; label: string }[] }) => (
+const FormFields = ({ formData, setFormData }: { formData: any, setFormData: any }) => (
     <div className="grid gap-4 py-4">
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Şirket Adı <span className="text-red-500">*</span></label>
@@ -29,10 +22,7 @@ const FormFields = ({ formData, setFormData, ILLER }: { formData: any, setFormDa
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Faaliyet İli</label>
-            <select value={formData.bulunduguIl} onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm">
-                {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-            </select>
+            <Input value={formData.bulunduguIl} onChange={e => setFormData({...formData, bulunduguIl: e.target.value})} placeholder="Örn: BURSA" className="h-9" />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Vergi No</label>
@@ -139,7 +129,7 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
                             <DialogTitle>Yeni Şirket Kaydı</DialogTitle>
                             <DialogDescription>Sisteme yeni bir müşteri/tenant şirketi ekleyin.</DialogDescription>
                         </DialogHeader>
-                        <FormFields formData={formData} setFormData={setFormData} ILLER={ILLER} />
+                        <FormFields formData={formData} setFormData={setFormData} />
                         <DialogFooter>
                             <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                                 {loading ? 'Kaydediliyor...' : 'Kaydet'}
@@ -161,7 +151,7 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
                         <DialogTitle>Şirketi Düzenle</DialogTitle>
                         <DialogDescription>"{editRow?.ad}" şirketinin bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} ILLER={ILLER} />
+                    <FormFields formData={formData} setFormData={setFormData} />
                     <DialogFooter>
                         <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                             {loading ? 'Güncelleniyor...' : 'Güncelle'}

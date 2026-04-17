@@ -1285,6 +1285,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     helperText={`${Math.round(metrics.toplamTankMevcut || 0).toLocaleString("tr-TR")} L / ${Math.round(metrics.toplamTankKapasite || 0).toLocaleString("tr-TR")} L`}
                     color={tankGaugeColor}
                     icon={<Fuel size={32} />}
+                    onClick={() => navigateWithScope("/dashboard/yakitlar")}
                 />
 
                 <GaugeChart

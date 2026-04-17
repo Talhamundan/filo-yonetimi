@@ -55,28 +55,9 @@ async function resolveRuhsatSahibiSirketId(inputSirketId?: string | null) {
 }
 
 function normalizeIlEnum(value: unknown): string {
-    const raw = String(value || "")
+    return String(value || "")
         .trim()
-        .toLocaleUpperCase("tr-TR")
-        .replace(/\s+/g, "");
-
-    switch (raw) {
-        case "İSTANBUL":
-        case "ISTANBUL":
-            return "ISTANBUL";
-        case "ŞANLIURFA":
-        case "SANLIURFA":
-            return "SANLIURFA";
-        case "DİĞER":
-        case "DIGER":
-            return "DIGER";
-        case "BURSA":
-            return "BURSA";
-        case "ANKARA":
-            return "ANKARA";
-        default:
-            return "ISTANBUL";
-    }
+        .toLocaleUpperCase("tr-TR");
 }
 
 function normalizeBedelInput(value: unknown): number | null {

@@ -18,6 +18,7 @@ type GaugeChartProps = {
     headerRight?: React.ReactNode;
     footer?: React.ReactNode;
     icon?: React.ReactNode;
+    onClick?: () => void;
 };
 
 function clamp(value: number, min: number, max: number) {
@@ -40,13 +41,29 @@ export function GaugeChart({
     headerRight,
     footer,
     icon,
+    onClick,
 }: GaugeChartProps) {
     const safeRange = max > min ? max - min : 1;
     const normalized = clamp((value - min) / safeRange, 0, 1);
     const percentage = Math.round(normalized * 100);
 
     return (
-        <div className={cn("rounded-xl border border-slate-200 bg-white p-4", className)}>
+        <div 
+            className={cn(
+                "rounded-xl border border-slate-200 bg-white p-4 transition-all duration-300", 
+                onClick && "cursor-pointer hover:border-indigo-200 hover:-translate-y-1 hover:shadow-md",
+                className
+            )}
+            onClick={onClick}
+            role={onClick ? "button" : undefined}
+            tabIndex={onClick ? 0 : undefined}
+            onKeyDown={onClick ? (e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onClick();
+                }
+            } : undefined}
+        >
             <div className="mb-3 flex items-start justify-between gap-2">
                 <div>
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>

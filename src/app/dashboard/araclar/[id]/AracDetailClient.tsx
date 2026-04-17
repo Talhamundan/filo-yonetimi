@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
+import { CitySelect } from "@/components/ui/city-select";
 import {
     Car, Users, Wrench, Fuel, ArrowLeft, Activity, Gauge, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, FileText, Plus, Pencil, Trash2
 } from "lucide-react";
@@ -62,13 +63,6 @@ const DOKUMAN_TURLERI = [
     { label: "Diğer", value: "DIGER" },
 ];
 
-const ILLER = [
-    { value: "ISTANBUL", label: "İSTANBUL" },
-    { value: "BURSA", label: "BURSA" },
-    { value: "SANLIURFA", label: "ŞANLIURFA" },
-    { value: "ANKARA", label: "ANKARA" },
-    { value: "DIGER", label: "DİĞER" },
-];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; description: string }> = {
@@ -1637,9 +1631,10 @@ export default function AracDetailClient({
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-sm font-medium">Güncel Lokasyon / İl</label>
-                                        <select value={aracEditForm.bulunduguIl} onChange={e => setAracEditForm({ ...aracEditForm, bulunduguIl: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
-                                            {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-                                        </select>
+                                        <CitySelect
+                                            value={aracEditForm.bulunduguIl}
+                                            onValueChange={value => setAracEditForm({ ...aracEditForm, bulunduguIl: value })}
+                                        />
                                     </div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
