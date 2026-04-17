@@ -695,6 +695,8 @@ export function buildRelationExportSelect(modelName: string) {
         return {
             ad: true,
             soyad: true,
+            tcNo: true,
+            eposta: true,
             calistigiKurum: true,
             sirket: { select: { ad: true } },
             arac: { select: { plaka: true, marka: true, model: true } },
@@ -811,6 +813,16 @@ export function getRelationImportHeaderAliases(modelName: string, foreignKeyFiel
             "ruhsatSahibi",
             "ruhsatSahibiFirma",
             "ruhsatSahibiFirmasi",
+        ];
+    }
+    if (modelName === "arac" && foreignKeyFieldName === "sirketId") {
+        return [
+            "Bağlı Şirket",
+            "Bagli Sirket",
+            "Şirket",
+            "Sirket",
+            "sirket",
+            "bagliSirket",
         ];
     }
     if (modelName === "yakit" && foreignKeyFieldName === "sirketId") {
@@ -1495,6 +1507,20 @@ export async function findExistingBusinessRecord(tx: unknown, modelName: string,
 
     const where: WhereData = {};
 
+    if (modelName === "kullanici") {
+        if (!parsedRow.ad || !parsedRow.soyad) return null;
+        const candidates = await delegate.findMany({
+            where: {
+                ad: { equals: String(parsedRow.ad).trim(), mode: "insensitive" },
+                soyad: { equals: String(parsedRow.soyad).trim(), mode: "insensitive" },
+                deletedAt: null
+            },
+            select: { id: true },
+            take: 2
+        });
+        return candidates.length === 1 ? candidates[0].id : null;
+    }
+
     if (modelName === "yakit") {
         if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.litre === undefined) return null;
         
@@ -1701,7 +1727,8 @@ export function buildRelationLookupWheres(modelName: string, rawValue: string) {
     }
 
     if (modelName === "Sirket") {
-        wheres.push({ ad: value });
+        wheres.push({ ad: { equals: value, mode: "insensitive" } });
+        // Also try partial match if needed, but insensitive equals is safer for now
         return wheres;
     }
 
@@ -2188,7 +2215,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                             data: {
                                 aracId: targetAracId,
                                 kullaniciId: existingId,
-                                baslangic: new Date(),
+                                baslangic: new Date(new Date().getFullYear(), 0, 1),
                                 baslangicKm: 0, // Fallback
                             }
                         });
