@@ -338,7 +338,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         upsertCost(soforId, { ariza: tutar, toplam: tutar });
     }
 
-    const yakitKayitlariIsMakineleri = (yakitKayitlari as Array<{
+    const yakitKayitlariForMetrics = (yakitKayitlari as Array<{
         id: string;
         aracId: string;
         tarih: Date;
@@ -347,10 +347,10 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         km: number;
         soforId: string | null;
         arac?: { kullaniciId?: string | null; kategori?: string | null } | null;
-    }>).filter((yakit) => yakit?.arac?.kategori === MACHINE_CATEGORY);
+    }>);
 
     const fuelMetricsByDriverId = buildFuelIntervalMetrics(
-        yakitKayitlariIsMakineleri.map((yakit) => ({
+        yakitKayitlariForMetrics.map((yakit) => ({
             id: yakit.id,
             aracId: yakit.aracId,
             tarih: yakit.tarih,

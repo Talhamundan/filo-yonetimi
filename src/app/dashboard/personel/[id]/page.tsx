@@ -212,7 +212,6 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
     const personelYakitAracIdleri = Array.from(
         new Set(
             (yakitKayitlari as any[])
-                .filter((kayit) => kayit?.arac?.kategori === MACHINE_CATEGORY)
                 .map((kayit) => (typeof kayit?.aracId === "string" ? kayit.aracId : ""))
                 .filter((id) => id.length > 0)
         )
@@ -248,7 +247,6 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
 
     const personelYakitMetrikleriBySofor = buildFuelIntervalMetrics(
         (yakitMetrikKayitlari as any[])
-            .filter((kayit) => kayit?.arac?.kategori === MACHINE_CATEGORY)
             .map((kayit) => ({
             id: kayit.id,
             aracId: kayit.aracId,

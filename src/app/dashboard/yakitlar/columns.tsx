@@ -126,10 +126,10 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
         },
         {
             accessorKey: "km",
-            header: "KM/Saat",
+            header: "KM",
             cell: ({ row }) => {
                 if (row.original.isStokHareketi) return <div className="text-slate-300 italic">-</div>;
-                return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km/saat</div>
+                return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km</div>
             },
         },
         {
