@@ -37,11 +37,22 @@ export async function GET(
 
         const selectedSirketId = req.nextUrl.searchParams.get("sirket");
         const selectedYil = parseSelectedYil(req.nextUrl.searchParams.get("yil"));
-        const scopedFilter = await getModelFilter(config.filterModel, selectedSirketId);
+        const scopedFilter = config.prismaModel === "disFirma"
+            ? {}
+            : await getModelFilter(config.filterModel, selectedSirketId);
+        const entityFilter =
+            entity === "taseronFirma"
+                ? { tur: "TASERON" }
+                : entity === "kiralikFirma"
+                    ? { tur: "KIRALIK" }
+                    : {};
+        const baseFilter = Object.keys(entityFilter).length
+            ? { AND: [(scopedFilter || {}) as Record<string, unknown>, entityFilter] }
+            : scopedFilter;
         const where =
             config.dateField && selectedYil
-                ? withYilDateFilter((scopedFilter || {}) as Record<string, unknown>, config.dateField, selectedYil)
-                : scopedFilter;
+                ? withYilDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil)
+                : baseFilter;
 
         const { data, sheetName, headers } = await exportEntity(entity, where as any);
 

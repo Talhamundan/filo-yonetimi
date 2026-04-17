@@ -90,10 +90,12 @@ export default function AracDetailClient({
     initialArac: arac,
     kullanicilar,
     sirketler,
+    disFirmalar,
 }: {
     initialArac: AracDetaySaaS;
     kullanicilar: SoforOption[];
     sirketler: Array<{ id: string; ad: string; bulunduguIl?: string | null }>;
+    disFirmalar: Array<{ id: string; ad: string; tur: string }>;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAssignIndependentRecords, canAccessAllCompanies } = useDashboardScope();
@@ -271,6 +273,7 @@ export default function AracDetailClient({
         kategori: arac.kategori || "BINEK",
         calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
         sirketId: arac.sirket?.id || "",
+        disFirmaId: arac.disFirma?.id || arac.disFirmaId || "",
         ruhsatSeriNo: arac.ruhsatSeriNo || "",
         aciklama: arac.aciklama || "",
         saseNo: arac.saseNo || "",
@@ -386,6 +389,7 @@ export default function AracDetailClient({
             kategori: arac.kategori || "BINEK",
             calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
             sirketId: arac.sirket?.id || "",
+            disFirmaId: arac.disFirma?.id || arac.disFirmaId || "",
             ruhsatSeriNo: arac.ruhsatSeriNo || "",
             aciklama: arac.aciklama || "",
             saseNo: arac.saseNo || "",
@@ -1599,121 +1603,170 @@ export default function AracDetailClient({
                                     "{arac.plaka}" plakalı aracın teknik ve idari bilgilerini güncelleyin.
                                 </DialogDescription>
                             </DialogHeader>
-                            <div className="grid gap-4 py-4">
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Plaka <span className="text-red-500">*</span></label>
-                                        <Input value={aracEditForm.plaka} onChange={e => setAracEditForm({ ...aracEditForm, plaka: forceUppercase(e.target.value) })} className="h-9" placeholder="34ABC123" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Model Yılı</label>
-                                        <Input type="number" value={aracEditForm.yil} onChange={e => setAracEditForm({ ...aracEditForm, yil: Number(e.target.value) })} className="h-9" />
-                                    </div>
+                            <div className="grid grid-cols-2 gap-3 py-2">
+                                <div className="col-span-2">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Temel Bilgiler</p>
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Marka <span className="text-red-500">*</span></label>
-                                        <Input value={aracEditForm.marka} onChange={e => setAracEditForm({ ...aracEditForm, marka: forceUppercase(e.target.value) })} className="h-9" placeholder="FORD" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Model <span className="text-red-500">*</span></label>
-                                        <Input value={aracEditForm.model} onChange={e => setAracEditForm({ ...aracEditForm, model: forceUppercase(e.target.value) })} className="h-9" placeholder="FOCUS" />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium flex items-center gap-1.5">
+                                        <Car size={14} className="text-slate-400" />
+                                        Plaka <span className="text-rose-500">*</span>
+                                    </label>
+                                    <Input value={aracEditForm.plaka} onChange={e => setAracEditForm({ ...aracEditForm, plaka: forceUppercase(e.target.value) })} placeholder="34 ABC 123" className="h-9 font-mono uppercase" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Araç Türü</label>
-                                        <select value={aracEditForm.kategori} onChange={e => setAracEditForm({ ...aracEditForm, kategori: e.target.value })} className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus:outline-none focus:ring-1 focus:ring-slate-400">
-                                            <option value="BINEK">Binek Araç</option>
-                                            <option value="HAFIF_TICARI">Hafif Ticari</option>
-                                            <option value="IS_MAKINESI">İş Makinesi</option>
-                                        </select>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Güncel Lokasyon / İl</label>
-                                        <CitySelect
-                                            value={aracEditForm.bulunduguIl}
-                                            onValueChange={value => setAracEditForm({ ...aracEditForm, bulunduguIl: value })}
-                                        />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Marka <span className="text-rose-500">*</span></label>
+                                    <Input value={aracEditForm.marka} onChange={e => setAracEditForm({ ...aracEditForm, marka: forceUppercase(e.target.value) })} placeholder="RENAULT" className="h-9 uppercase" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Güncel KM</label>
-                                        <Input type="number" value={aracEditForm.guncelKm} onChange={e => setAracEditForm({ ...aracEditForm, guncelKm: Number(e.target.value) })} className="h-9 font-medium" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Kira / Alım Bedeli (₺)</label>
-                                        <Input type="number" value={aracEditForm.bedel} onChange={e => setAracEditForm({ ...aracEditForm, bedel: e.target.value })} className="h-9" placeholder="0.00" />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Model <span className="text-rose-500">*</span></label>
+                                    <Input value={aracEditForm.model} onChange={e => setAracEditForm({ ...aracEditForm, model: forceUppercase(e.target.value) })} placeholder="MEGANE" className="h-9 uppercase" />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 border-t pt-4 mt-2">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Ruhsat Sahibi (Firma) <span className="text-red-500">*</span></label>
-                                        <SearchableSelect
-                                            value={aracEditForm.sirketId}
-                                            onValueChange={(v) => {
-                                                const sirket = sirketler.find(s => s.id === v);
-                                                setAracEditForm({
-                                                    ...aracEditForm,
-                                                    sirketId: v,
-                                                    bulunduguIl: sirket?.bulunduguIl || aracEditForm.bulunduguIl
-                                                });
-                                            }}
-                                            placeholder="Seçiniz..."
-                                            options={[
-                                                { value: "", label: "Seçiniz..." },
-                                                ...sirketler.map(s => ({ value: s.id, label: s.ad }))
-                                            ]}
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Kullanıcı Firma <span className="text-red-500">*</span></label>
-                                        <SearchableSelect
-                                            value={aracEditForm.calistigiKurum}
-                                            onValueChange={(v) => setAracEditForm({ ...aracEditForm, calistigiKurum: v })}
-                                            placeholder="Seçiniz..."
-                                            options={[
-                                                { value: "", label: "Seçiniz..." },
-                                                ...kullaniciFirmaOptions.map(opt => ({ value: opt, label: opt }))
-                                            ]}
-                                        />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
+                                    <Input type="number" value={aracEditForm.yil} onChange={e => setAracEditForm({ ...aracEditForm, yil: Number(e.target.value) })} className="h-9" />
                                 </div>
-                                <div className="space-y-1.5 border-t pt-4">
-                                    <label className="text-sm font-medium">Atanmış Şoför / Kullanıcı</label>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
+                                    <Input type="number" value={aracEditForm.guncelKm} onChange={e => setAracEditForm({ ...aracEditForm, guncelKm: Number(e.target.value) })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Muayene Geçerlilik</label>
+                                    <Input type="datetime-local" value={aracEditForm.muayeneGecerlilikTarihi} onChange={e => setAracEditForm({ ...aracEditForm, muayeneGecerlilikTarihi: e.target.value })} className="h-9" />
+                                </div>
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-sm font-medium">Şase No</label>
+                                    <Input value={aracEditForm.saseNo} onChange={e => setAracEditForm({ ...aracEditForm, saseNo: forceUppercase(e.target.value) })} className="h-9 uppercase" placeholder="Opsiyonel" />
+                                </div>
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-sm font-medium">Motor No</label>
+                                    <Input value={aracEditForm.motorNo} onChange={e => setAracEditForm({ ...aracEditForm, motorNo: forceUppercase(e.target.value) })} className="h-9 uppercase" placeholder="Opsiyonel" />
+                                </div>
+
+                                <div className="col-span-2 pt-2">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Organizasyon & Zimmet</p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium flex items-center gap-1.5">
+                                        <Settings size={14} className="text-slate-400" />
+                                        Ruhsat Sahibi Firma
+                                    </label>
+                                    <select
+                                        value={aracEditForm.sirketId}
+                                        onChange={e => {
+                                            const nextSirketId = e.target.value;
+                                            const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                                            setAracEditForm({
+                                                ...aracEditForm,
+                                                sirketId: nextSirketId,
+                                                bulunduguIl: selectedSirket?.bulunduguIl || aracEditForm.bulunduguIl,
+                                            });
+                                        }}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        {canAssignIndependentRecords ? <option value="">Şirket Seçiniz (Bağımsız)</option> : <option value="" disabled>Şirket Seçiniz</option>}
+                                        {canAssignIndependentRecords && !hasKiralikSirket && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
+                                        {sirketler.map((s) => <option key={s.id} value={s.id}>{s.ad}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium flex items-center gap-1.5">
+                                        <Settings size={14} className="text-slate-400" />
+                                        Dış Firma
+                                    </label>
+                                    <select
+                                        value={aracEditForm.disFirmaId}
+                                        onChange={e => setAracEditForm({ ...aracEditForm, disFirmaId: e.target.value })}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        <option value="">Dış firma yok</option>
+                                        {disFirmalar.map((firma) => (
+                                            <option key={firma.id} value={firma.id}>
+                                                {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium flex items-center gap-1.5">
+                                        <Settings size={14} className="text-slate-400" />
+                                        Kullanıcı Firma
+                                    </label>
+                                    <select
+                                        value={aracEditForm.calistigiKurum}
+                                        onChange={e => setAracEditForm({ ...aracEditForm, calistigiKurum: e.target.value })}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        <option value="">Kullanıcı Firma Seçiniz</option>
+                                        {kullaniciFirmaOptions.map((firma) => <option key={firma} value={firma}>{firma}</option>)}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-sm font-medium flex items-center gap-1.5">
+                                        <Users size={14} className="text-slate-400" />
+                                        Zimmetli Kullanıcı (Atama)
+                                    </label>
                                     <SearchableSelect
                                         value={aracEditForm.kullaniciId}
-                                        onValueChange={(v) => setAracEditForm({ ...aracEditForm, kullaniciId: v })}
-                                        placeholder="Atanmamış / Boşta"
+                                        onValueChange={(value) => {
+                                            const selectedKullanici = editAracFormKullanicilar.find((u) => u.id === value);
+                                            setAracEditForm({
+                                                ...aracEditForm,
+                                                kullaniciId: value,
+                                                calistigiKurum: selectedKullanici?.sirketAd || aracEditForm.calistigiKurum,
+                                            });
+                                        }}
+                                        placeholder="Kullanıcı Seçiniz (Atanmamış)"
                                         searchPlaceholder="Personel ara..."
                                         options={[
-                                            { value: "", label: "Atanmamış / Boşta" },
+                                            { value: "", label: "Kullanıcı Seçiniz (Atanmamış)" },
                                             ...editAracFormKullanicilar.map((u) => ({
                                                 value: u.id,
-                                                label: getPersonelOptionLabel(u),
-                                                searchText: getPersonelOptionSearchText(u),
+                                                label: `${u.adSoyad}${u.sirketAd ? ` - ${u.sirketAd}` : ""}`,
+                                                searchText: `${u.adSoyad} ${u.sirketAd || ""}`,
                                             })),
                                         ]}
                                     />
                                 </div>
-                                <div className="grid grid-cols-2 gap-3 mt-2">
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Ruhsat Seri No</label>
-                                        <Input value={aracEditForm.ruhsatSeriNo} onChange={e => setAracEditForm({ ...aracEditForm, ruhsatSeriNo: e.target.value })} className="h-9" placeholder="AA 123456" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Şase No</label>
-                                        <Input value={aracEditForm.saseNo} onChange={e => setAracEditForm({ ...aracEditForm, saseNo: forceUppercase(e.target.value) })} className="h-9 text-xs uppercase" />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-sm font-medium">Motor No</label>
-                                        <Input value={aracEditForm.motorNo} onChange={e => setAracEditForm({ ...aracEditForm, motorNo: forceUppercase(e.target.value) })} className="h-9 text-xs uppercase" />
-                                    </div>
+
+                                <div className="col-span-2 pt-2">
+                                    <p className="text-xs font-semibold text-slate-400 uppercase tracking-widest mb-2">Operasyonel Detaylar</p>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Ek Notlar / Açıklama</label>
-                                    <textarea value={aracEditForm.aciklama} onChange={e => setAracEditForm({ ...aracEditForm, aciklama: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-16 resize-none" />
+                                    <label className="text-sm font-medium">Bulunduğu Şantiye</label>
+                                    <CitySelect
+                                        value={aracEditForm.bulunduguIl}
+                                        onValueChange={value => setAracEditForm({ ...aracEditForm, bulunduguIl: value })}
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Araç Kategorisi</label>
+                                    <select
+                                        value={aracEditForm.kategori}
+                                        onChange={e => setAracEditForm({ ...aracEditForm, kategori: e.target.value })}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        <option value="BINEK">Binek Araç</option>
+                                        <option value="SANTIYE">İş Makinesi</option>
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Bedel</label>
+                                    <Input type="number" value={aracEditForm.bedel} onChange={e => setAracEditForm({ ...aracEditForm, bedel: e.target.value })} className="h-9" placeholder="₺" />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Ruhsat Seri No</label>
+                                    <Input value={aracEditForm.ruhsatSeriNo} onChange={e => setAracEditForm({ ...aracEditForm, ruhsatSeriNo: e.target.value })} className="h-9" placeholder="Örn: AA 123456" />
+                                </div>
+                                <div className="space-y-1.5 col-span-2">
+                                    <label className="text-sm font-medium">Açıklama</label>
+                                    <textarea
+                                        value={aracEditForm.aciklama}
+                                        onChange={e => setAracEditForm({ ...aracEditForm, aciklama: e.target.value })}
+                                        placeholder="Araç hakkında ek bilgiler..."
+                                        rows={2}
+                                        className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 h-20 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400"
+                                    />
                                 </div>
                             </div>
                             <DialogFooter className="gap-2">

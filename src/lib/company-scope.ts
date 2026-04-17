@@ -11,6 +11,17 @@ export async function getSelectedSirketId(
     return trimmed ? trimmed : null;
 }
 
+export async function getSelectedDisFirmaId(
+    searchParams?: Promise<DashboardSearchParams> | DashboardSearchParams
+) {
+    const resolved = searchParams ? await searchParams : {};
+    const rawValue = resolved?.disFirmaId;
+    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    const trimmed = value?.trim();
+
+    return trimmed ? trimmed : null;
+}
+
 export async function getSelectedKategori(
     searchParams?: Promise<DashboardSearchParams> | DashboardSearchParams
 ): Promise<"BINEK" | "SANTIYE" | null> {

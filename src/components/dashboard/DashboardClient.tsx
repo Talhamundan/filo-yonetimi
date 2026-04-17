@@ -218,6 +218,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         vehicleCostReport = [],
         driverCostReport = [],
         companyCostReport = [],
+        ownershipCostReport = [],
         vehicleFuelAverageReport = [],
         driverFuelAverageReport = [],
     } = data || {} as any;
@@ -525,6 +526,10 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     const sortedCompanyCostReport = useMemo(
         () => [...companyCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)),
         [companyCostReport]
+    );
+    const sortedOwnershipCostReport = useMemo(
+        () => [...ownershipCostReport].sort((a: any, b: any) => Number(b.toplam || 0) - Number(a.toplam || 0)).slice(0, 6),
+        [ownershipCostReport]
     );
     const companyReportTotal = useMemo(
         () => companyCostReport.reduce((sum: number, row: any) => sum + Number(row?.toplam || 0), 0),
@@ -1299,6 +1304,68 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     color={fuelCostRatioGaugeColor}
                 />
             </div>
+
+            {shouldShowCompanyCostReport ? (
+                <Card className="shadow-none border border-[#E2E8F0] bg-white rounded-xl">
+                    <CardHeader className="pb-2 px-5 pt-5">
+                        <CardTitle className="text-sm font-semibold text-slate-900">Toplam Gider Sahiplik Dağılımı</CardTitle>
+                        <p className="text-xs text-slate-500">Bizim şirketlerimiz bazında Öz Mal / Kiralık / Taşeron kırılımı. Yakıt + servis maliyetleri dikkate alınır.</p>
+                    </CardHeader>
+                    <CardContent className="px-5 pb-5 pt-1">
+                        {sortedOwnershipCostReport.length > 0 ? (
+                            <div className="grid gap-2 lg:grid-cols-2">
+                                {sortedOwnershipCostReport.map((item: any, index: number) => {
+                                    const total = Number(item.toplam || 0);
+                                    const bars = [
+                                        { key: "ozMal", label: "Öz Mal", value: Number(item.ozMal || 0), className: "bg-slate-900" },
+                                        { key: "kiralik", label: "Kiralık", value: Number(item.kiralik || 0), className: "bg-indigo-500" },
+                                        { key: "taseron", label: "Taşeron", value: Number(item.taseron || 0), className: "bg-amber-500" },
+                                    ].filter((bar) => bar.value > 0);
+                                    const href = item.sirketId
+                                        ? buildScopedHref(`/dashboard/sirketler?sirket=${item.sirketId}`)
+                                        : buildScopedHref("/dashboard/sirketler");
+
+                                    return (
+                                        <div key={`${item.sirketId || "bagimsiz"}-ownership-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
+                                            <div className="flex items-center justify-between gap-3">
+                                                <Link href={href} className="truncate text-xs font-semibold text-slate-700 hover:text-indigo-700 hover:underline">
+                                                    {item.sirketAd}
+                                                </Link>
+                                                <span className="text-sm font-black text-rose-600">{formatCurrencyValue(total)}</span>
+                                            </div>
+                                            <div className="mt-2 flex h-2 overflow-hidden rounded-full bg-slate-200">
+                                                {bars.map((bar) => (
+                                                    <div
+                                                        key={`${item.sirketId || "bagimsiz"}-${bar.key}`}
+                                                        className={bar.className}
+                                                        style={{ width: `${total > 0 ? Math.max(3, (bar.value / total) * 100) : 0}%` }}
+                                                        title={`${bar.label}: ${formatCurrencyValue(bar.value)}`}
+                                                    />
+                                                ))}
+                                            </div>
+                                            <div className="mt-2 flex flex-wrap gap-1.5">
+                                                {bars.map((bar) => (
+                                                    <span key={`${item.sirketId || "bagimsiz"}-${bar.key}-label`} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-600">
+                                                        {bar.label}: {formatCurrencyValue(bar.value)}
+                                                    </span>
+                                                ))}
+                                                <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                                                    Yakıt: {formatCurrencyValue(Number(item.yakit || 0))}
+                                                </span>
+                                                <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                                                    Servis: {formatCurrencyValue(Number(item.servis || 0))}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <p className="text-sm text-slate-400">Seçili dönem için sahiplik kırılımı oluşturacak yakıt veya servis maliyeti bulunmuyor.</p>
+                        )}
+                    </CardContent>
+                </Card>
+            ) : null}
 
             <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] items-start gap-4">
                 <div ref={calendarCardRef}>

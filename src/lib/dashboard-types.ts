@@ -76,6 +76,7 @@ export type DashboardData = {
     vehicleCostReport: DashboardVehicleCostItem[];
     driverCostReport: DashboardDriverCostItem[];
     companyCostReport: DashboardCompanyCostItem[];
+    ownershipCostReport: DashboardOwnershipCostItem[];
     vehicleFuelAverageReport: DashboardVehicleFuelAverageItem[];
     driverFuelAverageReport: DashboardDriverFuelAverageItem[];
 };
@@ -221,6 +222,17 @@ export type DashboardCompanyCostItem = {
     kasko: number;
     trafik: number;
     diger: number;
+    toplam: number;
+};
+
+export type DashboardOwnershipCostItem = {
+    sirketId: string | null;
+    sirketAd: string;
+    ozMal: number;
+    kiralik: number;
+    taseron: number;
+    yakit: number;
+    servis: number;
     toplam: number;
 };
 

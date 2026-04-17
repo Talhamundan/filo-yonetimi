@@ -38,6 +38,7 @@ const EMPTY = {
     aciklama: '',
     calistigiKurum: '',
     sirketId: '',
+    disFirmaId: '',
     kullaniciId: '',
     ruhsatSeriNo: '',
     saseNo: '',
@@ -49,6 +50,7 @@ const FormFields = ({
     formData,
     setFormData,
     sirketler,
+    disFirmalar,
     kullanicilar,
     kullaniciFirmaOptions,
     showInitialMuayeneField = false,
@@ -57,6 +59,7 @@ const FormFields = ({
     formData: any,
     setFormData: any,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    disFirmalar: Array<{ id: string; ad: string; tur: string }>,
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     kullaniciFirmaOptions: string[],
     showInitialMuayeneField?: boolean,
@@ -147,6 +150,24 @@ const FormFields = ({
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <Building2 size={14} className="text-slate-400" />
+                Dış Firma
+            </label>
+            <select
+                value={formData.disFirmaId}
+                onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
+                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+                <option value="">Dış firma yok</option>
+                {disFirmalar.map((firma) => (
+                    <option key={firma.id} value={firma.id}>
+                        {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
+                    </option>
+                ))}
+            </select>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium flex items-center gap-1.5">
+                <Building2 size={14} className="text-slate-400" />
                 Kullanıcı Firma
             </label>
             <select
@@ -204,11 +225,11 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 <option value="BINEK">Binek Araç</option>
-                <option value="SANTIYE">Şantiye Aracı</option>
+                <option value="SANTIYE">İş Makinesi</option>
             </select>
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Bedel (Kasko/Sigorta)</label>
+            <label className="text-sm font-medium">Bedel</label>
             <Input type="number" value={formData.bedel} onChange={e => setFormData({ ...formData, bedel: e.target.value })} className="h-9" placeholder="₺" />
         </div>
         <div className="space-y-1.5">
@@ -232,11 +253,13 @@ const FormFields = ({
 export default function AraclarClient({ 
     initialAraclar, 
     sirketler, 
+    disFirmalar,
     kullanicilar,
     role
 }: { 
     initialAraclar: AracRow[], 
     sirketler: { id: string, ad: string, bulunduguIl: string }[],
+    disFirmalar: Array<{ id: string; ad: string; tur: string }>,
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     role?: string | null
 }) {
@@ -381,6 +404,7 @@ export default function AraclarClient({
             aciklama: (row as any).aciklama || '',
             calistigiKurum: (row as any).calistigiKurum || row.kullanici?.sirket?.ad || '',
             sirketId: row.sirket?.id || (row as any).sirketId || '',
+            disFirmaId: row.disFirma?.id || (row as any).disFirmaId || '',
             kullaniciId: (row as any).kullaniciId || row.kullanici?.id || '',
             ruhsatSeriNo: (row as any).ruhsatSeriNo || '',
             saseNo: (row as any).saseNo || '',
@@ -446,6 +470,7 @@ export default function AraclarClient({
                                 formData={formData}
                                 setFormData={setFormData}
                                 sirketler={sirketler}
+                                disFirmalar={disFirmalar}
                                 kullanicilar={sortedKullanicilar}
                                 kullaniciFirmaOptions={kullaniciFirmaOptions}
                                 showInitialMuayeneField={true}
@@ -482,6 +507,7 @@ export default function AraclarClient({
                         formData={formData}
                         setFormData={setFormData}
                         sirketler={sirketler}
+                        disFirmalar={disFirmalar}
                         kullanicilar={editFormKullanicilar}
                         kullaniciFirmaOptions={kullaniciFirmaOptions}
                         showInitialMuayeneField={true}
@@ -514,7 +540,7 @@ export default function AraclarClient({
                     ],
                     typeOptions: [
                         { value: "BINEK", label: "Binek" },
-                        { value: "SANTIYE", label: "Şantiye" },
+                        { value: "SANTIYE", label: "İş Makinesi" },
                     ],
                 }}
                 toolbarArrangement="report-right-scroll"

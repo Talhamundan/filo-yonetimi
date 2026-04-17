@@ -180,6 +180,35 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             eposta: ["Eposta", "Mail"],
         },
     },
+    disFirma: {
+        visibleColumns: [
+            "ad",
+            "calistigiKurum",
+            "sehir",
+            "vergiNo",
+            "yetkiliKisi",
+            "telefon",
+        ],
+        strictVisibleColumns: true,
+        labels: {
+            ad: "Firma Adı",
+            calistigiKurum: "Çalıştığı Kurum",
+            tur: "Firma Türü",
+            sehir: "Şehir",
+            vergiNo: "Vergi No",
+            yetkiliKisi: "Yetkili Kişi",
+            telefon: "Telefon",
+        },
+        aliases: {
+            ad: ["Firma", "Firma Adı", "Firma Adi", "Şirket Adı", "Sirket Adi"],
+            calistigiKurum: ["Çalıştığı Kurum", "Calistigi Kurum", "Hangi Şirketimize Çalışıyor", "Hangi Sirketimize Calisiyor"],
+            tur: ["Tür", "Tur", "Firma Türü", "Firma Turu"],
+            sehir: ["Şehir", "Sehir", "İl", "Il"],
+            vergiNo: ["Vergi No", "Vergi Numarası", "Vergi Numarasi"],
+            yetkiliKisi: ["Yetkili", "Yetkili Kişi", "Yetkili Kisi"],
+            telefon: ["Telefon", "Tel", "GSM"],
+        },
+    },
     yakit: {
         visibleColumns: [
             "tarih",
@@ -1542,6 +1571,19 @@ export async function findExistingBusinessRecord(tx: unknown, modelName: string,
         return null;
     }
 
+    if (modelName === "disFirma") {
+        if (!parsedRow.ad || !parsedRow.tur) return null;
+        const existing = await delegate.findMany({
+            where: {
+                ad: { equals: String(parsedRow.ad).trim(), mode: "insensitive" },
+                tur: parsedRow.tur as any,
+            },
+            select: { id: true },
+            take: 1,
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    }
+
     if (modelName === "yakit") {
         if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.litre === undefined) return null;
         
@@ -2033,7 +2075,9 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
     const exportColumns = buildExportColumns(fields, relationFieldByForeignKey, modelMeta.name);
     const scalarImportColumns = exportColumns.filter((c): c is any => c.type === "scalar");
     const relationImportColumns = exportColumns.filter((c): c is any => c.type === "relationLookup");
-    const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name);
+    const fixedDisFirmaTuru = entityKey === "taseronFirma" ? "TASERON" : entityKey === "kiralikFirma" ? "KIRALIK" : null;
+    const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name)
+        .filter((group) => !(config.prismaModel === "disFirma" && fixedDisFirmaTuru && group.fieldName === "tur"));
     const enumMap = getEnumValueMap();
 
     const firstRecord = records[0] || {};
@@ -2089,6 +2133,10 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             }
 
             if (skipRow) { skipped++; continue; }
+
+            if (config.prismaModel === "disFirma" && fixedDisFirmaTuru) {
+                parsedRow.tur = fixedDisFirmaTuru;
+            }
 
             // Business Logic Specifics (Yakit/Bakim/Arac)
             if (config.prismaModel === "yakit") {

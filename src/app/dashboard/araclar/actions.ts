@@ -12,9 +12,30 @@ import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE } from "@/lib/ruhsat-sahibi";
 import { canRoleAssignIndependentRecords } from "@/lib/policy";
+import { ILLER } from "@/lib/constants/iller";
 
 const PATH = "/dashboard/araclar";
 const toUpperTr = (value: string) => value.toLocaleUpperCase("tr-TR");
+const ILLER_BY_NORMALIZED_LABEL = new Map(
+    ILLER.flatMap((il) => [
+        [normalizeCitySearchValue(il.value), il.value],
+        [normalizeCitySearchValue(il.label), il.value],
+    ])
+);
+
+function normalizeCitySearchValue(value: string) {
+    return value
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/İ/g, "I")
+        .replace(/Ş/g, "S")
+        .replace(/Ğ/g, "G")
+        .replace(/Ü/g, "U")
+        .replace(/Ö/g, "O")
+        .replace(/Ç/g, "C");
+}
 
 function normalizeSirketSelection(value: unknown) {
     if (typeof value !== "string") return null;
@@ -55,9 +76,74 @@ async function resolveRuhsatSahibiSirketId(inputSirketId?: string | null) {
 }
 
 function normalizeIlEnum(value: unknown): string {
-    return String(value || "")
+    const raw = String(value || "").trim();
+    if (!raw) return "BURSA";
+
+    return ILLER_BY_NORMALIZED_LABEL.get(normalizeCitySearchValue(raw)) || normalizeCitySearchValue(raw);
+}
+
+function normalizeAracKategori(value: unknown): "BINEK" | "SANTIYE" {
+    const raw = String(value || "")
         .trim()
-        .toLocaleUpperCase("tr-TR");
+        .toLocaleUpperCase("tr-TR")
+        .replace(/\s+/g, "_");
+
+    if (raw === "BINEK" || raw === "BINEK_ARAC" || raw === "HAFIF_TICARI") {
+        return "BINEK";
+    }
+
+    if (
+        raw === "SANTIYE" ||
+        raw === "SANTIYE_ARACI" ||
+        raw === "IS_MAKINESI" ||
+        raw === "IS_MAKINASI" ||
+        raw === "İŞ_MAKİNESİ"
+    ) {
+        return "SANTIYE";
+    }
+
+    return "BINEK";
+}
+
+function isInvalidLocationError(error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    return (
+        message.includes("invalid input value for enum") ||
+        message.includes("Value not found in enum") ||
+        message.includes("Invalid value for argument `bulunduguIl`")
+    );
+}
+
+function getPrismaKnownErrorCode(error: unknown) {
+    return typeof error === "object" && error !== null && "code" in error
+        ? String((error as { code?: unknown }).code || "")
+        : "";
+}
+
+function getPrismaErrorTarget(error: unknown) {
+    if (typeof error !== "object" || error === null || !("meta" in error)) {
+        return "";
+    }
+
+    const target = (error as { meta?: { target?: unknown } }).meta?.target;
+    if (Array.isArray(target)) {
+        return target.join(",");
+    }
+    return String(target || "");
+}
+
+function getDevelopmentErrorMessage(error: unknown) {
+    if (process.env.NODE_ENV === "production") {
+        return null;
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    return message
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .slice(-3)
+        .join(" ");
 }
 
 function normalizeBedelInput(value: unknown): number | null {
@@ -88,6 +174,7 @@ export async function createArac(data: {
     aciklama?: string | null;
     calistigiKurum?: string | null;
     sirketId?: string | null;
+    disFirmaId?: string | null;
     kullaniciId?: string | null;
     ruhsatSeriNo?: string | null;
     saseNo?: string | null;
@@ -143,12 +230,13 @@ export async function createArac(data: {
                 aciklama: data.aciklama?.trim() || null,
                 calistigiKurum: resolvedCalistigiKurum,
                 sirketId,
+                disFirmaId: data.disFirmaId?.trim() || null,
                 kullaniciId: kullanici?.id || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
                 motorNo: data.motorNo || null,
                 durum: kullanici ? "AKTIF" : "BOSTA",
-                kategori: data.kategori || 'BINEK'
+                kategori: normalizeAracKategori(data.kategori)
             }
         });
 
@@ -201,6 +289,7 @@ export async function createArac(data: {
                 bedel: arac.bedel,
                 aciklama: arac.aciklama,
                 calistigiKurum: (arac as any).calistigiKurum ?? null,
+                disFirmaId: (arac as any).disFirmaId ?? null,
                 kullaniciId: arac.kullaniciId,
             },
         });
@@ -209,12 +298,10 @@ export async function createArac(data: {
         revalidatePath('/dashboard/muayeneler');
         revalidatePath('/dashboard/zimmetler');
         return { success: true };
-    } catch (e: any) {
+    } catch (e: unknown) {
         console.error(e);
-        if (e.code === 'P2002') {
-            const target = Array.isArray(e?.meta?.target)
-                ? e.meta.target.join(",")
-                : String(e?.meta?.target || "");
+        if (getPrismaKnownErrorCode(e) === "P2002") {
+            const target = getPrismaErrorTarget(e);
             if (target.includes("plaka")) {
                 return { success: false, error: "Bu plaka zaten kayıtlı!" };
             }
@@ -223,10 +310,10 @@ export async function createArac(data: {
             }
             return { success: false, error: "Kayıt benzersizlik kuralına takıldı." };
         }
-        if (e instanceof Error && e.message.includes("bulunduguIl")) {
+        if (isInvalidLocationError(e)) {
             return { success: false, error: "Bulunduğu il değeri geçersiz." };
         }
-        return { success: false, error: "Araç kaydedilemedi." };
+        return { success: false, error: getDevelopmentErrorMessage(e) || "Araç kaydedilemedi." };
     }
 }
 
@@ -289,11 +376,12 @@ export async function updateArac(id: string, data: any) {
                 aciklama: data.aciklama !== undefined ? (data.aciklama?.trim() || null) : undefined,
                 calistigiKurum: resolvedCalistigiKurum,
                 sirketId: nextSirketId,
+                disFirmaId: data.disFirmaId !== undefined ? (data.disFirmaId?.trim() || null) : undefined,
                 kullaniciId: kullanici?.id || null,
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
                 motorNo: data.motorNo || null,
-                kategori: data.kategori || undefined
+                kategori: data.kategori !== undefined ? normalizeAracKategori(data.kategori) : undefined
             }
         });
 
@@ -363,9 +451,10 @@ export async function updateArac(id: string, data: any) {
                 yeniKullaniciId: kullanici?.id || null,
                 guncelKm: resolvedGuncelKm,
                 bedel: data.bedel !== undefined ? normalizeBedelInput(data.bedel) : undefined,
-                kategori: data.kategori || null,
+                kategori: data.kategori !== undefined ? normalizeAracKategori(data.kategori) : null,
                 aciklama: data.aciklama !== undefined ? (data.aciklama?.trim() || null) : undefined,
                 calistigiKurum: resolvedCalistigiKurum ?? null,
+                disFirmaId: data.disFirmaId !== undefined ? (data.disFirmaId?.trim() || null) : undefined,
             },
         });
 
@@ -374,12 +463,25 @@ export async function updateArac(id: string, data: any) {
         revalidatePath('/dashboard/muayeneler');
         revalidatePath('/dashboard/zimmetler');
         return { success: true, info: guncelKmBilgiMesaji || undefined };
-    } catch (e) {
+    } catch (e: unknown) {
         console.error(e);
-        if (e instanceof Error && e.message.includes("bulunduguIl")) {
+        if (getPrismaKnownErrorCode(e) === "P2002") {
+            const target = getPrismaErrorTarget(e);
+            if (target.includes("plaka")) {
+                return { success: false, error: "Bu plaka zaten kayıtlı!" };
+            }
+            if (target.includes("kullaniciId")) {
+                return { success: false, error: "Seçili personelde zaten zimmetli bir araç var." };
+            }
+            return { success: false, error: "Kayıt benzersizlik kuralına takıldı." };
+        }
+        if (getPrismaKnownErrorCode(e) === "P2003") {
+            return { success: false, error: "Seçilen firma veya personel kaydı bulunamadı. Listeyi yenileyip tekrar deneyin." };
+        }
+        if (isInvalidLocationError(e)) {
             return { success: false, error: "Bulunduğu il değeri geçersiz." };
         }
-        return { success: false, error: "Araç güncellenemedi." };
+        return { success: false, error: getDevelopmentErrorMessage(e) || "Araç güncellenemedi." };
     }
 }
 
@@ -539,7 +641,7 @@ export async function importAraclarFromExcel(formData: FormData) {
             aciklama: row.Aciklama || row.aciklama || null,
             sirketId,
             durum: 'BOSTA' as const,
-            kategori: (row.Kategori || row.kategori || 'BINEK') as any,
+            kategori: normalizeAracKategori(row.Kategori || row.kategori || "BINEK"),
             saseNo: row.SaseNo || row.saseno || row.saseNo || null,
             motorNo: row.MotorNo || row.motorno || row.motorNo || null,
         })).filter(r => r.plaka && r.marka);

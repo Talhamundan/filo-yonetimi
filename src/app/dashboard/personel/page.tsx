@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import PersonelClient from "./Client";
 import { getCurrentUserRole, getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
-import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedDisFirmaId, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
@@ -66,10 +66,11 @@ async function hasDatabaseColumn(tableName: string, columnName: string) {
 }
 
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, selectedAy, commonFilters, role] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, selectedDisFirmaId, commonFilters, role] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
         getSelectedAy(props.searchParams),
+        getSelectedDisFirmaId(props.searchParams),
         getCommonListFilters(props.searchParams),
         getCurrentUserRole(),
     ]);
@@ -112,6 +113,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             personelWhereParts.push({ rol: normalizedRoleStatus });
         }
     }
+    if (selectedDisFirmaId) {
+        personelWhereParts.push({ disFirmaId: selectedDisFirmaId });
+    }
     const personelWhere = personelWhereParts.length > 1 ? { AND: personelWhereParts } : personelWhereParts[0];
 
     const personelSelect: Record<string, unknown> = {
@@ -122,6 +126,8 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         tcNo: true,
         rol: true,
         sirketId: true,
+        disFirmaId: true,
+        disFirma: { select: { id: true, ad: true, tur: true } },
         sirket: { select: { id: true, ad: true } },
         hesap: { select: { kullaniciAdi: true } },
         arac: { select: { id: true, plaka: true, marka: true, model: true } },
@@ -154,13 +160,17 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             });
         });
 
-    const [personeller, sirketler] = await Promise.all([
+    const [personeller, sirketler, disFirmalar] = await Promise.all([
         personellerPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
             select: { id: true, ad: true, bulunduguIl: true },
             orderBy: { ad: 'asc' }
         }),
+        (prisma as any).disFirma.findMany({
+            select: { id: true, ad: true, tur: true },
+            orderBy: { ad: "asc" },
+        }).catch(() => []),
     ]);
 
     const personelIds = (personeller as Array<{ id?: string | null }>)
@@ -392,6 +402,8 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             rol: p.rol,
             sirketAdi: p.sirket?.ad || "Bağımsız",
             sirketId: p.sirketId || "",
+            disFirmaId: p.disFirmaId || "",
+            disFirmaAdi: p.disFirma?.ad || "",
             calistigiKurum: p.calistigiKurum || p.sehir || p.sirket?.ad || "-",
             zimmetliArac: zimmetliArac ? `${zimmetliArac.plaka} (${zimmetliArac.marka} ${zimmetliArac.model})` : null,
             zimmetliAracPlaka: zimmetliArac?.plaka || null,
@@ -411,5 +423,5 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         };
     });
 
-    return <PersonelClient initialData={formattedData} sirketler={sirketler} isTeknik={role === "TEKNIK"} />;
+    return <PersonelClient initialData={formattedData} sirketler={sirketler} disFirmalar={disFirmalar} isTeknik={role === "TEKNIK"} />;
 }

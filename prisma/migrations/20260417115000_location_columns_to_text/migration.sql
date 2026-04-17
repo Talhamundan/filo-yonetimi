@@ -1,0 +1,19 @@
+ALTER TABLE "Arac"
+ALTER COLUMN "bulunduguIl" DROP DEFAULT;
+
+ALTER TABLE "Arac"
+ALTER COLUMN "bulunduguIl" TYPE TEXT
+USING "bulunduguIl"::TEXT;
+
+ALTER TABLE "Arac"
+ALTER COLUMN "bulunduguIl" SET DEFAULT 'BURSA';
+
+ALTER TABLE "Sirket"
+ALTER COLUMN "bulunduguIl" DROP DEFAULT;
+
+ALTER TABLE "Sirket"
+ALTER COLUMN "bulunduguIl" TYPE TEXT
+USING "bulunduguIl"::TEXT;
+
+ALTER TABLE "Sirket"
+ALTER COLUMN "bulunduguIl" SET DEFAULT 'BURSA';

@@ -16,6 +16,7 @@ import { deleteSigorta } from "@/app/dashboard/trafik-sigortasi/actions";
 import { deleteMasraf } from "@/app/dashboard/masraflar/actions";
 import { deleteCezaMasraf } from "@/app/dashboard/ceza-masraflari/actions";
 import { deleteDokuman } from "@/app/dashboard/dokumanlar/actions";
+import { deleteDisFirma } from "@/app/dashboard/_dis-firmalar/actions";
 
 type DeleteResult = { success: boolean; error?: string };
 
@@ -27,6 +28,9 @@ async function deleteByEntity(entity: ExcelEntityKey, id: string): Promise<Delet
             return deletePersonel(id);
         case "sirket":
             return deleteSirket(id);
+        case "taseronFirma":
+        case "kiralikFirma":
+            return deleteDisFirma(id);
         case "zimmet":
             return deleteZimmet(id);
         case "ariza":

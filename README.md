@@ -39,6 +39,7 @@ cp .env.example .env
 - `DATABASE_URL`
 - `AUTH_SECRET`
 - `AUTH_URL`
+- `ADMIN_BOOTSTRAP_PASSWORD` (optional; enables the database-independent `admin` login outside development)
 
 4. Run database migrations
 ```bash

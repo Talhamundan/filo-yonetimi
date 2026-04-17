@@ -15,6 +15,8 @@ export type PersonelRow = {
     rol: string;
     sirketAdi: string;
     sirketId?: string;
+    disFirmaId?: string;
+    disFirmaAdi?: string;
     calistigiKurum: string;
     zimmetliArac: string | null;
     zimmetliAracPlaka?: string | null;

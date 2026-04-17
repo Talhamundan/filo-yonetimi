@@ -16,15 +16,17 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
 
-const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'PERSONEL', sirketId: '', calistigiKurum: '', tcNo: '' };
+const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'PERSONEL', sirketId: '', disFirmaId: '', calistigiKurum: '', tcNo: '' };
 
 export default function PersonelClient({
     initialData,
     sirketler,
+    disFirmalar = [],
     isTeknik = false,
 }: {
     initialData: PersonelRow[];
     sirketler: { id: string, ad: string, bulunduguIl: string }[];
+    disFirmalar?: { id: string; ad: string; tur: string }[];
     isTeknik?: boolean;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
@@ -89,6 +91,7 @@ export default function PersonelClient({
             telefon: row.telefon === "-" ? "" : row.telefon,
             rol: row.rol as Rol,
             sirketId: row.sirketId || '',
+            disFirmaId: row.disFirmaId || '',
             calistigiKurum: row.calistigiKurum === "-" ? "" : row.calistigiKurum,
             tcNo: row.tcNo === "-" ? "" : (row.tcNo || ''),
         });
@@ -150,6 +153,7 @@ export default function PersonelClient({
                             formData={formData}
                             setFormData={setFormData}
                             sirketler={sirketler}
+                            disFirmalar={disFirmalar}
                             allowAdminRole={isAdmin}
                             allowIndependentOption={canAssignIndependentRecords}
                         />
@@ -177,6 +181,7 @@ export default function PersonelClient({
                         formData={formData}
                         setFormData={setFormData}
                         sirketler={sirketler}
+                        disFirmalar={disFirmalar}
                         allowAdminRole={isAdmin}
                         allowIndependentOption={canAssignIndependentRecords}
                     />

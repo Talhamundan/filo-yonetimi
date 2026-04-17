@@ -10,6 +10,7 @@ import type {
     DashboardDailyTrendItem,
     DashboardDateContext,
     DashboardMonthlyTrendItem,
+    DashboardOwnershipCostItem,
     DashboardWeeklyTrendItem,
     GenericWhere,
 } from "@/lib/dashboard-types";
@@ -135,6 +136,7 @@ type DashboardCostServiceResult = {
     weeklyExpenseTrend: DashboardWeeklyTrendItem[];
     sixMonthsTrend: { name: string; gider: number }[];
     companyCostReport: DashboardCompanyCostItem[];
+    ownershipCostReport: DashboardOwnershipCostItem[];
 };
 
 type DashboardFuelConsumptionResult = {
@@ -581,6 +583,109 @@ export async function getCompanyCostReportForPeriod(params: {
         .sort((a, b) => b.toplam - a.toplam);
 }
 
+export async function getOwnershipCostReportForPeriod(params: {
+    vehicleScope?: GenericWhere;
+    start: Date;
+    end: Date;
+}): Promise<DashboardOwnershipCostItem[]> {
+    const { vehicleScope, start, end } = params;
+    const aracWhere = {
+        ...((vehicleScope || {}) as Record<string, unknown>),
+        deletedAt: null,
+    };
+
+    const araclar = await (prisma as any).arac.findMany({
+        where: aracWhere as any,
+        select: {
+            id: true,
+            sirket: { select: { id: true, ad: true } },
+            kullanici: { select: { sirket: { select: { id: true, ad: true } } } },
+            disFirma: { select: { tur: true } },
+        },
+    }).catch(() => []);
+
+    const aracIds = (araclar as Array<{ id?: string }>).map((arac) => arac.id).filter((id): id is string => Boolean(id));
+    if (!aracIds.length) return [];
+
+    const [yakitRows, servisRows] = await Promise.all([
+        (prisma as any).yakit.groupBy({
+            by: ["aracId"],
+            where: { aracId: { in: aracIds }, tarih: { gte: start, lte: end } },
+            _sum: { tutar: true },
+        }).catch(() => []),
+        (prisma as any).bakim.groupBy({
+            by: ["aracId"],
+            where: { aracId: { in: aracIds }, bakimTarihi: { gte: start, lte: end }, deletedAt: null },
+            _sum: { tutar: true },
+        }).catch(() => []),
+    ]);
+
+    const costByAracId = new Map<string, { yakit: number; servis: number }>();
+    const addCost = (aracId: string | null | undefined, key: "yakit" | "servis", amount: number) => {
+        if (!aracId || amount <= 0) return;
+        const current = costByAracId.get(aracId) || { yakit: 0, servis: 0 };
+        current[key] += amount;
+        costByAracId.set(aracId, current);
+    };
+
+    for (const row of yakitRows as Array<{ aracId: string; _sum: { tutar: number | null } }>) {
+        addCost(row.aracId, "yakit", toNumber(row._sum?.tutar));
+    }
+    for (const row of servisRows as Array<{ aracId: string; _sum: { tutar: number | null } }>) {
+        addCost(row.aracId, "servis", toNumber(row._sum?.tutar));
+    }
+
+    const grouped = new Map<string, DashboardOwnershipCostItem>();
+    for (const arac of araclar as Array<{
+        id: string;
+        sirket?: { id: string; ad: string } | null;
+        kullanici?: { sirket?: { id: string; ad: string } | null } | null;
+        disFirma?: { tur?: "TASERON" | "KIRALIK" | null } | null;
+    }>) {
+        const cost = costByAracId.get(arac.id);
+        const toplam = toNumber(cost?.yakit) + toNumber(cost?.servis);
+        if (toplam <= 0) continue;
+
+        const sirket = arac.sirket || arac.kullanici?.sirket || null;
+        const sirketId = normalizeCompanyId(sirket?.id);
+        const sirketAd = normalizeCompanyText(sirket?.ad) || "Bağımsız";
+        const key = sirketId ? `sirket:${sirketId}` : `kurum:${getCompanyLabelKey(sirketAd)}`;
+        const ownershipKey = arac.disFirma?.tur === "KIRALIK"
+            ? "kiralik"
+            : arac.disFirma?.tur === "TASERON"
+                ? "taseron"
+                : "ozMal";
+
+        const current = grouped.get(key) || {
+            sirketId,
+            sirketAd,
+            ozMal: 0,
+            kiralik: 0,
+            taseron: 0,
+            yakit: 0,
+            servis: 0,
+            toplam: 0,
+        };
+        current[ownershipKey] += toplam;
+        current.yakit += toNumber(cost?.yakit);
+        current.servis += toNumber(cost?.servis);
+        current.toplam += toplam;
+        grouped.set(key, current);
+    }
+
+    return [...grouped.values()]
+        .map((item) => ({
+            ...item,
+            ozMal: Math.round(item.ozMal),
+            kiralik: Math.round(item.kiralik),
+            taseron: Math.round(item.taseron),
+            yakit: Math.round(item.yakit),
+            servis: Math.round(item.servis),
+            toplam: Math.round(item.toplam),
+        }))
+        .sort((a, b) => b.toplam - a.toplam);
+}
+
 async function getBreakdownForPeriod(params: {
     scope: GenericWhere;
     cezaScope: GenericWhere;
@@ -821,13 +926,20 @@ export async function getDashboardCostData(params: {
         start: seciliAyBasi,
         end: seciliAySonu,
     });
-    const companyCostReport = await getCompanyCostReportForPeriod({
-        scope: usageExpenseScope,
-        cezaScope: usageExpenseCezaScope,
-        vehicleScope,
-        start: seciliAyBasi,
-        end: seciliAySonu,
-    });
+    const [companyCostReport, ownershipCostReport] = await Promise.all([
+        getCompanyCostReportForPeriod({
+            scope: usageExpenseScope,
+            cezaScope: usageExpenseCezaScope,
+            vehicleScope,
+            start: seciliAyBasi,
+            end: seciliAySonu,
+        }),
+        getOwnershipCostReportForPeriod({
+            vehicleScope,
+            start: seciliAyBasi,
+            end: seciliAySonu,
+        }),
+    ]);
 
     const now = new Date();
     const currentYear = now.getFullYear();
@@ -867,6 +979,7 @@ export async function getDashboardCostData(params: {
         weeklyExpenseTrend,
         sixMonthsTrend: monthlyExpenseTrend.map((item) => ({ name: item.name, gider: item.toplam })),
         companyCostReport,
+        ownershipCostReport,
     };
 }
 

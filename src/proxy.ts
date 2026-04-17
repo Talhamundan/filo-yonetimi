@@ -15,29 +15,24 @@ export default auth((req) => {
   const isDashboardPage = nextUrl.pathname.startsWith("/dashboard")
   const isCompanyManagementPage = nextUrl.pathname.startsWith("/dashboard/sirketler")
 
-  // 1. Giriş yapmamış kullanıcı dashboard'a girmek isterse login'e at
   if (isDashboardPage && !isLoggedIn) {
     return NextResponse.redirect(new URL("/auth/login", nextUrl))
   }
 
-  // 2. Onaylanmamış kullanıcı (ADMIN değilse) dashboard'a girerse bekleme sayfasına at
   if (isLoggedIn && isDashboardPage && shouldForceWaitingPage(userRole, userOnayDurumu)) {
-      if (nextUrl.pathname !== "/dashboard/bekleme") {
-        return NextResponse.redirect(new URL("/dashboard/bekleme", nextUrl))
-      }
-  }
-
-  // 3. Rol Bazlı Erişim Kontrolü (RBAC)
-  if (isLoggedIn && isDashboardPage && isDashboardPathRestrictedForRole(userRole, nextUrl.pathname)) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
+    if (nextUrl.pathname !== "/dashboard/bekleme") {
+      return NextResponse.redirect(new URL("/dashboard/bekleme", nextUrl))
     }
-
-  // 3.1 Şirket Yönetimi sadece ADMIN tarafından görüntülenebilir
-  if (isLoggedIn && isCompanyManagementPage && !isAdminRole(userRole)) {
-    return NextResponse.redirect(new URL("/dashboard", nextUrl));
   }
 
-  // 4. Giriş yapmış kullanıcı auth sayfalarına (login/register) girmek isterse dashboard'a at
+  if (isLoggedIn && isDashboardPage && isDashboardPathRestrictedForRole(userRole, nextUrl.pathname)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl))
+  }
+
+  if (isLoggedIn && isCompanyManagementPage && !isAdminRole(userRole)) {
+    return NextResponse.redirect(new URL("/dashboard", nextUrl))
+  }
+
   if (isAuthPage && isLoggedIn) {
     return NextResponse.redirect(new URL("/dashboard", nextUrl))
   }

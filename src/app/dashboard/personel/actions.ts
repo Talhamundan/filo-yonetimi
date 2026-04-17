@@ -66,10 +66,11 @@ async function hasPersonelCalistigiKurumColumn() {
     return hasCachedCalistigiKurumColumn;
 }
 
-export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; calistigiKurum?: string; tcNo?: string }) {
+export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
+        const disFirmaId = data.disFirmaId?.trim() || null;
         const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
         const personelWriteSelect: any = {
             id: true,
@@ -105,6 +106,7 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
                         telefon: data.telefon || null,
                         rol: data.rol,
                         ...(sirketId ? { sirket: { connect: { id: sirketId } } } : {}),
+                        ...(disFirmaId ? { disFirma: { connect: { id: disFirmaId } } } : {}),
                         ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
                         tcNo: data.tcNo || null,
                         onayDurumu: "ONAYLANDI",
@@ -140,6 +142,7 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
                 rol: created.rol,
                 eposta: null,
                 sirketId: sirketId || null,
+                disFirmaId,
                 calistigiKurum: canWriteCalistigiKurum ? ((created as any).calistigiKurum || null) : null,
             },
         });
@@ -159,10 +162,11 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
     }
 }
 
-export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; calistigiKurum?: string; tcNo?: string }) {
+export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
+        const disFirmaId = data.disFirmaId?.trim() || null;
         const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
         const personelWriteSelect: any = {
             id: true,
@@ -189,6 +193,9 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                 ...(sirketId
                     ? { sirket: { connect: { id: sirketId } } }
                     : { sirket: { disconnect: true } }),
+                ...(disFirmaId
+                    ? { disFirma: { connect: { id: disFirmaId } } }
+                    : { disFirma: { disconnect: true } }),
                 ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
                 tcNo: data.tcNo || null,
             },
@@ -210,6 +217,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                 yeniRol: updated.rol,
                 oncekiSirketId: oncekiKayit?.sirketId || null,
                 yeniSirketId: sirketId || null,
+                disFirmaId,
                 calistigiKurum: canWriteCalistigiKurum ? ((updated as any).calistigiKurum || null) : null,
             },
         });

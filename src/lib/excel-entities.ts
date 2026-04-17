@@ -2,6 +2,8 @@ export type ExcelEntityKey =
     | "arac"
     | "personel"
     | "sirket"
+    | "taseronFirma"
+    | "kiralikFirma"
     | "zimmet"
     | "ariza"
     | "bakim"
@@ -39,6 +41,18 @@ export const EXCEL_ENTITY_CONFIG: Record<ExcelEntityKey, ExcelEntityConfig> = {
         filterModel: "sirket",
         sheetName: "Sirket",
         fileNamePrefix: "sirketler",
+    },
+    taseronFirma: {
+        prismaModel: "disFirma",
+        filterModel: "disFirma",
+        sheetName: "TaseronFirmalar",
+        fileNamePrefix: "taseron-firmalar",
+    },
+    kiralikFirma: {
+        prismaModel: "disFirma",
+        filterModel: "disFirma",
+        sheetName: "KiralikFirmalar",
+        fileNamePrefix: "kiralik-firmalar",
     },
     zimmet: {
         prismaModel: "kullaniciZimmet",

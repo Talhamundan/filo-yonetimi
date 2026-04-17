@@ -12,6 +12,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
         where: queryFilter,
         include: {
             sirket: true,
+            disFirma: true,
             kullanici: true,
             kullaniciGecmisi: {
                 include: { kullanici: true },
@@ -35,6 +36,7 @@ async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
                 ruhsatSeriNo: true,
                 kullaniciId: true,
                 sirketId: true,
+                disFirmaId: true,
                 olusturmaTarihi: true,
                 guncellemeTarihi: true,
             },
@@ -216,6 +218,7 @@ async function getSafeAracDetailLegacy(queryFilter: Record<string, unknown>) {
             ruhsatSeriNo: true,
             kullaniciId: true,
             sirketId: true,
+            disFirmaId: true,
         },
     });
 }
@@ -231,7 +234,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
     ]);
     const queryFilter = { id: params.id, ...(filter as any) };
 
-    const [aracRaw, kullanicilar, sirketler] = await Promise.all([
+    const [aracRaw, kullanicilar, sirketler, disFirmalar] = await Promise.all([
         getSafeAracDetail(queryFilter).catch(async (error) => {
             console.warn("Arac detay birlesik sorgu basarisiz, legacy minimal sorgu ile devam ediliyor.", error);
             return getSafeAracDetailLegacy(queryFilter);
@@ -268,6 +271,10 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             console.warn("Sirket listesi getirilemedi, bos liste ile devam ediliyor.", error);
             return [];
         }),
+        (prisma as any).disFirma.findMany({
+            select: { id: true, ad: true, tur: true },
+            orderBy: { ad: "asc" },
+        }).catch(() => []),
     ]);
 
     if (!aracRaw) {
@@ -290,6 +297,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
     const arac = {
         ...aracRaw,
         sirket: (aracRaw as any).sirket || null,
+        disFirma: (aracRaw as any).disFirma || null,
         kullanici: inferredKullanici,
         kullaniciId: (aracRaw as any).kullaniciId || inferredKullanici?.id || null,
         kullaniciGecmisi: (aracRaw as any).kullaniciGecmisi || [],
@@ -316,6 +324,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
                 sirketAd: u.sirket?.ad || null,
             }))}
             sirketler={sirketler as any[]}
+            disFirmalar={disFirmalar as any[]}
         />
     );
 }

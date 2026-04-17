@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, History, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Toaster } from "sonner";
@@ -38,13 +38,11 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function DashboardShell({ children, scopeOptions }: DashboardShellProps) {
     const pathname = usePathname();
-    const router = useRouter();
     const searchParams = useSearchParams();
     const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
     const [isAdminMenuOpen, setIsAdminMenuOpen] = React.useState(false);
     const [isMobileSidebarOpen, setIsMobileSidebarOpen] = React.useState(false);
     const [isMobileHeaderToolsOpen, setIsMobileHeaderToolsOpen] = React.useState(true);
-    const didNormalizeDateQueryRef = React.useRef(false);
     const desktopAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const mobileAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const headerIconButtonClass =

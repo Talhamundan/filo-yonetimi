@@ -20,6 +20,7 @@ export type {
     DashboardWeeklyTrendItem,
     DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
+    DashboardOwnershipCostItem,
     DashboardVehicleFuelAverageItem,
     DashboardVehicleCostItem,
 } from "@/lib/dashboard-types";
@@ -69,6 +70,7 @@ function getEmptyDashboardData(): DashboardData {
         vehicleCostReport: [],
         driverCostReport: [],
         companyCostReport: [],
+        ownershipCostReport: [],
         vehicleFuelAverageReport: [],
         driverFuelAverageReport: [],
     };
@@ -151,6 +153,7 @@ async function getDashboardDataUnsafe(
         vehicleCostReport: vehicleData.vehicleCostReport,
         driverCostReport: driverData.driverCostReport,
         companyCostReport: costData.companyCostReport,
+        ownershipCostReport: costData.ownershipCostReport,
         vehicleFuelAverageReport: fuelAverageData.vehicleFuelAverageReport,
         driverFuelAverageReport: fuelAverageData.driverFuelAverageReport,
     };

@@ -24,6 +24,8 @@ export type AracRow = {
     kullanici?: { id: string; ad: string, soyad: string; sirket?: { id: string; ad: string } | null } | null;
     kullaniciId?: string | null;
     sirket?: { id: string; ad: string } | null;
+    disFirmaId?: string | null;
+    disFirma?: { id: string; ad: string; tur: string } | null;
     muayene?: { gecerlilikTarihi: Date }[];
     kasko?: { bitisTarihi: Date }[];
     trafikSigortasi?: { bitisTarihi: Date }[];
@@ -161,7 +163,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
             header: "Kategori",
             cell: ({ row }) => {
                 const cat = row.original.kategori;
-                const labels: Record<string, string> = { SANTIYE: "Şantiye", BINEK: "Binek" };
+                const labels: Record<string, string> = { SANTIYE: "İş Makinesi", BINEK: "Binek" };
                 return <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{labels[cat] || cat}</span>;
             }
         },

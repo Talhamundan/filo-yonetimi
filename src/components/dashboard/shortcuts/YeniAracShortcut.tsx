@@ -158,7 +158,7 @@ const FormFields = ({
                             className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                         >
                             <option value="BINEK">Binek Araç</option>
-                            <option value="SANTIYE">Şantiye Aracı</option>
+                            <option value="SANTIYE">İş Makinesi</option>
                         </select>
                     </div>
                     <div className="space-y-1.5 col-span-2">

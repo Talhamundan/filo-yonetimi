@@ -10,6 +10,10 @@ const trustHost =
   process.env.AUTH_TRUST_HOST === "true" ||
   process.env.NODE_ENV === "development"
 
+const bootstrapAdminPassword =
+  process.env.ADMIN_BOOTSTRAP_PASSWORD ||
+  (process.env.NODE_ENV === "development" ? process.env.POSTGRES_PASSWORD : undefined)
+
 export const { handlers, signIn, signOut, auth } = NextAuth({
   ...authConfig,
   trustHost,
@@ -38,9 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-          // Sabit (Hardcoded) Admin Kontrolü - Veritabanından bağımsız her zaman çalışır
-          const adminPassword = process.env.POSTGRES_PASSWORD || "filo_sifre_2026"
-          if (identifier === "admin" && password === adminPassword) {
+          if (identifier === "admin" && bootstrapAdminPassword && password === bootstrapAdminPassword) {
             return {
               id: "0000",
               name: "Sistem Yöneticisi (Sabit)",

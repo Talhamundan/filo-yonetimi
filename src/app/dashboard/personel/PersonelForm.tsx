@@ -11,6 +11,7 @@ export type PersonelFormData = {
     telefon: string;
     rol: Rol;
     sirketId: string;
+    disFirmaId?: string;
     calistigiKurum: string;
     tcNo: string;
 };
@@ -22,12 +23,14 @@ export const FormFields = ({
     formData,
     setFormData,
     sirketler,
+    disFirmalar = [],
     allowAdminRole = false,
     allowIndependentOption = true,
 }: {
     formData: PersonelFormData,
     setFormData: React.Dispatch<React.SetStateAction<PersonelFormData>>,
     sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    disFirmalar?: { id: string; ad: string; tur: string }[],
     allowAdminRole?: boolean,
     allowIndependentOption?: boolean,
 }) => {
@@ -108,6 +111,21 @@ export const FormFields = ({
                     className="h-9 uppercase"
                 />
             </div>
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Dış Firma (Taşeron / Kiralık)</label>
+            <select
+                value={formData.disFirmaId || ""}
+                onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
+                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+            >
+                <option value="">Dış firma yok</option>
+                {disFirmalar.map((firma) => (
+                    <option key={firma.id} value={firma.id}>
+                        {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
+                    </option>
+                ))}
+            </select>
         </div>
     </div>
     );

@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
 import { getAracUsageFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
-import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedDisFirmaId, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
@@ -21,6 +21,7 @@ const ARAC_FALLBACK_SELECT = {
     durum: true,
     kullaniciId: true,
     sirketId: true,
+    disFirmaId: true,
     calistigiKurum: true,
     kategori: true,
     saseNo: true,
@@ -75,6 +76,7 @@ async function getAraclarWithTakipBilgileri(
                 },
             },
             sirket: true,
+            disFirma: true,
         },
     }).catch(async (error: any) => {
         console.warn("Arac listesi sorgusu basarisiz, minimal sorgu ile devam ediliyor.", error);
@@ -107,6 +109,7 @@ async function getAraclarWithTakipBilgileri(
                     durum: true,
                     kullaniciId: true,
                     sirketId: true,
+                    disFirmaId: true,
                     calistigiKurum: true,
                     kategori: true,
                     olusturmaTarihi: true,
@@ -386,6 +389,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
+    const selectedDisFirmaId = await getSelectedDisFirmaId(props.searchParams);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
@@ -417,6 +421,9 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     if (commonFilters.type) {
         filterParts.push({ kategori: commonFilters.type });
     }
+    if (selectedDisFirmaId) {
+        filterParts.push({ disFirmaId: selectedDisFirmaId });
+    }
     const safeFilterParts = filterParts.filter((part) => {
         if (!part || typeof part !== "object") return false;
         const keys = Object.keys(part);
@@ -438,7 +445,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         safeScopeFilter
     );
 
-    const [araclar, sirketler, kullanicilar] = await Promise.all([
+    const [araclar, sirketler, kullanicilar, disFirmalar] = await Promise.all([
         araclarPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
@@ -469,7 +476,11 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         }).catch((error: any) => {
             console.warn("Kullanici listesi getirilemedi, bos liste ile devam ediliyor.", error);
             return [];
-        })
+        }),
+        (prisma as any).disFirma.findMany({
+            select: { id: true, ad: true, tur: true },
+            orderBy: { ad: "asc" },
+        }).catch(() => []),
     ]);
 
     const sirketIdByName = new Map<string, string>();
@@ -501,6 +512,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         <AraclarClient 
             initialAraclar={araclarWithUsageCompany as any} 
             sirketler={sirketler}
+            disFirmalar={disFirmalar}
             kullanicilar={kullanicilar.map((u: any) => ({
                 id: u.id,
                 adSoyad: `${u.ad} ${u.soyad}`.trim(),

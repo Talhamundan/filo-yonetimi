@@ -24,6 +24,8 @@ const DRIVER_RESTRICTED_DASHBOARD_PATHS = [
     "/dashboard/personel",
     "/dashboard/yetkilendirme-paneli",
     "/dashboard/sirketler",
+    "/dashboard/taseronlar",
+    "/dashboard/kiraliklar",
     "/dashboard/finans",
     "/dashboard/aktivite-gecmisi",
     "/dashboard/cop-kutusu",
