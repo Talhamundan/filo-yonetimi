@@ -139,6 +139,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "calistigiKurum",
             "rol",
             "sirket",
+            "zimmetliArac",
             "onayDurumu",
             "eposta",
         ],
@@ -150,7 +151,8 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             tcNo: "TC Kimlik No",
             calistigiKurum: "Çalıştığı Kurum",
             rol: "Rol",
-            sirket: "Bağlı Şirket",
+            sirket: "Çalıştığı Firma",
+            zimmetliArac: "Zimmetli Araç",
             onayDurumu: "Onay Durumu",
             eposta: "E-Posta",
         },
@@ -165,7 +167,15 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
                 "Sehir",
                 "sehir",
             ],
-            sirket: ["Bağlı Şirket", "Bagli Sirket", "Şirket", "Sirket"],
+            sirket: [
+                "Çalıştığı Firma",
+                "Calistigi Firma",
+                "Bağlı Şirket",
+                "Bagli Sirket",
+                "Şirket",
+                "Sirket",
+            ],
+            zimmetliArac: ["Zimmetli Araç", "Zimmetli Arac", "Plaka", "Araç", "Arac"],
             tcNo: ["TC No", "TCKN", "TC Kimlik"],
             eposta: ["Eposta", "Mail"],
         },
@@ -687,6 +697,7 @@ export function buildRelationExportSelect(modelName: string) {
             soyad: true,
             calistigiKurum: true,
             sirket: { select: { ad: true } },
+            arac: { select: { plaka: true, marka: true, model: true } },
         };
     }
 
@@ -814,6 +825,18 @@ export function getRelationImportHeaderAliases(modelName: string, foreignKeyFiel
             "Calistigi Kurum",
             "bagliSirket",
             "calistigiKurum",
+        ];
+    }
+    if (modelName === "kullanici" && foreignKeyFieldName === "sirketId") {
+        return [
+            "Çalıştığı Firma",
+            "Calistigi Firma",
+            "Bağlı Şirket",
+            "Bagli Sirket",
+            "Şirket",
+            "Sirket",
+            "sirket",
+            "bagliSirket",
         ];
     }
     return [];
@@ -1916,6 +1939,10 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
             output.bagliSirket = toExportCell(bagliSirket);
             output.calistigiKurum = toExportCell(aracObj?.calistigiKurum || soforObj?.calistigiKurum || soforObj?.sirket?.ad || null);
         }
+        if (config.prismaModel === "kullanici") {
+            const aracObj = row.arac as any;
+            output.zimmetliArac = toExportCell(aracObj?.plaka || relationDisplayValue(aracObj));
+        }
         if (config.prismaModel === "bakim") {
             const islemYapanFirma = normalizeLookupString(row.islemYapanFirma) || normalizeLookupString(row.servisAdi);
             output.islemYapanFirma = toExportCell(islemYapanFirma);
@@ -2077,6 +2104,22 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                 sanitizeAracImportRow(parsedRow);
             }
 
+            if (config.prismaModel === "kullanici") {
+                const aracHeader = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, "zimmetliArac"));
+                const rawAracVal = aracHeader ? record[aracHeader] : null;
+                const normalizedPlaka = normalizeAracPlaka(rawAracVal);
+                
+                if (normalizedPlaka) {
+                    const foundArac = await (getModelDelegate(tx, "arac") as any).findUnique({
+                        where: { plaka: normalizedPlaka },
+                        select: { id: true }
+                    });
+                    if (foundArac) {
+                        (parsedRow as any)._targetAracId = foundArac.id;
+                    }
+                }
+            }
+
             validateRequiredFields(fields, parsedRow, modelMeta.name);
 
             const whereUnique = getWhereUnique(fields, parsedRow, config.prismaModel);
@@ -2108,8 +2151,49 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                 if (id) { await model.update({ where: { id }, data: updateData }); updated++; }
                 else { await createAracWithoutPlakaRaw(tx, createData); created++; }
             } else {
-                await model.create({ data: createData });
+                const createdRecord = await model.create({ data: createData }) as { id: string };
+                existingId = createdRecord.id;
                 created++;
+            }
+
+            // Post-import vehicle assignment for personnel
+            if (config.prismaModel === "kullanici" && existingId && (parsedRow as any)._targetAracId) {
+                const targetAracId = (parsedRow as any)._targetAracId;
+                const currentArac = await (getModelDelegate(tx, "arac") as any).findUnique({
+                    where: { id: targetAracId },
+                    select: { kullaniciId: true }
+                });
+
+                if (currentArac && currentArac.kullaniciId !== existingId) {
+                    // Update vehicle's user
+                    await (getModelDelegate(tx, "arac") as any).update({
+                        where: { id: targetAracId },
+                        data: { kullaniciId: existingId }
+                    });
+                    
+                    // Also create a zimmet record if it doesn't exist for this active assignment
+                    const existingZimmet = await (getModelDelegate(tx, "kullaniciZimmet") as any).findMany({
+                        where: { aracId: targetAracId, kullaniciId: existingId, bitis: null },
+                        take: 1
+                    });
+
+                    if (existingZimmet.length === 0) {
+                        // Close any other active zimmet for this vehicle
+                        await (getModelDelegate(tx, "kullaniciZimmet") as any).updateMany({
+                            where: { aracId: targetAracId, bitis: null },
+                            data: { bitis: new Date() }
+                        });
+
+                        await (getModelDelegate(tx, "kullaniciZimmet") as any).create({
+                            data: {
+                                aracId: targetAracId,
+                                kullaniciId: existingId,
+                                baslangic: new Date(),
+                                baslangicKm: 0, // Fallback
+                            }
+                        });
+                    }
+                }
             }
 
         } catch (err) {

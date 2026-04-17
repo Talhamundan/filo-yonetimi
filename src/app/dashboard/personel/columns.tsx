@@ -4,6 +4,7 @@ import { ColumnDef } from "@tanstack/react-table"
 import { Shield, User, Briefcase, Truck, Wrench } from "lucide-react"
 import { AracLink, PersonelLink } from "@/components/links/RecordLinks"
 import { getRoleLabel } from "@/lib/role-label"
+import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 
 export type PersonelRow = {
     id: string;
@@ -16,6 +17,8 @@ export type PersonelRow = {
     sirketId?: string;
     calistigiKurum: string;
     zimmetliArac: string | null;
+    zimmetliAracPlaka?: string | null;
+    zimmetliAracMarkaModel?: string | null;
     zimmetliAracId?: string | null;
     maliyetKalemleri?: {
         ceza: number;
@@ -62,6 +65,8 @@ const baseColumns: ColumnDef<PersonelRow>[] = [
             </div>
         )
     },
+    { accessorKey: "sirketAdi", header: "Çalıştığı Firma", cell: ({ row }) => <span className="font-medium text-slate-700">{row.getValue("sirketAdi")}</span> },
+    { accessorKey: "calistigiKurum", header: "Çalıştığı Kurum", cell: ({ row }) => <span className="text-slate-500">{row.getValue("calistigiKurum")}</span> },
     {
         accessorFn: (row) => getRoleLabel(row.rol),
         id: "rol",
@@ -76,22 +81,25 @@ const baseColumns: ColumnDef<PersonelRow>[] = [
             )
         }
     },
-    { accessorKey: "sirketAdi", header: "Bağlı Şirket", cell: ({ row }) => <span className="font-medium text-slate-700">{row.getValue("sirketAdi")}</span> },
-    { accessorKey: "calistigiKurum", header: "Çalıştığı Kurum", cell: ({ row }) => <span className="text-slate-500">{row.getValue("calistigiKurum")}</span> },
     { 
         accessorKey: "zimmetliArac", 
         header: "Zimmetli Araç", 
         cell: ({ row }) => {
-            const arac = row.getValue("zimmetliArac") as string | null;
-            return arac ? (
-                <AracLink
-                    aracId={row.original.zimmetliAracId}
-                    className="font-mono text-xs font-bold bg-indigo-50 text-indigo-700 px-2 py-1 rounded border border-indigo-200 hover:bg-indigo-100"
-                >
-                    {arac}
-                </AracLink>
-            ) : (
-                <span className="text-slate-400 italic text-xs">Zimmet yok</span>
+            const plaka = row.original.zimmetliAracPlaka;
+            const markaModel = row.original.zimmetliAracMarkaModel;
+            const sirket = row.original.sirketAdi;
+            const id = row.original.zimmetliAracId;
+
+            if (!plaka) return <span className="text-slate-400 italic text-xs">Zimmet yok</span>;
+
+            return (
+                <VehicleIdentityCell
+                    aracId={id}
+                    plaka={plaka}
+                    subtitle={markaModel}
+                    companyName={sirket}
+                    showCompanyInfo={true}
+                />
             );
         }
     },

@@ -241,7 +241,7 @@ export default function PersonelDetailClient({
                                 {getRoleBadge(p.rol)}
                             </div>
                             <div className="flex flex-wrap items-center gap-4 text-sm font-medium text-slate-500 mt-2 mb-4">
-                                <div className="flex items-center gap-1.5"><Briefcase size={16} /> {p.sirket?.ad || 'Bağımsız'}</div>
+                                <div className="flex items-center gap-1.5"><Briefcase size={16} /> {p.sirket?.ad || 'Firma Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5"><Building2 size={16} /> {p.calistigiKurum || p.sehir || 'Kurum Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />

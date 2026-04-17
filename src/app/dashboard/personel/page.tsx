@@ -388,6 +388,8 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             sirketId: p.sirketId || "",
             calistigiKurum: p.calistigiKurum || p.sehir || p.sirket?.ad || "-",
             zimmetliArac: zimmetliArac ? `${zimmetliArac.plaka} (${zimmetliArac.marka} ${zimmetliArac.model})` : null,
+            zimmetliAracPlaka: zimmetliArac?.plaka || null,
+            zimmetliAracMarkaModel: zimmetliArac ? `${zimmetliArac.marka} ${zimmetliArac.model}` : null,
             zimmetliAracId: zimmetliArac?.id || null,
             maliyetKalemleri: {
                 ceza: maliyet.ceza,
