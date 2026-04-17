@@ -20,11 +20,18 @@ import { updatePersonel, deletePersonel } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
-import { createZimmet, finalizeZimmet } from "../../zimmetler/actions";
+import { createZimmet, finalizeZimmet, deleteZimmet } from "../../zimmetler/actions";
+import { addBakim, updateBakim, deleteBakim } from "../../bakimlar/actions";
+import { createYakit, updateYakit, deleteYakit } from "../../yakitlar/actions";
+import { createMasraf, updateMasraf, deleteMasraf } from "../../masraflar/actions";
+import { createCeza, updateCeza, deleteCeza } from "../../cezalar/actions";
+import { deleteArizaKaydi, updateArizaKaydi } from "../../arizalar/actions";
 import { AracLink } from "@/components/links/RecordLinks";
-import { nowDateTimeLocal } from "@/lib/datetime-local";
+import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { getRoleLabel } from "@/lib/role-label";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
+import { RowActionButton } from "@/components/ui/row-action-button";
+import { sortByTextValue } from "@/lib/sort-utils";
 
 export default function PersonelDetailClient({
     initialPersonel: p,
@@ -61,6 +68,69 @@ export default function PersonelDetailClient({
         bitis: nowDateTimeLocal(),
         bitisKm: p.arac?.guncelKm ? String(p.arac.guncelKm) : "",
         notlar: "",
+    });
+    const [actionLoading, setActionLoading] = useState(false);
+
+    // --- YAKIT ---
+    const [yakitOpen, setYakitOpen] = useState(false);
+    const [yakitEditRow, setYakitEditRow] = useState<any>(null);
+    const [yakitData, setYakitData] = useState({
+        tarih: nowDateTimeLocal(),
+        litre: '',
+        tutar: '',
+        km: '',
+        istasyon: '',
+        odemeYontemi: 'NAKIT' as any,
+        soforId: p.id,
+    });
+
+    // --- CEZA ---
+    const [cezaOpen, setCezaOpen] = useState(false);
+    const [cezaEditRow, setCezaEditRow] = useState<any>(null);
+    const [cezaData, setCezaData] = useState({
+        tarih: nowDateTimeLocal(),
+        tutar: '',
+        cezaMaddesi: '',
+        aciklama: '',
+        aracId: '',
+        soforId: p.id,
+    });
+
+    // --- ARIZA ---
+    const [arizaOpen, setArizaOpen] = useState(false);
+    const [arizaEditRow, setArizaEditRow] = useState<any>(null);
+    const [arizaData, setArizaData] = useState({
+        bildirimTarihi: nowDateTimeLocal(),
+        aciklama: '',
+        oncelik: 'ORTA' as any,
+        km: '',
+        aracId: '',
+        soforId: p.id,
+    });
+
+    // --- BAKIM ---
+    const [bakimOpen, setBakimOpen] = useState(false);
+    const [bakimEditRow, setBakimEditRow] = useState<any>(null);
+    const [bakimData, setBakimData] = useState({
+        bakimTarihi: nowDateTimeLocal(),
+        tip: 'PERIYODIK' as any,
+        servisAdi: '',
+        yapilanIslemler: '',
+        tutar: '',
+        km: '',
+        aracId: '',
+        soforId: p.id,
+    });
+
+    // --- MASRAF ---
+    const [masrafOpen, setMasrafOpen] = useState(false);
+    const [masrafEditRow, setMasrafEditRow] = useState<any>(null);
+    const [masrafData, setMasrafData] = useState({
+        tarih: nowDateTimeLocal(),
+        tur: 'DIGER' as any,
+        tutar: '',
+        aciklama: '',
+        aracId: '',
     });
 
     const activeZimmet = React.useMemo(() => {
@@ -146,6 +216,187 @@ export default function PersonelDetailClient({
         setLoading(false);
     };
 
+    const handleDeleteZimmet = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Zimmet Kaydını Sil",
+            message: "Bu zimmet kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteZimmet(rowId);
+        if (res.success) {
+            toast.success("Zimmet kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
+    const openYakitEdit = (row: any) => {
+        setYakitData({
+            tarih: toDateTimeLocalInput(row.tarih),
+            litre: row.litre.toString(),
+            tutar: row.tutar.toString(),
+            km: row.km.toString(),
+            istasyon: row.istasyon || "",
+            odemeYontemi: row.odemeYontemi,
+            soforId: row.soforId || p.id,
+        });
+        setYakitEditRow(row);
+        setYakitOpen(true);
+    };
+
+    const handleDeleteYakit = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Yakıt Kaydını Sil",
+            message: "Bu yakıt kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteYakit(rowId);
+        if (res.success) {
+            toast.success("Yakıt kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
+    const openCezaEdit = (row: any) => {
+        setCezaData({
+            tarih: toDateTimeLocalInput(row.tarih),
+            tutar: row.tutar.toString(),
+            cezaMaddesi: row.cezaMaddesi || "",
+            aciklama: row.aciklama || "",
+            aracId: row.aracId || "",
+            soforId: row.soforId || p.id,
+        });
+        setCezaEditRow(row);
+        setCezaOpen(true);
+    };
+
+    const handleDeleteCeza = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Ceza Kaydını Sil",
+            message: "Bu ceza kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteCeza(rowId);
+        if (res.success) {
+            toast.success("Ceza kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
+    const openArizaEdit = (row: any) => {
+        setArizaData({
+            bildirimTarihi: toDateTimeLocalInput(row.bildirimTarihi),
+            aciklama: row.aciklama || "",
+            oncelik: row.oncelik,
+            km: (row.km || "").toString(),
+            aracId: row.aracId || "",
+            soforId: row.soforId || p.id,
+        });
+        setArizaEditRow(row);
+        setArizaOpen(true);
+    };
+
+    const handleDeleteAriza = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Arıza Kaydını Sil",
+            message: "Bu arıza kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteArizaKaydi(rowId);
+        if (res.success) {
+            toast.success("Arıza kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
+    const openBakimEdit = (row: any) => {
+        setBakimData({
+            bakimTarihi: toDateTimeLocalInput(row.bakimTarihi),
+            tip: row.tip,
+            servisAdi: row.servisAdi || "",
+            yapilanIslemler: row.yapilanIslemler || "",
+            tutar: row.tutar.toString(),
+            km: row.km.toString(),
+            aracId: row.aracId || "",
+            soforId: row.soforId || p.id,
+        });
+        setBakimEditRow(row);
+        setBakimOpen(true);
+    };
+
+    const handleDeleteBakim = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Bakım Kaydını Sil",
+            message: "Bu bakım kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteBakim(rowId);
+        if (res.success) {
+            toast.success("Bakım kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
+    const openMasrafEdit = (row: any) => {
+        setMasrafData({
+            tarih: toDateTimeLocalInput(row.tarih),
+            tur: row.tur,
+            tutar: row.tutar.toString(),
+            aciklama: row.aciklama || "",
+            aracId: row.aracId || "",
+        });
+        setMasrafEditRow(row);
+        setMasrafOpen(true);
+    };
+
+    const handleDeleteMasraf = async (rowId: string) => {
+        const confirmed = await openConfirm({
+            title: "Masraf Kaydını Sil",
+            message: "Bu masraf kaydını silmek istediğinizden emin misiniz?",
+            confirmText: "Sil",
+            variant: "danger",
+        });
+        if (!confirmed) return;
+        setActionLoading(true);
+        const res = await deleteMasraf(rowId);
+        if (res.success) {
+            toast.success("Masraf kaydı silindi");
+            router.refresh();
+        } else {
+            toast.error("Silme başarısız", { description: res.error });
+        }
+        setActionLoading(false);
+    };
+
     const handleAtamaAracChange = (aracId: string) => {
         const seciliArac = atamayaUygunAraclar.find((arac) => arac.id === aracId);
         setAtamaData((prev) => ({
@@ -187,7 +438,7 @@ export default function PersonelDetailClient({
     };
 
     const formatDate = (date: string | Date | null | undefined) => 
-        date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
+        date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
 
     const getRoleBadge = (rol: string) => {
         switch (rol) {
@@ -488,6 +739,7 @@ export default function PersonelDetailClient({
                                         <TableHead>Alış Tarihi</TableHead>
                                         <TableHead>Bitiş Tarihi</TableHead>
                                         <TableHead className="text-right">KM Bilgisi (Alış / Veriş)</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -512,6 +764,11 @@ export default function PersonelDetailClient({
                                                 <TableCell className="text-right font-mono text-xs">
                                                     {z.baslangicKm.toLocaleString()} km / {z.bitisKm ? `${z.bitisKm.toLocaleString()} km` : '-'}
                                                 </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteZimmet(z.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -535,6 +792,7 @@ export default function PersonelDetailClient({
                                         <TableHead>Araç Plaka</TableHead>
                                         <TableHead>Ceza Maddesi</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -554,6 +812,12 @@ export default function PersonelDetailClient({
                                                 </TableCell>
                                                 <TableCell className="text-slate-600">{c.cezaMaddesi || c.aciklama || '-'}</TableCell>
                                                 <TableCell className="text-right font-bold text-rose-600">₺{c.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="edit" onClick={() => openCezaEdit(c)} disabled={actionLoading} />
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteCeza(c.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -579,6 +843,7 @@ export default function PersonelDetailClient({
                                         <TableHead>Durum</TableHead>
                                         <TableHead>Açıklama</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -622,6 +887,12 @@ export default function PersonelDetailClient({
                                                 <TableCell className="text-right font-bold text-slate-900">
                                                     ₺{Number(a.tutar || 0).toLocaleString("tr-TR")}
                                                 </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="edit" onClick={() => openArizaEdit(a)} disabled={actionLoading} />
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteAriza(a.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -648,6 +919,7 @@ export default function PersonelDetailClient({
                                         <TableHead>Değişen Parça</TableHead>
                                         <TableHead>İşlem Yapan Firma</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -672,6 +944,12 @@ export default function PersonelDetailClient({
                                                 <TableCell className="text-right font-bold text-slate-900">
                                                     ₺{Number(b.tutar || 0).toLocaleString("tr-TR")}
                                                 </TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="edit" onClick={() => openBakimEdit(b)} disabled={actionLoading} />
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteBakim(b.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -693,10 +971,11 @@ export default function PersonelDetailClient({
                                     <TableRow>
                                         <TableHead>Tarih</TableHead>
                                         <TableHead>Araç Plaka</TableHead>
-                                        <TableHead>Litre</TableHead>
                                         <TableHead>İstasyon</TableHead>
-                                        <TableHead className="text-right">Tutar</TableHead>
                                         <TableHead className="text-right">Araç KM</TableHead>
+                                        <TableHead>Litre</TableHead>
+                                        <TableHead className="text-right">Tutar</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -714,10 +993,16 @@ export default function PersonelDetailClient({
                                                         ) : null}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{y.litre} L</TableCell>
                                                 <TableCell>{y.istasyon || '-'}</TableCell>
-                                                <TableCell className="text-right font-bold">₺{y.tutar.toLocaleString()}</TableCell>
                                                 <TableCell className="text-right font-mono text-xs">{y.km.toLocaleString()} km</TableCell>
+                                                <TableCell>{y.litre} L</TableCell>
+                                                <TableCell className="text-right font-bold">₺{y.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="edit" onClick={() => openYakitEdit(y)} disabled={actionLoading} />
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteYakit(y.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -741,6 +1026,7 @@ export default function PersonelDetailClient({
                                         <TableHead>Kategori</TableHead>
                                         <TableHead>Açıklama</TableHead>
                                         <TableHead className="text-right">Tutar</TableHead>
+                                        <TableHead className="text-right">İşlemler</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -751,6 +1037,12 @@ export default function PersonelDetailClient({
                                                 <TableCell><Badge variant="outline">{m.tur}</Badge></TableCell>
                                                 <TableCell className="text-slate-600">{m.aciklama || '-'}</TableCell>
                                                 <TableCell className="text-right font-bold">₺{m.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right">
+                                                    <div className="flex items-center justify-end gap-1">
+                                                        <RowActionButton variant="edit" onClick={() => openMasrafEdit(m)} disabled={actionLoading} />
+                                                        <RowActionButton variant="delete" onClick={() => handleDeleteMasraf(m.id)} disabled={actionLoading} />
+                                                    </div>
+                                                </TableCell>
                                             </TableRow>
                                         ))
                                     ) : (
@@ -765,6 +1057,365 @@ export default function PersonelDetailClient({
                         </Card>
                     </TabsContent>
                 </Tabs>
+
+                <Dialog open={yakitOpen} onOpenChange={setYakitOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Yakıt Kaydını Düzenle</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tarih</label>
+                                <Input
+                                    type="datetime-local"
+                                    className="col-span-3"
+                                    value={yakitData.tarih}
+                                    onChange={(e) => setYakitData({ ...yakitData, tarih: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Litre</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={yakitData.litre}
+                                    onChange={(e) => setYakitData({ ...yakitData, litre: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tutar (₺)</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={yakitData.tutar}
+                                    onChange={(e) => setYakitData({ ...yakitData, tutar: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Araç KM</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={yakitData.km}
+                                    onChange={(e) => setYakitData({ ...yakitData, km: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">İstasyon</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={yakitData.istasyon}
+                                    onChange={(e) => setYakitData({ ...yakitData, istasyon: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={async () => {
+                                    if (!yakitEditRow) return;
+                                    setActionLoading(true);
+                                    const res = await updateYakit(yakitEditRow.id, {
+                                        tarih: yakitData.tarih,
+                                        litre: Number(yakitData.litre),
+                                        tutar: Number(yakitData.tutar),
+                                        km: Number(yakitData.km),
+                                        istasyon: yakitData.istasyon,
+                                        odemeYontemi: yakitData.odemeYontemi,
+                                        soforId: yakitData.soforId,
+                                    });
+                                    if (res.success) {
+                                        toast.success("Yakıt kaydı güncellendi");
+                                        setYakitOpen(false);
+                                        router.refresh();
+                                    } else {
+                                        toast.error("Hata", { description: res.error });
+                                    }
+                                    setActionLoading(false);
+                                }}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            >
+                                {actionLoading ? "Kaydediliyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={arizaOpen} onOpenChange={setArizaOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Bildirim Tarihi</label>
+                                <Input
+                                    type="datetime-local"
+                                    className="col-span-3"
+                                    value={arizaData.bildirimTarihi}
+                                    onChange={(e) => setArizaData({ ...arizaData, bildirimTarihi: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Açıklama</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={arizaData.aciklama}
+                                    onChange={(e) => setArizaData({ ...arizaData, aciklama: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Öncelik</label>
+                                <select
+                                    className="col-span-3 flex h-10 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm ring-offset-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 focus-visible:ring-offset-2"
+                                    value={arizaData.oncelik}
+                                    onChange={(e) => setArizaData({ ...arizaData, oncelik: e.target.value as any })}
+                                >
+                                    <option value="DUSUK">Düşük</option>
+                                    <option value="ORTA">Orta</option>
+                                    <option value="YUKSEK">Yüksek</option>
+                                </select>
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={async () => {
+                                    if (!arizaEditRow) return;
+                                    setActionLoading(true);
+                                    const res = await updateArizaKaydi(arizaEditRow.id, {
+                                        bildirimTarihi: new Date(arizaData.bildirimTarihi),
+                                        aciklama: arizaData.aciklama,
+                                        oncelik: arizaData.oncelik,
+                                        km: Number(arizaData.km),
+                                        soforId: arizaData.soforId,
+                                    });
+                                    if (res.success) {
+                                        toast.success("Arıza kaydı güncellendi");
+                                        setArizaOpen(false);
+                                        router.refresh();
+                                    } else {
+                                        toast.error("Hata", { description: res.error });
+                                    }
+                                    setActionLoading(false);
+                                }}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            >
+                                {actionLoading ? "Kaydediliyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={cezaOpen} onOpenChange={setCezaOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Ceza Kaydını Düzenle</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tarih</label>
+                                <Input
+                                    type="datetime-local"
+                                    className="col-span-3"
+                                    value={cezaData.tarih}
+                                    onChange={(e) => setCezaData({ ...cezaData, tarih: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tutar (₺)</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={cezaData.tutar}
+                                    onChange={(e) => setCezaData({ ...cezaData, tutar: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Ceza Maddesi</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={cezaData.cezaMaddesi}
+                                    onChange={(e) => setCezaData({ ...cezaData, cezaMaddesi: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Açıklama</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={cezaData.aciklama}
+                                    onChange={(e) => setCezaData({ ...cezaData, aciklama: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={async () => {
+                                    if (!cezaEditRow) return;
+                                    setActionLoading(true);
+                                    const res = await updateCeza(cezaEditRow.id, {
+                                        tarih: new Date(cezaData.tarih),
+                                        tutar: Number(cezaData.tutar),
+                                        cezaMaddesi: cezaData.cezaMaddesi,
+                                        aciklama: cezaData.aciklama,
+                                        aracId: cezaData.aracId,
+                                        soforId: cezaData.soforId,
+                                    });
+                                    if (res.success) {
+                                        toast.success("Ceza kaydı güncellendi");
+                                        setCezaOpen(false);
+                                        router.refresh();
+                                    } else {
+                                        toast.error("Hata", { description: res.error });
+                                    }
+                                    setActionLoading(false);
+                                }}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            >
+                                {actionLoading ? "Kaydediliyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={bakimOpen} onOpenChange={setBakimOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Bakım Kaydını Düzenle</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tarih</label>
+                                <Input
+                                    type="datetime-local"
+                                    className="col-span-3"
+                                    value={bakimData.bakimTarihi}
+                                    onChange={(e) => setBakimData({ ...bakimData, bakimTarihi: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Servis Adı</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={bakimData.servisAdi}
+                                    onChange={(e) => setBakimData({ ...bakimData, servisAdi: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tutar (₺)</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={bakimData.tutar}
+                                    onChange={(e) => setBakimData({ ...bakimData, tutar: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Araç KM</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={bakimData.km}
+                                    onChange={(e) => setBakimData({ ...bakimData, km: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={async () => {
+                                    if (!bakimEditRow) return;
+                                    setActionLoading(true);
+                                    const res = await updateBakim(bakimEditRow.id, {
+                                        bakimTarihi: new Date(bakimData.bakimTarihi),
+                                        tur: bakimData.tip,
+                                        servisAdi: bakimData.servisAdi,
+                                        yapilanIslemler: bakimData.yapilanIslemler,
+                                        tutar: Number(bakimData.tutar),
+                                        yapilanKm: Number(bakimData.km),
+                                        aracId: bakimData.aracId,
+                                        soforId: bakimData.soforId,
+                                    });
+                                    if (res.success) {
+                                        toast.success("Bakım kaydı güncellendi");
+                                        setBakimOpen(false);
+                                        router.refresh();
+                                    } else {
+                                        toast.error("Hata", { description: res.error });
+                                    }
+                                    setActionLoading(false);
+                                }}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            >
+                                {actionLoading ? "Kaydediliyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                <Dialog open={masrafOpen} onOpenChange={setMasrafOpen}>
+                    <DialogContent>
+                        <DialogHeader>
+                            <DialogTitle>Masraf Kaydını Düzenle</DialogTitle>
+                        </DialogHeader>
+                        <div className="grid gap-4 py-4">
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tarih</label>
+                                <Input
+                                    type="datetime-local"
+                                    className="col-span-3"
+                                    value={masrafData.tarih}
+                                    onChange={(e) => setMasrafData({ ...masrafData, tarih: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Tutar (₺)</label>
+                                <Input
+                                    type="number"
+                                    className="col-span-3"
+                                    value={masrafData.tutar}
+                                    onChange={(e) => setMasrafData({ ...masrafData, tutar: e.target.value })}
+                                />
+                            </div>
+                            <div className="grid grid-cols-4 items-center gap-4">
+                                <label className="text-right text-sm">Açıklama</label>
+                                <Input
+                                    className="col-span-3"
+                                    value={masrafData.aciklama}
+                                    onChange={(e) => setMasrafData({ ...masrafData, aciklama: e.target.value })}
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <button
+                                onClick={async () => {
+                                    if (!masrafEditRow) return;
+                                    setActionLoading(true);
+                                    const res = await updateMasraf(masrafEditRow.id, {
+                                        tarih: new Date(masrafData.tarih),
+                                        tur: masrafData.tur,
+                                        tutar: Number(masrafData.tutar),
+                                        aciklama: masrafData.aciklama,
+                                        aracId: masrafData.aracId,
+                                    });
+                                    if (res.success) {
+                                        toast.success("Masraf kaydı güncellendi");
+                                        setMasrafOpen(false);
+                                        router.refresh();
+                                    } else {
+                                        toast.error("Hata", { description: res.error });
+                                    }
+                                    setActionLoading(false);
+                                }}
+                                disabled={actionLoading}
+                                className="inline-flex items-center justify-center rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-50"
+                            >
+                                {actionLoading ? "Kaydediliyor..." : "Güncelle"}
+                            </button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
 
                 <Dialog open={editOpen} onOpenChange={setEditOpen}>
                     <DialogContent >

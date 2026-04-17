@@ -1027,7 +1027,7 @@ export default function AracDetailClient({
         return <Badge className={`${badge.className} border-0 shadow-none`}>{badge.label}</Badge>;
     };
 
-    const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy HH:mm", { locale: tr }) : '-';
+    const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
 
     const resetFormForTab = (tab: string) => {
         if (tab === "soforGecmisi") {
@@ -2653,20 +2653,24 @@ export default function AracDetailClient({
                                                 <TableRow key={y.id}>
                                                     <TableCell className="text-slate-700">{formatDate(y.tarih)}</TableCell>
                                                     <TableCell className="text-slate-700">
-                                                        {y.sofor?.id ? (
-                                                            <div className="flex flex-col">
-                                                                <PersonelLink personelId={y.sofor.id} className="hover:text-indigo-600 hover:underline">
-                                                                    {`${y.sofor.ad || ""} ${y.sofor.soyad || ""}`.trim() || "-"}
-                                                                </PersonelLink>
-                                                                {canAccessAllCompanies && (y.sofor?.sirket?.ad || y.sofor?.calistigiKurum) ? (
-                                                                    <span className="text-[11px] font-semibold text-indigo-500 normal-case">
-                                                                        {y.sofor?.sirket?.ad || y.sofor?.calistigiKurum}
-                                                                    </span>
-                                                                ) : null}
-                                                            </div>
-                                                        ) : (
-                                                            <span className="text-slate-400 italic text-xs">Atanmamış</span>
-                                                        )}
+                                                        {(() => {
+                                                            const selectedSofor = y.sofor || y.kullanici || arac.kullanici || (arac.kullaniciGecmisi && arac.kullaniciGecmisi[0]?.kullanici) || null;
+                                                            if (selectedSofor?.id) {
+                                                                return (
+                                                                    <div className="flex flex-col">
+                                                                        <PersonelLink personelId={selectedSofor.id} className="hover:text-indigo-600 hover:underline">
+                                                                            {`${selectedSofor.ad || ""} ${selectedSofor.soyad || ""}`.trim() || "-"}
+                                                                        </PersonelLink>
+                                                                        {canAccessAllCompanies && (selectedSofor?.sirket?.ad || selectedSofor?.calistigiKurum) ? (
+                                                                            <span className="text-[11px] font-semibold text-indigo-500 normal-case">
+                                                                                {selectedSofor?.sirket?.ad || selectedSofor?.calistigiKurum}
+                                                                            </span>
+                                                                        ) : null}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                            return <span className="text-slate-400 italic text-xs">Atanmamış</span>;
+                                                        })()}
                                                     </TableCell>
                                                     <TableCell className="text-slate-900">{y.istasyon || '-'}</TableCell>
                                                     <TableCell className="text-slate-700">{y.km.toLocaleString()} km</TableCell>

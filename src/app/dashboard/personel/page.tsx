@@ -315,7 +315,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     }>) {
         const soforId =
             yakit.soforId ||
-            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
+            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih) ||
+            yakit.arac?.kullaniciId ||
+            null;
         const tutar = toNumber(yakit.tutar);
         upsertCost(soforId, { yakit: tutar, toplam: tutar });
     }
@@ -329,7 +331,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     }>) {
         const soforId =
             servis.soforId ||
-            findDriverAtDate(zimmetByAracId, servis.aracId, servis.bakimTarihi);
+            findDriverAtDate(zimmetByAracId, servis.aracId, servis.bakimTarihi) ||
+            servis.arac?.kullaniciId ||
+            null;
         const tutar = toNumber(servis.tutar);
         upsertCost(soforId, { ariza: tutar, toplam: tutar });
     }
@@ -355,7 +359,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             tutar: yakit.tutar,
             soforId:
                 yakit.soforId ||
-                findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih),
+                findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih) ||
+                yakit.arac?.kullaniciId ||
+                null,
         }))
     ).byDriverId;
     const driverAverageValues = [...fuelMetricsByDriverId.values()]

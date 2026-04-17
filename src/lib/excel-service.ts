@@ -1509,16 +1509,37 @@ export async function findExistingBusinessRecord(tx: unknown, modelName: string,
 
     if (modelName === "kullanici") {
         if (!parsedRow.ad || !parsedRow.soyad) return null;
+        
+        // Match by TC No first if available (most reliable)
+        if (parsedRow.tcNo) {
+            const byTcNo = await delegate.findMany({
+                where: { tcNo: String(parsedRow.tcNo).trim(), deletedAt: null },
+                select: { id: true },
+                take: 1
+            });
+            if (byTcNo.length > 0) return byTcNo[0].id;
+        }
+
         const candidates = await delegate.findMany({
             where: {
                 ad: { equals: String(parsedRow.ad).trim(), mode: "insensitive" },
                 soyad: { equals: String(parsedRow.soyad).trim(), mode: "insensitive" },
                 deletedAt: null
             },
-            select: { id: true },
-            take: 2
+            select: { id: true, tcNo: true },
+            take: 5
         });
-        return candidates.length === 1 ? candidates[0].id : null;
+
+        if (candidates.length === 1) return candidates[0].id;
+        
+        // If multiple name matches, try to disambiguate with TC No from Excel
+        if (candidates.length > 1 && parsedRow.tcNo) {
+            const targetTc = String(parsedRow.tcNo).trim();
+            const exactMatch = candidates.find(c => c.tcNo === targetTc);
+            if (exactMatch) return exactMatch.id;
+        }
+
+        return null;
     }
 
     if (modelName === "yakit") {

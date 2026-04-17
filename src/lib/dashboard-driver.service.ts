@@ -120,15 +120,13 @@ function buildDriverCosts(params: {
     yakitRows: DriverYakitRow[];
     arizaRows: DriverArizaRow[];
     adSoyadMap: Record<string, string>;
-    activeDriverIds: Set<string>;
     zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>>;
 }) {
-    const { cezaRows, yakitRows, arizaRows, adSoyadMap, activeDriverIds, zimmetByAracId } = params;
+    const { cezaRows, yakitRows, arizaRows, adSoyadMap, zimmetByAracId } = params;
     const map: Record<string, DriverAccumulator> = {};
 
     for (const ceza of cezaRows) {
         if (!ceza.soforId) continue;
-        if (!activeDriverIds.has(ceza.soforId)) continue;
         const row = getOrCreateDriverCost(map, ceza.soforId, adSoyadMap);
         row.ceza += toNumber(ceza.tutar);
         row.toplam += toNumber(ceza.tutar);
@@ -137,9 +135,10 @@ function buildDriverCosts(params: {
     for (const yakit of yakitRows) {
         const soforId =
             yakit.soforId ||
-            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih);
+            findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih) ||
+            yakit.arac?.kullaniciId;
+            
         if (!soforId) continue;
-        if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
         row.yakit += toNumber(yakit.tutar);
         row.yakitLitre += toNumber(yakit.litre);
@@ -150,9 +149,10 @@ function buildDriverCosts(params: {
         if (!ariza.aracId) continue;
         const soforId =
             ariza.soforId ||
-            findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi);
+            findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi) ||
+            ariza.arac?.kullaniciId;
+            
         if (!soforId) continue;
-        if (!activeDriverIds.has(soforId)) continue;
         const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
         row.ariza += toNumber(ariza.tutar);
         row.toplam += toNumber(ariza.tutar);
@@ -240,10 +240,33 @@ export async function getDashboardDriverData(params: {
     ]);
 
     const adSoyadMap: Record<string, string> = {};
-    const activeDriverIds = new Set<string>();
     for (const kullanici of kullanicilar) {
         adSoyadMap[kullanici.id] = `${kullanici.ad} ${kullanici.soyad}`.trim();
-        activeDriverIds.add(kullanici.id);
+    }
+
+    // Collect all referenced user IDs to fetch their names if missing from active users map
+    const allReferencedUserIds = new Set<string>();
+    const allRows = [
+        ...yakitRowsCurrent, ...arizaRowsCurrent, ...cezaRowsCurrent,
+        ...yakitRowsPrevious, ...arizaRowsPrevious, ...cezaRowsPrevious
+    ];
+    for (const row of allRows) {
+        if (row.soforId) allReferencedUserIds.add(row.soforId);
+        if ((row as any).arac?.kullaniciId) allReferencedUserIds.add((row as any).arac.kullaniciId);
+    }
+    for (const z of tumZimmetler) {
+        allReferencedUserIds.add(z.kullaniciId);
+    }
+
+    const missingUserIds = [...allReferencedUserIds].filter(id => !adSoyadMap[id]);
+    if (missingUserIds.length > 0) {
+        const missingUsers = await prisma.kullanici.findMany({
+            where: { id: { in: missingUserIds } },
+            select: { id: true, ad: true, soyad: true }
+        });
+        for (const u of missingUsers) {
+            adSoyadMap[u.id] = `${u.ad} ${u.soyad}`.trim();
+        }
     }
 
     const zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>> = {};
@@ -264,7 +287,6 @@ export async function getDashboardDriverData(params: {
         yakitRows: yakitRowsCurrent,
         arizaRows: arizaRowsCurrent,
         adSoyadMap,
-        activeDriverIds,
         zimmetByAracId,
     });
     const previousRows = buildDriverCosts({
@@ -272,7 +294,6 @@ export async function getDashboardDriverData(params: {
         yakitRows: yakitRowsPrevious,
         arizaRows: arizaRowsPrevious,
         adSoyadMap,
-        activeDriverIds,
         zimmetByAracId,
     });
 
