@@ -96,7 +96,7 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         accessorKey: "personelSayisi",
         header: "Kayıtlı Personel",
         cell: ({ row }) => (
-            <Link href={`/dashboard/personeller?disFirmaId=${encodeURIComponent(row.original.id)}`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href={`/dashboard/personel?disFirmaId=${encodeURIComponent(row.original.id)}`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
                 {row.original.personelSayisi} Kişi
             </Link>
         ),

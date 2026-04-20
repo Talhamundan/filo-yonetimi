@@ -34,6 +34,7 @@ import { PersonelLink } from "@/components/links/RecordLinks";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
@@ -100,6 +101,7 @@ export default function AracDetailClient({
     const { confirmModal, openConfirm } = useConfirm();
     const { canAssignIndependentRecords, canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
+    const scopedHref = useDashboardScopedHref();
     const [loading, setLoading] = React.useState(false);
     const [activeTab, setActiveTab] = React.useState("ozet");
     const [quickAddOpen, setQuickAddOpen] = React.useState(false);
@@ -294,6 +296,11 @@ export default function AracDetailClient({
         return raw;
     }, [arac.ortalamaYakit100Km]);
     const aracYakitAralikSayisi = Number(arac.ortalamaYakitIntervalSayisi || 0);
+    const ruhsatSahibiFirmaAdi = arac.sirket?.ad || "Bağımsız";
+    const kullaniciFirmaAdi = arac.kullanici?.sirket?.ad || arac.calistigiKurum || "-";
+    const disFirmaAdi = arac.disFirma?.ad
+        ? `${arac.disFirma.ad}${arac.disFirma.tur ? ` (${arac.disFirma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})` : ""}`
+        : "-";
     const editAracFormKullanicilar = React.useMemo(() => {
         if (!arac.kullanici?.id) {
             return sortedKullanicilar;
@@ -464,7 +471,7 @@ export default function AracDetailClient({
 
         if (res.success) {
             toast.success("Araç silindi.");
-            router.push("/dashboard/araclar");
+            router.push(scopedHref("/dashboard/araclar"));
             return;
         }
 
@@ -1573,7 +1580,7 @@ export default function AracDetailClient({
         {confirmModal}
             <main className="flex-1 p-6 md:p-8 xl:p-12 min-w-0 max-w-[1400px] mx-auto">
                 <button
-                    onClick={() => router.push('/dashboard/araclar')}
+                    onClick={() => router.push(scopedHref('/dashboard/araclar'))}
                     className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-medium text-sm mb-6 transition-colors"
                 >
                     <ArrowLeft size={16} />
@@ -1931,7 +1938,7 @@ export default function AracDetailClient({
                         {arac.kullanici ? (
                             <div 
                                 className="flex items-center gap-3 cursor-pointer group hover:bg-white/50 p-2 -m-2 rounded-lg transition-colors"
-                                onClick={() => router.push(`/dashboard/personel/${arac.kullanici.id}`)}
+                                onClick={() => router.push(scopedHref(`/dashboard/personel/${arac.kullanici.id}`))}
                             >
                                 <div className="h-10 w-10 rounded-full bg-gradient-to-tr from-indigo-500 to-indigo-600 text-white flex items-center justify-center font-bold text-sm shadow-sm ring-2 ring-white uppercase group-hover:scale-105 transition-transform">
                                     {arac.kullanici.ad.charAt(0)}
@@ -2499,6 +2506,18 @@ export default function AracDetailClient({
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Ruhsat Seri No</span>
                                                 <span className="text-sm font-semibold text-slate-900">{arac.ruhsatSeriNo || '-'}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center gap-4 px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Ruhsat Sahibi Firma</span>
+                                                <span className="max-w-[60%] break-words text-right text-sm font-semibold text-slate-900">{ruhsatSahibiFirmaAdi}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center gap-4 px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Kullanıcı Firma</span>
+                                                <span className="max-w-[60%] break-words text-right text-sm font-semibold text-indigo-600">{kullaniciFirmaAdi}</span>
+                                            </li>
+                                            <li className="flex justify-between items-center gap-4 px-6 py-4">
+                                                <span className="text-sm font-medium text-slate-500">Dış Firma</span>
+                                                <span className="max-w-[60%] break-words text-right text-sm font-semibold text-slate-900">{disFirmaAdi}</span>
                                             </li>
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Marka / Model</span>

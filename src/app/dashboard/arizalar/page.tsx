@@ -2,15 +2,16 @@ import { prisma } from "@/lib/prisma";
 import ArizalarClient from "./client";
 import { ArizaRow } from "./columns";
 import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { getActivePersonelId } from "@/lib/personel-display";
 
 export default async function ArizalarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
 
@@ -20,7 +21,7 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
         getPersonnelSelectFilter(),
     ]);
 
-    const yearWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "bildirimTarihi", selectedYil);
+    const yearWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "bildirimTarihi", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [yearWhere as Record<string, unknown>];
 

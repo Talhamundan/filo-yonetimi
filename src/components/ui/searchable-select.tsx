@@ -97,25 +97,25 @@ export function SearchableSelect({
     }, [open]);
 
     return (
-        <div ref={rootRef} className={cn("relative", className)}>
+        <div ref={rootRef} data-slot="searchable-select" className={cn("relative w-full min-w-0 max-w-full", className)}>
             <button
                 type="button"
                 disabled={disabled}
                 onClick={() => setOpen((prev) => !prev)}
                 className={cn(
-                    "h-9 flex w-full items-center justify-between rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
+                    "h-9 flex w-full min-w-0 max-w-full items-center justify-between rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400",
                     triggerClassName
                 )}
             >
-                <span className={cn("truncate text-left", !selectedOption && "text-slate-400")}>
+                <span className={cn("min-w-0 flex-1 truncate text-left", !selectedOption && "text-slate-400")}>
                     {selectedOption ? selectedOption.label : placeholder}
                 </span>
-                <ChevronsUpDown className="h-4 w-4 text-slate-400" />
+                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 text-slate-400" />
             </button>
             {open && !disabled ? (
                 <div
                     className={cn(
-                        "absolute z-50 mt-1 w-full rounded-md border border-slate-200 bg-white shadow-lg",
+                        "absolute z-50 mt-1 w-full min-w-0 max-w-full rounded-md border border-slate-200 bg-white shadow-lg",
                         contentClassName
                     )}
                 >
@@ -140,13 +140,13 @@ export function SearchableSelect({
                                         setOpen(false);
                                     }}
                                     className={cn(
-                                        "flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors",
+                                        "flex w-full min-w-0 items-center justify-between rounded-md px-2 py-1.5 text-left text-sm transition-colors",
                                         option.value === value ? "bg-indigo-50 text-indigo-700" : "hover:bg-slate-100",
                                         option.disabled && "cursor-not-allowed opacity-50"
                                     )}
                                 >
-                                    <span className="truncate">{option.label}</span>
-                                    {option.value === value ? <Check className="h-4 w-4" /> : null}
+                                    <span className="min-w-0 flex-1 truncate">{option.label}</span>
+                                    {option.value === value ? <Check className="ml-2 h-4 w-4 shrink-0" /> : null}
                                 </button>
                             ))
                         ) : (

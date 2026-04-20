@@ -31,8 +31,7 @@ export async function createDokuman(data: {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const created = await prisma.dokuman.create({
@@ -87,8 +86,7 @@ export async function updateDokuman(id: string, data: {
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
 
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const updated = await prisma.dokuman.update({

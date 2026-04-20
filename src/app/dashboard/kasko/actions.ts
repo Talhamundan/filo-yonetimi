@@ -36,8 +36,7 @@ export async function createKasko(data: {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
         const runCreate = async (columns: Set<string>) => {
             const createData: any = {
@@ -126,8 +125,7 @@ export async function renewKasko(id: string, data: {
                 sirketId: true,
             });
             const usageSirketId = await resolveVehicleUsageCompanyId({
-                aracId: arac.id,
-                fallbackSirketId: arac.sirketId || (mevcutKayit as any).sirketId || null,
+                aracId: arac.id
             });
 
             const yenilemeTarihi = new Date(data.yenilemeTarihi);
@@ -204,8 +202,7 @@ export async function updateKasko(id: string, data: any) {
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId || (mevcutKayit as any).sirketId || null,
+            aracId: arac.id
         });
 
         const updateData: any = {

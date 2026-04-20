@@ -44,8 +44,7 @@ export async function createCeza(data: CezaPayload) {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         let soforId: string | null = null;
@@ -135,8 +134,7 @@ export async function updateCeza(id: string, data: Partial<CezaPayload>) {
         const arac = await getScopedAracOrThrow(targetAracId, { id: true, plaka: true, sirketId: true });
 
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         let soforId = ceza.soforId;

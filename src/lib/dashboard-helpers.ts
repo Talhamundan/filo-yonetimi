@@ -86,8 +86,8 @@ export function getCezaScopeWhere(scope: GenericWhere): GenericWhere {
             restScope,
             {
                 OR: [
-                    { sirketId },
-                    { AND: [{ sirketId: null }, { arac: { sirketId } }] },
+                    { arac: getVehicleUsageCompanyFilter(sirketId) },
+                    { AND: [{ aracId: null }, { sirketId }] },
                 ],
             },
         ],

@@ -2,7 +2,7 @@ import { prisma } from "../../../lib/prisma";
 import EvrakTakipClient from "./EvrakTakipClient";
 import { differenceInDays } from "date-fns";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { matchesTokenizedSearch } from "@/lib/search-query";
 
@@ -26,7 +26,7 @@ function getDurum(kalanGun: number) {
     return "GECERLI";
 }
 
-function isWithinSelectedYear(date: Date, yilBasi: Date, yilSonu: Date) {
+function isWithinSelectedPeriod(date: Date, yilBasi: Date, yilSonu: Date) {
     const time = new Date(date).getTime();
     return time >= yilBasi.getTime() && time <= yilSonu.getTime();
 }
@@ -43,12 +43,13 @@ function buildLatestMap<T extends EvrakKaydi>(records: T[]) {
 }
 
 export default async function EvrakTakipPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
-    const { start: yilBasi, end: yilSonu } = getYilDateRange(selectedYil);
+    const { start: yilBasi, end: yilSonu } = getAyDateRange(selectedYil, selectedAy);
     const [aracFilter, muayeneFilter, kaskoFilter, trafikFilter] = await Promise.all([
         getModelFilter("arac", selectedSirketId),
         getModelFilter("muayene", selectedSirketId),
@@ -179,7 +180,7 @@ export default async function EvrakTakipPage(props: { searchParams?: Promise<Das
 
     for (const arac of araclar as any[]) {
         const muayene = latestMuayene.get(arac.id);
-        if (muayene && isWithinSelectedYear(muayene.gecerlilikTarihi, yilBasi, yilSonu)) {
+        if (muayene && isWithinSelectedPeriod(muayene.gecerlilikTarihi, yilBasi, yilSonu)) {
             const kalanGun = differenceInDays(muayene.gecerlilikTarihi, bugun);
             evrakListesi.push({
                 id: `m-${muayene.id}`,
@@ -195,7 +196,7 @@ export default async function EvrakTakipPage(props: { searchParams?: Promise<Das
         }
 
         const kasko = latestKasko.get(arac.id);
-        if (kasko && isWithinSelectedYear(kasko.gecerlilikTarihi, yilBasi, yilSonu)) {
+        if (kasko && isWithinSelectedPeriod(kasko.gecerlilikTarihi, yilBasi, yilSonu)) {
             const kalanGun = differenceInDays(kasko.gecerlilikTarihi, bugun);
             evrakListesi.push({
                 id: `k-${kasko.id}`,
@@ -211,7 +212,7 @@ export default async function EvrakTakipPage(props: { searchParams?: Promise<Das
         }
 
         const trafik = latestTrafik.get(arac.id);
-        if (trafik && isWithinSelectedYear(trafik.gecerlilikTarihi, yilBasi, yilSonu)) {
+        if (trafik && isWithinSelectedPeriod(trafik.gecerlilikTarihi, yilBasi, yilSonu)) {
             const kalanGun = differenceInDays(trafik.gecerlilikTarihi, bugun);
             evrakListesi.push({
                 id: `ts-${trafik.id}`,

@@ -10,6 +10,7 @@ import ReportExportToolbar from "@/components/ui/report-export-toolbar";
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { DEADLINE_STATUS_CLASS, getDeadlineLabel, type DeadlineStatus } from "@/lib/deadline-status";
+import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 
 type EvrakRow = {
     id: string;
@@ -110,6 +111,7 @@ function getColumns(showCompanyInfo: boolean): ColumnDef<EvrakRow>[] {
 
 export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar: EvrakRow[] }) {
     const router = useRouter();
+    const scopedHref = useDashboardScopedHref();
     const { canAccessAllCompanies } = useDashboardScope();
     const columns = useMemo(() => getColumns(canAccessAllCompanies), [canAccessAllCompanies]);
 
@@ -128,7 +130,7 @@ export default function EvrakTakipClient({ initialEvraklar }: { initialEvraklar:
                 toolbarRight={(
                     <ReportExportToolbar report="document-expirations" className="w-full sm:w-auto" />
                 )}
-                onRowClick={(row) => router.push(`/dashboard/araclar/${row.aracId}`)}
+                onRowClick={(row) => router.push(scopedHref(`/dashboard/araclar/${row.aracId}`))}
             />
         </div>
     );

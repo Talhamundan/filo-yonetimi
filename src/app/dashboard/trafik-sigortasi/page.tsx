@@ -2,17 +2,18 @@ import { prisma } from "../../../lib/prisma";
 import SigortaClient from "./client";
 import { SigortaRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 export default async function TrafikSigortasiPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
-    const { start: yilBasi, end: yilSonu } = getYilDateRange(selectedYil);
+    const { start: yilBasi, end: yilSonu } = getAyDateRange(selectedYil, selectedAy);
     const filter = await getModelFilter('trafikSigortasi', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);

@@ -33,8 +33,7 @@ export async function createMasraf(data: {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const created = await prisma.masraf.create({
@@ -86,8 +85,7 @@ export async function updateMasraf(id: string, data: any) {
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId || mevcutKayit.sirketId,
+            aracId: arac.id
         });
 
         const updated = await prisma.masraf.update({

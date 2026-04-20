@@ -20,6 +20,7 @@ import { updatePersonel, deletePersonel } from "../actions";
 import { useState } from "react";
 import { toast } from "sonner";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
+import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import { createZimmet, finalizeZimmet, deleteZimmet } from "../../zimmetler/actions";
 import { addBakim, updateBakim, deleteBakim } from "../../bakimlar/actions";
 import { createYakit, updateYakit, deleteYakit } from "../../yakitlar/actions";
@@ -45,6 +46,7 @@ export default function PersonelDetailClient({
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
+    const scopedHref = useDashboardScopedHref();
     const [editOpen, setEditOpen] = useState(false);
     const [formData, setFormData] = useState<PersonelFormData>({
         ad: p.ad,
@@ -170,7 +172,7 @@ export default function PersonelDetailClient({
         const res = await deletePersonel(p.id);
         if (res.success) {
             toast.success("Personel silindi");
-            router.push('/dashboard/personel');
+            router.push(scopedHref('/dashboard/personel'));
         } else {
             toast.error(res.error || "Silme işlemi başarısız");
         }
@@ -455,7 +457,7 @@ export default function PersonelDetailClient({
         {confirmModal}
             <main className="flex-1 p-6 md:p-8 xl:p-12 min-w-0 max-w-[1400px] mx-auto">
                 <button
-                    onClick={() => router.push('/dashboard/personel')}
+                    onClick={() => router.push(scopedHref('/dashboard/personel'))}
                     className="flex items-center gap-2 text-slate-500 hover:text-slate-900 font-medium text-sm mb-6 transition-colors"
                 >
                     <ArrowLeft size={16} />
@@ -638,7 +640,7 @@ export default function PersonelDetailClient({
                         {p.arac ? (
                             <div 
                                 className="flex items-center gap-3 cursor-pointer group"
-                                onClick={() => router.push(`/dashboard/araclar/${p.arac.id}`)}
+                                onClick={() => router.push(scopedHref(`/dashboard/araclar/${p.arac.id}`))}
                             >
                                 <div className="h-10 w-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-xs ring-2 ring-white shadow-sm">
                                     <Car size={18} />
@@ -748,7 +750,7 @@ export default function PersonelDetailClient({
                                             <TableRow key={z.id}>
                                                 <TableCell 
                                                     className="font-bold text-indigo-600 cursor-pointer uppercase"
-                                                    onClick={() => router.push(`/dashboard/araclar/${z.arac.id}`)}
+                                                    onClick={() => router.push(scopedHref(`/dashboard/araclar/${z.arac.id}`))}
                                                 >
                                                     <div className="flex flex-col">
                                                         <AracLink aracId={z.arac.id} className="hover:underline">

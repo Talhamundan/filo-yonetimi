@@ -10,13 +10,12 @@ const MACHINE_CATEGORY = "SANTIYE";
 export default async function PersonelDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
     const selectedSirketId = await getSelectedSirketId(props.searchParams);
-    const [personelFilter, sirketListFilter, aracFilter, arizaFilter, yakitFilter, bakimFilter] = await Promise.all([
+    const [personelFilter, sirketListFilter, aracFilter, arizaFilter, yakitFilter] = await Promise.all([
         getModelFilter("kullanici", selectedSirketId),
         getSirketListFilter(),
         getModelFilter("arac", selectedSirketId),
         getModelFilter("arizaKaydi", selectedSirketId),
         getModelFilter("yakit", selectedSirketId),
-        getModelFilter("bakim", selectedSirketId),
     ]);
 
     const whereClause = {
@@ -104,7 +103,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
         });
     };
 
-    const [rawArizalar, rawYakitKayitlari, rawBakimKayitlari] = await Promise.all([
+    const [rawArizalar, rawYakitKayitlari] = await Promise.all([
         (prisma as any).arizaKaydi
             .findMany({
                 where: {
@@ -157,32 +156,6 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                 console.warn("Personel yakıt kayıtları alınamadı.", error);
                 return [];
             }),
-        (prisma as any).bakim
-            .findMany({
-                where: {
-                    AND: [
-                        personelZimmetAracIdleri.length > 0
-                            ? {
-                                  OR: [{ soforId: personel.id }, { aracId: { in: personelZimmetAracIdleri } }],
-                              }
-                            : { soforId: personel.id },
-                        bakimFilter as any,
-                    ],
-                },
-                include: {
-                    arac: {
-                        include: {
-                            sirket: true,
-                        },
-                    },
-                },
-                orderBy: { bakimTarihi: "desc" },
-                take: 100,
-            })
-            .catch((error: any) => {
-                console.warn("Personel servis kayıtları alınamadı.", error);
-                return [];
-            }),
     ]);
     const arizalar = (rawArizalar as any[]).filter((kayit) => {
         if (kayit?.soforId === personel.id) return true;
@@ -200,14 +173,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             (typeof kayit?.arac?.kullaniciId === "string" && kayit.arac.kullaniciId === personel.id)
         );
     });
-    const bakimKayitlari = (rawBakimKayitlari as any[]).filter((kayit) => {
-        if (kayit?.soforId === personel.id) return true;
-        if (kayit?.soforId) return false;
-        return (
-            matchesPersonelZimmetAtDate(kayit?.aracId, kayit?.bakimTarihi) ||
-            (typeof kayit?.arac?.kullaniciId === "string" && kayit.arac.kullaniciId === personel.id)
-        );
-    });
+    const bakimKayitlari: any[] = [];
 
     const personelYakitAracIdleri = Array.from(
         new Set(

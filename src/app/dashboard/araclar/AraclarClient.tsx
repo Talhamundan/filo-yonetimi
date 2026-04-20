@@ -16,6 +16,7 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
+import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const toDateTimeLocalInput = (value?: Date | string | null) => {
@@ -268,6 +269,7 @@ export default function AraclarClient({
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies, canAssignIndependentRecords } = useDashboardScope();
     const searchParams = useSearchParams();
+    const scopedHref = useDashboardScopedHref();
     const scopedSirketId = searchParams.get("sirket")?.trim() || "";
     const defaultCreateSirketId = React.useMemo(() => {
         if (scopedSirketId && sirketler.some((s) => s.id === scopedSirketId)) {
@@ -338,20 +340,36 @@ export default function AraclarClient({
     };
 
     const handleUpdate = async () => {
-        if (!editRow || !formData.plaka) return;
-        setLoading(true);
-        const res = await updateArac(editRow.id, formData);
-        if (res.success) {
-            setEditRow(null);
-            toast.success("Güncelleme Başarılı", { description: "Araç bilgileri başarıyla güncellendi." });
-            if (res.info) {
-                toast.info(res.info);
-            }
-            router.refresh();
-        } else {
-            toast.error("Güncelleme Hatası", { description: res.error });
+        if (!editRow) {
+            toast.warning("Güncelleme başlatılamadı", { description: "Düzenlenecek araç bilgisi bulunamadı." });
+            return;
         }
-        setLoading(false);
+        if (!formData.plaka || !formData.marka) {
+            toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
+            return;
+        }
+        if (loading) return;
+
+        setLoading(true);
+        try {
+            const res = await updateArac(editRow.id, formData);
+            if (res?.success) {
+                setEditRow(null);
+                toast.success("Güncelleme Başarılı", { description: "Araç bilgileri başarıyla güncellendi." });
+                if (res.info) {
+                    toast.info(res.info);
+                }
+                router.refresh();
+            } else {
+                toast.error("Güncelleme Hatası", { description: res?.error || "Araç güncellenemedi." });
+            }
+        } catch (error) {
+            toast.error("Güncelleme Hatası", {
+                description: error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
+            });
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleDelete = async (arac: AracRow) => {
@@ -366,7 +384,7 @@ export default function AraclarClient({
                 variant: "warning",
             });
             if (goDetail) {
-                router.push(`/dashboard/araclar/${id}`);
+                router.push(scopedHref(`/dashboard/araclar/${id}`));
             }
             return;
         }
@@ -477,10 +495,11 @@ export default function AraclarClient({
                                 allowIndependentOption={canAssignIndependentRecords}
                             />
                             <DialogFooter>
-                                <button 
-                                    onClick={handleCreate}
-                                    disabled={loading}
-                                    className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
+                        <button
+                            type="button"
+                            onClick={handleCreate}
+                            disabled={loading}
+                            className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
                                 >
                                     {loading ? 'Kaydediliyor...' : 'Kaydet'}
                                 </button>
@@ -514,7 +533,8 @@ export default function AraclarClient({
                         allowIndependentOption={canAssignIndependentRecords}
                     />
                     <DialogFooter>
-                        <button 
+                        <button
+                            type="button"
                             onClick={handleUpdate}
                             disabled={loading}
                             className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
@@ -545,7 +565,7 @@ export default function AraclarClient({
                 }}
                 toolbarArrangement="report-right-scroll"
                 tableClassName="min-w-[1960px]"
-                onRowClick={(row) => router.push(`/dashboard/araclar/${row.id}`)}
+                onRowClick={(row) => router.push(scopedHref(`/dashboard/araclar/${row.id}`))}
                 excelEntity="arac"
             />
         </div>

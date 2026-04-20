@@ -1440,6 +1440,58 @@ export function normalizeLookupString(value: unknown) {
     return String(normalized).trim();
 }
 
+async function findSirketIdByNameForImport(tx: unknown, value: unknown) {
+    const name = normalizeLookupString(value);
+    if (!name) return null;
+
+    const sirket = await (getModelDelegate(tx, "sirket") as any)?.findMany?.({
+        where: { ad: { equals: name, mode: "insensitive" } },
+        select: { id: true },
+        take: 1,
+        orderBy: { id: "asc" },
+    });
+
+    const id = Array.isArray(sirket) ? normalizeLookupString(sirket[0]?.id) : null;
+    return id || null;
+}
+
+async function resolveYakitUsageSirketIdForImport(tx: unknown, aracIdValue: unknown) {
+    const aracId = normalizeLookupString(aracIdValue);
+    if (!aracId) return null;
+
+    const aracRows = await (getModelDelegate(tx, "arac") as any)?.findMany?.({
+        where: { id: aracId },
+        select: { id: true, calistigiKurum: true, kullaniciId: true },
+        take: 1,
+    });
+    const arac = Array.isArray(aracRows) ? aracRows[0] : null;
+    if (!arac) return null;
+
+    const aracKurumSirketId = await findSirketIdByNameForImport(tx, arac.calistigiKurum);
+    if (aracKurumSirketId) return aracKurumSirketId;
+
+    const zimmetRows = await (getModelDelegate(tx, "kullaniciZimmet") as any)?.findMany?.({
+        where: { aracId, bitis: null },
+        orderBy: { baslangic: "desc" },
+        select: { kullaniciId: true },
+        take: 1,
+    });
+    const aktifKullaniciId = normalizeLookupString(Array.isArray(zimmetRows) ? zimmetRows[0]?.kullaniciId : null) ||
+        normalizeLookupString(arac.kullaniciId);
+    if (!aktifKullaniciId) return null;
+
+    const kullaniciRows = await (getModelDelegate(tx, "kullanici") as any)?.findMany?.({
+        where: { id: aktifKullaniciId, deletedAt: null },
+        select: { sirketId: true, calistigiKurum: true },
+        take: 1,
+    });
+    const kullanici = Array.isArray(kullaniciRows) ? kullaniciRows[0] : null;
+    const kullaniciSirketId = normalizeLookupString(kullanici?.sirketId);
+    if (kullaniciSirketId) return kullaniciSirketId;
+
+    return findSirketIdByNameForImport(tx, kullanici?.calistigiKurum);
+}
+
 export function normalizeAracPlaka(value: unknown) {
     const normalized = normalizeCell(value);
     if (normalized === null) return null;
@@ -2142,6 +2194,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             if (config.prismaModel === "yakit") {
                 parsedRow.tutar = parsedRow.tutar || 0;
                 if (!parsedRow.aracId) { skipped++; continue; }
+                parsedRow.sirketId = await resolveYakitUsageSirketIdForImport(tx, parsedRow.aracId);
                 if (parsedRow.km === undefined || parsedRow.km === null) {
                     let km = kmCache.get(parsedRow.aracId as string);
                     if (km === undefined) {

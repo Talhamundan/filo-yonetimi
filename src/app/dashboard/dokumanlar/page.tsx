@@ -2,21 +2,22 @@ import prisma from "../../../lib/prisma";
 import DokumanlarClient from "./client";
 import { DokumanRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 export default async function DokumanlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
     const [filter, aracFilter] = await Promise.all([
         getModelFilter("dokuman", selectedSirketId),
         getModelFilter("arac", selectedSirketId),
     ]);
-    const dokumanWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "yuklemeTarihi", selectedYil);
+    const dokumanWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "yuklemeTarihi", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [dokumanWhere as Record<string, unknown>];
 

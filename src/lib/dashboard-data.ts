@@ -1,5 +1,5 @@
 import type { DashboardComparisonGranularity, DashboardData, GenericWhere } from "@/lib/dashboard-types";
-import { buildDateContext, getCezaScopeWhere, getDegisimYuzdesi } from "@/lib/dashboard-helpers";
+import { buildDateContext, getCezaScopeWhere, getDegisimYuzdesi, getVehicleUsageScopeWhere } from "@/lib/dashboard-helpers";
 import { getDashboardCostData, getDashboardFuelConsumptionData } from "@/lib/dashboard-cost.service";
 import { getDashboardCalendarData } from "@/lib/dashboard-calendar.service";
 import { getDashboardVehicleData, getFleetStatusData } from "@/lib/dashboard-vehicle.service";
@@ -84,7 +84,7 @@ async function getDashboardDataUnsafe(
     comparisonGranularity: DashboardComparisonGranularity = "AY"
 ): Promise<DashboardData> {
     const scope = sirketFilter || {};
-    const vehicleScope = vehicleScopeFilter || scope;
+    const vehicleScope = vehicleScopeFilter || getVehicleUsageScopeWhere(scope);
     const cezaScope = getCezaScopeWhere(scope);
     const dateContext = buildDateContext(selectedYil, selectedAy, comparisonGranularity);
 

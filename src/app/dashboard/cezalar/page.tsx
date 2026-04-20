@@ -1,15 +1,17 @@
 import { redirect } from "next/navigation";
-import { getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 
 export default async function CezalarPageAlias(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, resolvedSearchParams] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, resolvedSearchParams] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         props.searchParams ? props.searchParams : Promise.resolve({} as DashboardSearchParams),
     ]);
     const params = new URLSearchParams();
     if (selectedSirketId) params.set("sirket", selectedSirketId);
     if (selectedYil) params.set("yil", String(selectedYil));
+    params.set("ay", selectedAy == null ? "all" : String(selectedAy));
     const passthroughKeys = ["q", "status", "type", "from", "to"] as const;
     for (const key of passthroughKeys) {
         const value = resolvedSearchParams[key];

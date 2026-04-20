@@ -120,3 +120,20 @@ export function withYilDateFilter<T extends Record<string, unknown>>(
         ],
     };
 }
+
+export function withAyDateFilter<T extends Record<string, unknown>>(
+    where: T,
+    dateField: string,
+    yil: number,
+    ay: number | null
+) {
+    const { start, end } = getAyDateRange(yil, ay);
+    return {
+        AND: [
+            where,
+            {
+                [dateField]: { gte: start, lte: end },
+            },
+        ],
+    };
+}

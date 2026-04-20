@@ -25,7 +25,6 @@ export type PersonelRow = {
     maliyetKalemleri?: {
         ceza: number;
         yakit: number;
-        ariza: number;
     };
     toplamMaliyet?: number;
     ortalamaYakit100Km?: number | null;
@@ -113,11 +112,10 @@ const maliyetColumn: ColumnDef<PersonelRow> = {
     header: "Maliyet Özeti",
     cell: ({ row }) => {
         const toplam = row.original.toplamMaliyet || 0;
-        const kalemler = row.original.maliyetKalemleri || { ceza: 0, yakit: 0, ariza: 0 };
+        const kalemler = row.original.maliyetKalemleri || { ceza: 0, yakit: 0 };
         const nonZero = [
             { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
             { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-            { key: "Servis", value: kalemler.ariza, className: "bg-amber-50 text-amber-700 border-amber-200" },
         ].filter((item) => item.value > 0);
 
         return (

@@ -15,6 +15,7 @@ import type { Rol } from "@prisma/client";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
+import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 
 const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'PERSONEL', sirketId: '', disFirmaId: '', calistigiKurum: '', tcNo: '' };
 
@@ -33,6 +34,7 @@ export default function PersonelClient({
     const { isAdmin, canAssignIndependentRecords } = useDashboardScope();
     const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
     const router = useRouter();
+    const scopedHref = useDashboardScopedHref();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<PersonelRow | null>(null);
     const [formData, setFormData] = useState<PersonelFormData>({ ...EMPTY, sirketId: defaultCreateSirketId });
@@ -202,7 +204,7 @@ export default function PersonelClient({
                     statusOptions: ROLLER.map((rol) => ({ value: rol, label: getRoleLabel(rol) })),
                 }}
                 tableClassName="min-w-[1280px]"
-                onRowClick={(row) => router.push(`/dashboard/personel/${row.id}`)}
+                onRowClick={(row) => router.push(scopedHref(`/dashboard/personel/${row.id}`))}
                 excelEntity="personel"
             />
         </div>

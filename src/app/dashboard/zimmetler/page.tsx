@@ -2,7 +2,7 @@ import { prisma } from "../../../lib/prisma";
 import ZimmetlerClient from "./client";
 import { SoforZimmetRow } from "./columns";
 import { getCurrentUserRole, getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
@@ -42,16 +42,17 @@ function findZimmetIdForEvent(
 }
 
 export default async function ZimmetlerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters, role] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters, role] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
         getCurrentUserRole(),
     ]);
     const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
     const personelFilter = await getPersonnelSelectFilter();
-    const zimmetWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "baslangic", selectedYil);
+    const zimmetWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "baslangic", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [zimmetWhere as Record<string, unknown>];
 

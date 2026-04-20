@@ -1,20 +1,21 @@
 import { prisma } from "../../../lib/prisma";
 import FinansClient from "./FinansClient";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 
 export default async function FinansPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
     ]);
     const yakitFilter = await getModelFilter('yakit', selectedSirketId);
     const masrafFilter = await getModelFilter('masraf', selectedSirketId);
     const muayeneFilter = await getModelFilter('muayene', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
-    const yakitWhere = withYilDateFilter((yakitFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
-    const masrafWhere = withYilDateFilter((masrafFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
-    const muayeneWhere = withYilDateFilter((muayeneFilter || {}) as Record<string, unknown>, "muayeneTarihi", selectedYil);
+    const yakitWhere = withAyDateFilter((yakitFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
+    const masrafWhere = withAyDateFilter((masrafFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
+    const muayeneWhere = withAyDateFilter((muayeneFilter || {}) as Record<string, unknown>, "muayeneTarihi", selectedYil, selectedAy);
 
     const [yakitlar, masraflar, muayenelerResult] = await Promise.all([
         (prisma as any).yakit.findMany({

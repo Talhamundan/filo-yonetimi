@@ -22,14 +22,6 @@ type DriverYakitRow = {
     arac?: { kullaniciId: string | null } | null;
 };
 
-type DriverArizaRow = {
-    aracId: string | null;
-    bakimTarihi: Date;
-    tutar: number;
-    soforId: string | null;
-    arac?: { kullaniciId: string | null } | null;
-};
-
 type DriverCezaRow = {
     soforId: string | null;
     tutar: number;
@@ -118,11 +110,10 @@ function getOrCreateDriverCost(
 function buildDriverCosts(params: {
     cezaRows: DriverCezaRow[];
     yakitRows: DriverYakitRow[];
-    arizaRows: DriverArizaRow[];
     adSoyadMap: Record<string, string>;
     zimmetByAracId: Record<string, Array<{ kullaniciId: string; baslangic: number; bitis: number | null }>>;
 }) {
-    const { cezaRows, yakitRows, arizaRows, adSoyadMap, zimmetByAracId } = params;
+    const { cezaRows, yakitRows, adSoyadMap, zimmetByAracId } = params;
     const map: Record<string, DriverAccumulator> = {};
 
     for (const ceza of cezaRows) {
@@ -143,19 +134,6 @@ function buildDriverCosts(params: {
         row.yakit += toNumber(yakit.tutar);
         row.yakitLitre += toNumber(yakit.litre);
         row.toplam += toNumber(yakit.tutar);
-    }
-
-    for (const ariza of arizaRows) {
-        if (!ariza.aracId) continue;
-        const soforId =
-            ariza.soforId ||
-            findDriverAtDate(zimmetByAracId, ariza.aracId, ariza.bakimTarihi) ||
-            ariza.arac?.kullaniciId;
-            
-        if (!soforId) continue;
-        const row = getOrCreateDriverCost(map, soforId, adSoyadMap);
-        row.ariza += toNumber(ariza.tutar);
-        row.toplam += toNumber(ariza.tutar);
     }
 
     return Object.values(map)
@@ -181,10 +159,8 @@ export async function getDashboardDriverData(params: {
         kullanicilar,
         tumZimmetler,
         yakitRowsCurrent,
-        arizaRowsCurrent,
         cezaRowsCurrent,
         yakitRowsPrevious,
-        arizaRowsPrevious,
         cezaRowsPrevious,
     ] = await Promise.all([
         prisma.kullanici.findMany({
@@ -201,14 +177,6 @@ export async function getDashboardDriverData(params: {
             where: { ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: seciliAyBasi, lte: seciliAySonu } },
             select: { aracId: true, tarih: true, tutar: true, litre: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
-        prisma.bakim.findMany({
-            where: {
-                ...(expenseScope as Prisma.BakimWhereInput),
-                bakimTarihi: { gte: seciliAyBasi, lte: seciliAySonu },
-                deletedAt: null,
-            },
-            select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
-        }),
         prisma.ceza.findMany({
             where: {
                 ...(expenseScope as Prisma.CezaWhereInput),
@@ -220,14 +188,6 @@ export async function getDashboardDriverData(params: {
         prisma.yakit.findMany({
             where: { ...(expenseScope as Prisma.YakitWhereInput), tarih: { gte: oncekiDonemBasi, lte: oncekiDonemSonu } },
             select: { aracId: true, tarih: true, tutar: true, litre: true, soforId: true, arac: { select: { kullaniciId: true } } },
-        }),
-        prisma.bakim.findMany({
-            where: {
-                ...(expenseScope as Prisma.BakimWhereInput),
-                bakimTarihi: { gte: oncekiDonemBasi, lte: oncekiDonemSonu },
-                deletedAt: null,
-            },
-            select: { aracId: true, bakimTarihi: true, tutar: true, soforId: true, arac: { select: { kullaniciId: true } } },
         }),
         prisma.ceza.findMany({
             where: {
@@ -247,8 +207,8 @@ export async function getDashboardDriverData(params: {
     // Collect all referenced user IDs to fetch their names if missing from active users map
     const allReferencedUserIds = new Set<string>();
     const allRows = [
-        ...yakitRowsCurrent, ...arizaRowsCurrent, ...cezaRowsCurrent,
-        ...yakitRowsPrevious, ...arizaRowsPrevious, ...cezaRowsPrevious
+        ...yakitRowsCurrent, ...cezaRowsCurrent,
+        ...yakitRowsPrevious, ...cezaRowsPrevious
     ];
     for (const row of allRows) {
         if (row.soforId) allReferencedUserIds.add(row.soforId);
@@ -285,14 +245,12 @@ export async function getDashboardDriverData(params: {
     const currentRows = buildDriverCosts({
         cezaRows: cezaRowsCurrent,
         yakitRows: yakitRowsCurrent,
-        arizaRows: arizaRowsCurrent,
         adSoyadMap,
         zimmetByAracId,
     });
     const previousRows = buildDriverCosts({
         cezaRows: cezaRowsPrevious,
         yakitRows: yakitRowsPrevious,
-        arizaRows: arizaRowsPrevious,
         adSoyadMap,
         zimmetByAracId,
     });

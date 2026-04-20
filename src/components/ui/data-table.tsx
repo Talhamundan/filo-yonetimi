@@ -589,8 +589,10 @@ export function DataTable<TData, TValue>({
             const params = new URLSearchParams()
             const selectedSirket = searchParams.get("sirket")
             const selectedYil = searchParams.get("yil")
+            const selectedAy = searchParams.get("ay")
             if (selectedSirket) params.set("sirket", selectedSirket)
             if (selectedYil) params.set("yil", selectedYil)
+            if (selectedAy) params.set("ay", selectedAy)
 
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
             const response = await fetch(endpoint, { method: "GET" })

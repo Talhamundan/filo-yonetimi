@@ -177,12 +177,9 @@ export async function addBakim(data: {
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
         const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
         const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
-        const fallbackSoforId = arac
-            ? await getAracActiveSoforId(arac.id, arac.kullaniciId || null)
-            : null;
-        const resolvedSoforId = await resolveBakimSoforId(data.soforId, fallbackSoforId);
+        const resolvedSoforId = null;
         const resolvedSirketId = arac
-            ? await resolveVehicleUsageCompanyId({ aracId: arac.id, fallbackSirketId: arac.sirketId })
+            ? await resolveVehicleUsageCompanyId({ aracId: arac.id })
             : (await resolveActionSirketId());
         const summaryPlaka = plaka || "araçsız kayıt";
 
@@ -191,7 +188,7 @@ export async function addBakim(data: {
                 aracId: arac?.id || null,
                 plaka,
                 sirketId: resolvedSirketId,
-                ...(BAKIM_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
+                ...(BAKIM_HAS_SOFOR_ID ? { soforId: null } : {}),
                 bakimTarihi: data.bakimTarihi,
                 yapilanKm: Number(yapilanKm),
                 kategori: effectiveKategori,
@@ -308,17 +305,10 @@ export async function updateBakim(id: string, data: {
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
         const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
         const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
-        const vehicleChanged = oldAracId !== nextAracId;
-        const fallbackSoforId = nextAracId && arac
-            ? (vehicleChanged
-                ? await getAracActiveSoforId(arac.id, arac.kullaniciId || null)
-                : ((mevcutKayit as any).soforId ?? null))
-            : null;
-        const resolvedSoforId = await resolveBakimSoforId(data.soforId, fallbackSoforId);
+        const resolvedSoforId = null;
         const resolvedSirketId = arac
             ? await resolveVehicleUsageCompanyId({
-                aracId: arac.id,
-                fallbackSirketId: arac.sirketId || normalizeOptionalText((mevcutKayit as any).sirketId),
+                aracId: arac.id
             })
             : normalizeOptionalText((mevcutKayit as any).sirketId) || (await resolveActionSirketId());
         const summaryPlaka = plaka || "araçsız kayıt";
@@ -329,7 +319,7 @@ export async function updateBakim(id: string, data: {
                 aracId: nextAracId,
                 plaka,
                 sirketId: resolvedSirketId,
-                ...(BAKIM_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
+                ...(BAKIM_HAS_SOFOR_ID ? { soforId: null } : {}),
                 bakimTarihi: data.bakimTarihi,
                 yapilanKm: Number(yapilanKm),
                 kategori: effectiveKategori,

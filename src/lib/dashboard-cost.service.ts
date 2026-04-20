@@ -146,9 +146,9 @@ type DashboardFuelConsumptionResult = {
     previousAverageLitresPer100Km: number;
 };
 
-type GroupedByVehicleSumRow = { aracId: string; sirketId: string | null; _sum: { tutar: number | null } };
+type GroupedByVehicleSumRow = { aracId: string | null; sirketId: string | null; _sum: { tutar: number | null } };
 type GroupedByVehicleYakitSumRow = {
-    aracId: string;
+    aracId: string | null;
     sirketId: string | null;
     _sum: { tutar: number | null; litre: number | null };
 };
@@ -359,10 +359,19 @@ function resolveUsageCompanyInfo(
     const gecerliKullanici = aktifKullanici?.deletedAt ? null : aktifKullanici;
 
     const manualFirma = normalizeCompanyText(arac.calistigiKurum);
+    if (manualFirma) {
+        const manualSirketId = sirketMapByName.get(getCompanyLabelKey(manualFirma)) || null;
+        return {
+            key: getUsageCompanyKey({ sirketId: manualSirketId, label: manualFirma }),
+            sirketId: manualSirketId,
+            label: manualFirma,
+        };
+    }
+
     const kullaniciSirketAd = normalizeCompanyText(gecerliKullanici?.sirket?.ad);
     const kullaniciSirketId = normalizeCompanyId(gecerliKullanici?.sirket?.id);
 
-    const sirketAd = kullaniciSirketAd || manualFirma || "Bağımsız";
+    const sirketAd = kullaniciSirketAd || "Bağımsız";
     const sirketId = kullaniciSirketId || sirketMapByName.get(getCompanyLabelKey(sirketAd)) || null;
 
     return {
@@ -425,15 +434,24 @@ function mergeGroupedByVehicleSums(
     usageCompanyByAracId: Map<string, UsageCompanyInfo>,
     usageCompanyBySirketId: Map<string, UsageCompanyInfo>
 ) {
-    const defaultUsage = getDefaultUsageCompanyInfo();
     for (const row of rows) {
-        const normalizedSirketId = normalizeCompanyId(row.sirketId);
-        const usage =
-            usageCompanyByAracId.get(row.aracId) ||
-            (normalizedSirketId ? usageCompanyBySirketId.get(normalizedSirketId) : null) ||
-            defaultUsage;
+        const usage = resolveExpenseUsageCompany(row, usageCompanyByAracId, usageCompanyBySirketId);
         addCompanyCategoryAmount(groupedTotals, usage, category, toNumber(row._sum.tutar));
     }
+}
+
+function resolveExpenseUsageCompany(
+    row: { aracId: string | null; sirketId: string | null },
+    usageCompanyByAracId: Map<string, UsageCompanyInfo>,
+    usageCompanyBySirketId: Map<string, UsageCompanyInfo>
+) {
+    const defaultUsage = getDefaultUsageCompanyInfo();
+    if (row.aracId) {
+        return usageCompanyByAracId.get(row.aracId) || defaultUsage;
+    }
+
+    const normalizedSirketId = normalizeCompanyId(row.sirketId);
+    return (normalizedSirketId ? usageCompanyBySirketId.get(normalizedSirketId) : null) || defaultUsage;
 }
 
 export async function getCompanyCostReportForPeriod(params: {
@@ -517,7 +535,7 @@ export async function getCompanyCostReportForPeriod(params: {
                 ...kaskoRows.map((row) => row.aracId),
                 ...trafikRows.map((row) => row.aracId),
                 ...digerRows.map((row) => row.aracId),
-            ].filter((aracId) => typeof aracId === "string" && aracId.length > 0)
+            ].filter((aracId): aracId is string => typeof aracId === "string" && aracId.length > 0)
         )
     );
     const usageCompanyByAracId = await getUsageCompanyByAracId(aracIds, sirketMapByName);
@@ -551,11 +569,9 @@ export async function getCompanyCostReportForPeriod(params: {
 
     const defaultUsage = getDefaultUsageCompanyInfo();
     for (const row of yakitRows) {
-        const normalizedSirketId = normalizeCompanyId(row.sirketId);
-        const usage =
-            usageCompanyByAracId.get(row.aracId) ||
-            (normalizedSirketId ? usageCompanyBySirketId.get(normalizedSirketId) : null) ||
-            defaultUsage;
+        const usage = row.aracId
+            ? usageCompanyByAracId.get(row.aracId) || defaultUsage
+            : resolveExpenseUsageCompany(row, usageCompanyByAracId, usageCompanyBySirketId);
         addCompanyCategoryAmount(groupedTotals, usage, "yakit", toNumber(row._sum.tutar));
         addCompanyFuelLitres(groupedTotals, usage, toNumber(row._sum.litre));
     }
@@ -598,8 +614,29 @@ export async function getOwnershipCostReportForPeriod(params: {
         where: aracWhere as any,
         select: {
             id: true,
+            calistigiKurum: true,
             sirket: { select: { id: true, ad: true } },
-            kullanici: { select: { sirket: { select: { id: true, ad: true } } } },
+            kullanici: {
+                select: {
+                    deletedAt: true,
+                    calistigiKurum: true,
+                    sirket: { select: { id: true, ad: true } },
+                },
+            },
+            kullaniciGecmisi: {
+                where: { bitis: null },
+                orderBy: { baslangic: "desc" },
+                take: 1,
+                select: {
+                    kullanici: {
+                        select: {
+                            deletedAt: true,
+                            calistigiKurum: true,
+                            sirket: { select: { id: true, ad: true } },
+                        },
+                    },
+                },
+            },
             disFirma: { select: { tur: true } },
         },
     }).catch(() => []);
@@ -636,20 +673,24 @@ export async function getOwnershipCostReportForPeriod(params: {
     }
 
     const grouped = new Map<string, DashboardOwnershipCostItem>();
-    for (const arac of araclar as Array<{
-        id: string;
-        sirket?: { id: string; ad: string } | null;
-        kullanici?: { sirket?: { id: string; ad: string } | null } | null;
+    const allSirketler = await prisma.sirket.findMany({ select: { id: true, ad: true } });
+    const sirketMapByName = new Map<string, string>();
+    for (const sirket of allSirketler) {
+        const key = getCompanyLabelKey(sirket.ad);
+        if (key) sirketMapByName.set(key, sirket.id);
+    }
+
+    for (const arac of araclar as Array<AracCompanyResolveRow & {
         disFirma?: { tur?: "TASERON" | "KIRALIK" | null } | null;
     }>) {
         const cost = costByAracId.get(arac.id);
         const toplam = toNumber(cost?.yakit) + toNumber(cost?.servis);
         if (toplam <= 0) continue;
 
-        const sirket = arac.sirket || arac.kullanici?.sirket || null;
-        const sirketId = normalizeCompanyId(sirket?.id);
-        const sirketAd = normalizeCompanyText(sirket?.ad) || "Bağımsız";
-        const key = sirketId ? `sirket:${sirketId}` : `kurum:${getCompanyLabelKey(sirketAd)}`;
+        const usage = resolveUsageCompanyInfo(arac, sirketMapByName);
+        const sirketId = usage.sirketId;
+        const sirketAd = usage.label;
+        const key = usage.key;
         const ownershipKey = arac.disFirma?.tur === "KIRALIK"
             ? "kiralik"
             : arac.disFirma?.tur === "TASERON"

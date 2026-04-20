@@ -76,12 +76,11 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     ]);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
-    const [filter, sirketListFilter, cezaFilter, yakitFilter, bakimFilter, zimmetFilter] = await Promise.all([
+    const [filter, sirketListFilter, cezaFilter, yakitFilter, zimmetFilter] = await Promise.all([
         getModelFilter('personel', selectedSirketId),
         getSirketListFilter(),
         getModelFilter("ceza", selectedSirketId),
         getModelFilter("yakit", selectedSirketId),
-        getModelFilter("bakim", selectedSirketId),
         getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
     const personelWhereParts: Record<string, unknown>[] = [((filter || {}) as Record<string, unknown>)];
@@ -190,24 +189,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             ],
         } as any)
         : ({ ...(yakitFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } } as any);
-    const servisBakimWhere = directSoforWhere
-        ? ({
-            AND: [
-                { bakimTarihi: { gte: rangeStart, lte: rangeEnd } },
-                {
-                    OR: [
-                        (bakimFilter as any),
-                        directSoforWhere,
-                    ],
-                },
-            ],
-        } as any)
-        : ({
-            ...(bakimFilter as any),
-            bakimTarihi: { gte: rangeStart, lte: rangeEnd },
-        } as any);
-
-    const [cezaBySofor, yakitKayitlari, servisKayitlari, tumZimmetler] = await Promise.all([
+    const [cezaBySofor, yakitKayitlari, tumZimmetler] = await Promise.all([
         (prisma as any).ceza.groupBy({
             where: { ...(cezaFilter as any), tarih: { gte: rangeStart, lte: rangeEnd } },
             by: ["soforId"],
@@ -240,16 +222,6 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             }).catch(() => []);
             return (fallbackRows || []).map((row: any) => ({ ...row, soforId: null }));
         }),
-        (prisma as any).bakim.findMany({
-            where: servisBakimWhere,
-            select: {
-                aracId: true,
-                bakimTarihi: true,
-                tutar: true,
-                soforId: true,
-                arac: { select: { kullaniciId: true } },
-            },
-        }).catch(() => []),
         (prisma as any).kullaniciZimmet.findMany({
             where: {
                 ...(zimmetFilter as any),
@@ -298,14 +270,13 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         list.sort((a, b) => a.baslangic - b.baslangic);
     });
 
-    const costByPersonelId = new Map<string, { ceza: number; yakit: number; ariza: number; toplam: number }>();
-    const upsertCost = (kullaniciId: string | null, patch: Partial<{ ceza: number; yakit: number; ariza: number; toplam: number }>) => {
+    const costByPersonelId = new Map<string, { ceza: number; yakit: number; toplam: number }>();
+    const upsertCost = (kullaniciId: string | null, patch: Partial<{ ceza: number; yakit: number; toplam: number }>) => {
         if (!kullaniciId) return;
-        const current = costByPersonelId.get(kullaniciId) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
+        const current = costByPersonelId.get(kullaniciId) || { ceza: 0, yakit: 0, toplam: 0 };
         const next = {
             ceza: current.ceza + toNumber(patch.ceza),
             yakit: current.yakit + toNumber(patch.yakit),
-            ariza: current.ariza + toNumber(patch.ariza),
             toplam: current.toplam + toNumber(patch.toplam),
         };
         costByPersonelId.set(kullaniciId, next);
@@ -330,22 +301,6 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             null;
         const tutar = toNumber(yakit.tutar);
         upsertCost(soforId, { yakit: tutar, toplam: tutar });
-    }
-
-    for (const servis of servisKayitlari as Array<{
-        aracId: string;
-        bakimTarihi: Date;
-        tutar: number;
-        soforId?: string | null;
-        arac?: { kullaniciId?: string | null } | null;
-    }>) {
-        const soforId =
-            servis.soforId ||
-            findDriverAtDate(zimmetByAracId, servis.aracId, servis.bakimTarihi) ||
-            servis.arac?.kullaniciId ||
-            null;
-        const tutar = toNumber(servis.tutar);
-        upsertCost(soforId, { ariza: tutar, toplam: tutar });
     }
 
     const yakitKayitlariForMetrics = (yakitKayitlari as Array<{
@@ -384,7 +339,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
 
     const formattedData = personeller.map((p: any) => {
         const zimmetliArac = p.arac || aktifAracByKullaniciId.get(p.id) || null;
-        const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
+        const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, toplam: 0 };
         const yakitOrtalama = fuelMetricsByDriverId.get(p.id);
         const ortalamaYakit100Km = yakitOrtalama?.averageLitresPer100Km ?? null;
         const ortalamaYakitIntervalSayisi = yakitOrtalama?.intervalCount ?? 0;
@@ -412,7 +367,6 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             maliyetKalemleri: {
                 ceza: maliyet.ceza,
                 yakit: maliyet.yakit,
-                ariza: maliyet.ariza,
             },
             toplamMaliyet: maliyet.toplam,
             ortalamaYakit100Km,

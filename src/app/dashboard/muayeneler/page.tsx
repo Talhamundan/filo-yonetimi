@@ -2,7 +2,7 @@ import { prisma } from "../../../lib/prisma";
 import MuayenelerClient from "./client";
 import { MuayeneRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, getYilDateRange, type DashboardSearchParams } from "@/lib/company-scope";
+import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { ensureMuayeneColumns } from "@/lib/muayene-schema-compat";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
@@ -68,34 +68,20 @@ function resolveKullaniciFirmaAd(arac: CompanyAwareVehicle) {
 }
 
 export default async function MuayenelerPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
     const filter = await getModelFilter('muayene', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
-    const { start: yilBasi, end: yilSonu } = getYilDateRange(selectedYil);
+    const { start: yilBasi, end: yilSonu } = getAyDateRange(selectedYil, selectedAy);
     const baseMuayeneFilter = { ...((filter || {}) as Record<string, unknown>) } as Record<string, unknown>;
-    const scopedSirketId = typeof baseMuayeneFilter.sirketId === "string" ? baseMuayeneFilter.sirketId : null;
-
-    if (scopedSirketId) {
-        delete baseMuayeneFilter.sirketId;
-    }
-
-    const companyCompatibleWhere = scopedSirketId
-        ? {
-            ...baseMuayeneFilter,
-            OR: [
-                { sirketId: scopedSirketId },
-                { sirketId: null, arac: { sirketId: scopedSirketId } },
-            ],
-        }
-        : baseMuayeneFilter;
 
     const muayeneWhere = {
         AND: [
-            companyCompatibleWhere,
+            baseMuayeneFilter,
             {
                 gecerlilikTarihi: { gte: yilBasi, lte: yilSonu },
             },

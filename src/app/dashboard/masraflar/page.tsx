@@ -2,19 +2,20 @@ import { prisma } from "../../../lib/prisma";
 import MasraflarClient from "./client";
 import { MasrafRow } from "./columns";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
 export default async function MasraflarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
     const filter = await getModelFilter('masraf', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
-    const masrafWhere = withYilDateFilter((filter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const masrafWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [masrafWhere as Record<string, unknown>];
 

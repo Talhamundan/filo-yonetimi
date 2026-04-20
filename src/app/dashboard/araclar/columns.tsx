@@ -18,6 +18,7 @@ export type AracRow = {
     aciklama?: string | null;
     durum: string;
     kategori: string;
+    ruhsatSeriNo?: string | null;
     saseNo?: string | null;
     motorNo?: string | null;
     calistigiKurum?: string | null;
@@ -142,6 +143,14 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
                     },
               ] as ColumnDef<AracRow>[])
             : []),
+        {
+            accessorKey: "ruhsatSeriNo",
+            header: "Ruhsat Seri No",
+            cell: ({ row }) => {
+                const ruhsatSeriNo = row.original.ruhsatSeriNo?.trim();
+                return <div className="font-mono text-xs text-slate-600">{ruhsatSeriNo || "-"}</div>;
+            },
+        },
         {
             accessorKey: "saseNo",
             header: "Şase No",

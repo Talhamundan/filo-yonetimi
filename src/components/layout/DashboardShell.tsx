@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronUp, History, LogOut, Menu, PanelLeftClose, PanelLeftOpen, ShieldCheck, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { Toaster } from "sonner";
@@ -12,6 +12,11 @@ import YearScopeSwitcher from "@/components/layout/YearScopeSwitcher";
 import MonthScopeSwitcher from "@/components/layout/MonthScopeSwitcher";
 import CategoryScopeSwitcher from "@/components/layout/CategoryScopeSwitcher";
 import { DashboardScopeProvider } from "@/components/layout/DashboardScopeContext";
+import {
+    ensureDashboardPeriodInSearch,
+    mergeDashboardScopeIntoHref,
+    persistDashboardPeriodFromSearch,
+} from "@/lib/dashboard-scope-query";
 import { cn } from "@/lib/utils";
 
 type DashboardShellProps = {
@@ -37,6 +42,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function DashboardShell({ children, scopeOptions }: DashboardShellProps) {
+    const router = useRouter();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [isSidebarCollapsed, setIsSidebarCollapsed] = React.useState(false);
@@ -88,7 +94,41 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
         setIsMobileHeaderToolsOpen(true);
     }, [pathname]);
 
-    // No more automatic filter cleanup logic here as we want them to persist.
+    React.useEffect(() => {
+        persistDashboardPeriodFromSearch(searchParams);
+    }, [searchParams]);
+
+    React.useEffect(() => {
+        if (!pathname.startsWith("/dashboard")) return;
+
+        const { params, changed } = ensureDashboardPeriodInSearch(searchParams);
+        if (!changed) return;
+
+        const query = params.toString();
+        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    }, [pathname, router, searchParams]);
+
+    const handleScopedDashboardLinkClick = React.useCallback(
+        (event: React.MouseEvent<HTMLDivElement>) => {
+            if (event.defaultPrevented) return;
+            if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+
+            const target = event.target as HTMLElement | null;
+            const anchor = target?.closest("a");
+            if (!anchor) return;
+            if (anchor.target && anchor.target !== "_self") return;
+
+            const rawHref = anchor.getAttribute("href");
+            if (!rawHref) return;
+
+            const scopedHref = mergeDashboardScopeIntoHref(rawHref, searchParams);
+            if (scopedHref === rawHref) return;
+
+            event.preventDefault();
+            router.push(scopedHref);
+        },
+        [router, searchParams]
+    );
 
     const toggleSidebar = React.useCallback(() => {
         setIsSidebarCollapsed((current) => {
@@ -124,7 +164,10 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                 canAssignIndependentRecords: scopeOptions.canAssignIndependentRecords,
             }}
         >
-            <div className="dashboard-compact-ui flex h-[100dvh] min-h-screen overflow-hidden bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900">
+            <div
+                className="dashboard-compact-ui flex h-[100dvh] min-h-screen overflow-hidden bg-[#F8FAFC] font-sans text-slate-900 selection:bg-indigo-100 selection:text-indigo-900"
+                onClickCapture={handleScopedDashboardLinkClick}
+            >
                 <Toaster position="top-right" richColors />
 
                 <div className="flex min-w-0 flex-1 flex-col overflow-x-hidden">

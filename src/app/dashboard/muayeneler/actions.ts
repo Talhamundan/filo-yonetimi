@@ -133,8 +133,7 @@ export async function createMuayene(data: {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
         const normalizedKm =
             data.km !== undefined
@@ -209,8 +208,7 @@ export async function updateMuayene(id: string, data: any) {
             ? await getScopedAracOrThrow(data.aracId, { id: true, sirketId: true })
             : await getScopedAracOrThrow(mevcutKayit.aracId, { id: true, sirketId: true });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId || mevcutKayit.sirketId,
+            aracId: arac.id
         });
 
         const kmInput =

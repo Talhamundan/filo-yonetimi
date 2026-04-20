@@ -133,8 +133,7 @@ export async function createArizaKaydi(data: {
         const fallbackSoforId = await getAracActiveSoforId(arac.id, arac.kullaniciId || null);
         const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const created = await (prisma as any).arizaKaydi.create({
@@ -229,8 +228,7 @@ export async function updateArizaKaydi(
         );
         const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId || mevcut.sirketId,
+            aracId: arac.id
         });
 
         const updated = await (prisma as any).arizaKaydi.update({
@@ -382,8 +380,7 @@ export async function tamamlaArizaKaydi(
         const tutar = typeof data?.tutar === "number" ? data.tutar : typeof kayit.tutar === "number" ? kayit.tutar : 0;
         const shouldCreateBakim = data?.createBakim !== false;
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: kayit.aracId,
-            fallbackSirketId: kayit.sirketId || kayit.arac.sirketId,
+            aracId: kayit.aracId
         });
 
         let bakimId = kayit.bakimId as string | null;
@@ -392,7 +389,7 @@ export async function tamamlaArizaKaydi(
                 data: {
                     aracId: kayit.aracId,
                     sirketId: usageSirketId || kayit.sirketId || kayit.arac.sirketId,
-                    ...(BAKIM_HAS_SOFOR_ID ? { soforId: kayit.soforId || null } : {}),
+                    ...(BAKIM_HAS_SOFOR_ID ? { soforId: null } : {}),
                     bakimTarihi: new Date(),
                     yapilanKm: km,
                     kategori: "ARIZA",

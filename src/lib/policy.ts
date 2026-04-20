@@ -168,7 +168,7 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
             return {
                 OR: [
                     { arac: getVehicleUsageCompanyFilter(sirketId) },
-                    { sirketId },
+                    { AND: [{ aracId: null }, { sirketId }] },
                 ],
             };
         case "activityLog":

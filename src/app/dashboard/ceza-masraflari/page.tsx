@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import CezaMasraflariClient from "./client";
 import { CezaMasrafRow } from "./columns";
 import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
-import { getSelectedSirketId, getSelectedYil, withYilDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName, isDeletedPersonel } from "@/lib/personel-display";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
@@ -59,9 +59,10 @@ async function getSafeCezalar(cezaFilter: Record<string, unknown>) {
 }
 
 export default async function CezaMasraflariPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
+        getSelectedAy(props.searchParams),
         getCommonListFilters(props.searchParams),
     ]);
     const [cezaFilter, aracFilter, kullaniciFilter] = await Promise.all([
@@ -69,7 +70,7 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
         getModelFilter("arac", selectedSirketId),
         getPersonnelSelectFilter(),
     ]);
-    const cezaWhere = withYilDateFilter((cezaFilter || {}) as Record<string, unknown>, "tarih", selectedYil);
+    const cezaWhere = withAyDateFilter((cezaFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const now = new Date();
     now.setHours(0, 0, 0, 0);

@@ -19,24 +19,24 @@ export default function SelectedAracInfo({ arac }: { arac?: SelectedAracInfoData
             : "-";
 
     return (
-        <div className="rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="w-full min-w-0 max-w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 px-3 py-2">
             <p className="text-[11px] text-slate-500 mb-1">Seçilen Araç</p>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-                <div>
+            <div className="grid min-w-0 grid-cols-1 gap-x-3 gap-y-1 text-xs sm:grid-cols-2">
+                <div className="min-w-0">
                     <span className="text-slate-500">Plaka:</span>{" "}
-                    <span className="font-semibold text-slate-800 font-mono">{(arac.plaka || "-").trim() || "-"}</span>
+                    <span className="font-semibold text-slate-800 font-mono break-words">{(arac.plaka || "-").trim() || "-"}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                     <span className="text-slate-500">Şehir:</span>{" "}
-                    <span className="font-semibold text-slate-800">{formatIl(arac.bulunduguIl)}</span>
+                    <span className="font-semibold text-slate-800 break-words">{formatIl(arac.bulunduguIl)}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                     <span className="text-slate-500">Araç:</span>{" "}
-                    <span className="font-semibold text-slate-800">{[arac.marka, arac.model].filter(Boolean).join(" ") || "-"}</span>
+                    <span className="font-semibold text-slate-800 break-words">{[arac.marka, arac.model].filter(Boolean).join(" ") || "-"}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                     <span className="text-slate-500">Güncel KM:</span>{" "}
-                    <span className="font-semibold text-slate-800 font-mono">{kmText}</span>
+                    <span className="font-semibold text-slate-800 font-mono break-words">{kmText}</span>
                 </div>
             </div>
         </div>

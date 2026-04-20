@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
-import { withYilDateFilter } from "@/lib/company-scope";
+import { withAyDateFilter } from "@/lib/company-scope";
 import * as XLSX from "xlsx";
 import { 
     getEntityOrNull, 
@@ -15,6 +15,16 @@ import {
     isCezaSchemaCompatibilityError,
     syncAracGuncelKm
 } from "@/lib/excel-service";
+
+function parseSelectedAy(val: string | null | undefined): number | null {
+    const normalized = val?.trim().toLowerCase();
+    if (normalized === "all" || normalized === "__all__") return null;
+    if (!val) return null;
+
+    const parsed = Number(val);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) return null;
+    return parsed;
+}
 
 export async function GET(
     req: NextRequest,
@@ -37,6 +47,7 @@ export async function GET(
 
         const selectedSirketId = req.nextUrl.searchParams.get("sirket");
         const selectedYil = parseSelectedYil(req.nextUrl.searchParams.get("yil"));
+        const selectedAy = parseSelectedAy(req.nextUrl.searchParams.get("ay"));
         const scopedFilter = config.prismaModel === "disFirma"
             ? {}
             : await getModelFilter(config.filterModel, selectedSirketId);
@@ -51,7 +62,7 @@ export async function GET(
             : scopedFilter;
         const where =
             config.dateField && selectedYil
-                ? withYilDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil)
+                ? withAyDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil, selectedAy)
                 : baseFilter;
 
         const { data, sheetName, headers } = await exportEntity(entity, where as any);

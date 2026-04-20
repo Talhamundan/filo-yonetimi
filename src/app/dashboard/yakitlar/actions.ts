@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { assertKmWriteConsistency, getAracMaxKnownKm, syncAracGuncelKm } from "@/lib/km-consistency";
 import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
+import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/yakitlar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -120,7 +121,7 @@ function parseDateInput(value: unknown, fieldLabel: string) {
 
 async function getAracUsageContext(
     aracId: string,
-    fallback?: { soforId?: string | null; kullanimSirketId?: string | null }
+    fallback?: { soforId?: string | null }
 ) {
     const aktifZimmet = await (prisma as any).kullaniciZimmet
         .findFirst({
@@ -128,14 +129,14 @@ async function getAracUsageContext(
             orderBy: { baslangic: "desc" },
             select: {
                 kullaniciId: true,
-                kullanici: { select: { sirketId: true } },
             },
         })
         .catch(() => null);
+    const kullanimSirketId = await resolveVehicleUsageCompanyId({ aracId });
 
     return {
         soforId: aktifZimmet?.kullaniciId || fallback?.soforId || null,
-        kullanimSirketId: normalizeSirketId(aktifZimmet?.kullanici?.sirketId) || fallback?.kullanimSirketId || null,
+        kullanimSirketId,
     };
 }
 
@@ -373,9 +374,8 @@ export async function createYakit(data: CreateYakitInput) {
         });
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
-            kullanimSirketId: normalizeSirketId((arac as any)?.kullanici?.sirketId),
         });
-        const resolvedSoforId = await resolveYakitSoforId(data.soforId, null);
+        const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = parseDateInput(data.tarih, "Yakıt tarihi");
         const parsedLitre = parseDecimalInput(data.litre, "Litre");
         const parsedTutar = parseDecimalInput(data.tutar, "Toplam tutar");
@@ -560,9 +560,8 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
         }
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
-            kullanimSirketId: normalizeSirketId((arac as any)?.kullanici?.sirketId),
         });
-        const resolvedSoforId = await resolveYakitSoforId(data.soforId, null);
+        const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = data.tarih ? parseDateInput(data.tarih, "Yakıt tarihi") : undefined;
         const parsedLitre = data.litre !== undefined ? parseDecimalInput(data.litre, "Litre") : undefined;
         const parsedTutar = data.tutar !== undefined ? parseDecimalInput(data.tutar, "Toplam tutar") : undefined;
@@ -647,7 +646,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                 where: { id },
                 data: {
                     aracId: arac.id,
-                    sirketId: usageContext.kullanimSirketId ?? mevcutKayit.sirketId,
+                    sirketId: usageContext.kullanimSirketId,
                     tarih: parsedTarih,
                     litre: parsedLitre,
                     tutar: finalTutar,

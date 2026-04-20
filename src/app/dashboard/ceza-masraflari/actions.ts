@@ -56,8 +56,7 @@ export async function createCezaMasraf(data: CezaMasrafPayload) {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const sofor = data.soforId
@@ -157,8 +156,7 @@ export async function updateCezaMasraf(id: string, data: CezaMasrafPayload) {
             sirketId: true,
         });
         const usageSirketId = await resolveVehicleUsageCompanyId({
-            aracId: arac.id,
-            fallbackSirketId: arac.sirketId,
+            aracId: arac.id
         });
 
         const sofor = data.soforId

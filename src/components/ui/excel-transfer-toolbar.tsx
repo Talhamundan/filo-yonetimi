@@ -60,9 +60,11 @@ export default function ExcelTransferToolbar({ options, className, hideEntitySel
 
     const selectedSirket = searchParams.get("sirket");
     const selectedYil = searchParams.get("yil");
+    const selectedAy = searchParams.get("ay");
     const params = new URLSearchParams();
     if (selectedSirket) params.set("sirket", selectedSirket);
     if (selectedYil) params.set("yil", selectedYil);
+    if (selectedAy) params.set("ay", selectedAy);
     const query = params.toString();
     const endpoint = `/api/excel/${selectedEntity}${query ? `?${query}` : ""}`;
 
