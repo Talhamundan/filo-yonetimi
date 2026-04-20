@@ -537,8 +537,7 @@ export default function AraclarClient({
                             type="button"
                             onClick={handleUpdate}
                             disabled={loading}
-                            className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50"
-                        >
+                            className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50">
                             {loading ? 'Güncelleniyor...' : 'Güncelle'}
                         </button>
                     </DialogFooter>

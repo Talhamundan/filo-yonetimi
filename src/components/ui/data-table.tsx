@@ -5,6 +5,7 @@ import {
     Column as TanstackColumn,
     ColumnDef,
     ColumnFiltersState,
+    ColumnOrderState,
     FilterFn,
     PaginationState,
     Row as TanstackRow,
@@ -18,7 +19,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown, Columns3, Download, Filter, FilterX, Loader2, Trash2, Upload } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Download, Filter, FilterX, Loader2, Pin, PinOff, Trash2, Upload } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { bulkDeleteByExcelEntity } from "@/app/dashboard/_actions/bulk-delete"
@@ -36,7 +37,6 @@ import { Button } from "./button"
 import { Input } from "./input"
 import {
     DropdownMenu,
-    DropdownMenuCheckboxItem,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
@@ -156,6 +156,11 @@ function isActionsColumnId(value: string) {
     );
 }
 
+function isStatusColumnName(value: string) {
+    const normalized = normalizeColumnId(value);
+    return normalized === "durum" || normalized === "status" || normalized === "mevcut durum";
+}
+
 function humanizeColumnId(value: string) {
     return value
         .replace(/^_+|_+$/g, "")
@@ -176,6 +181,26 @@ function getColumnDisplayName<TData>(column: TanstackColumn<TData, unknown>) {
     }
 
     return humanizeColumnId(column.id || "sütun");
+}
+
+function isStatusColumn<TData>(column: TanstackColumn<TData, unknown>) {
+    return isStatusColumnName(column.id) || isStatusColumnName(getColumnDisplayName(column));
+}
+
+function isNonDataColumnId(value: string) {
+    return value === "__select__" || isActionsColumnId(value);
+}
+
+function areStringArraysEqual(left: string[], right: string[]) {
+    if (left.length !== right.length) return false;
+    return left.every((item, index) => item === right[index]);
+}
+
+function areNumberRecordsEqual(left: Record<string, number>, right: Record<string, number>) {
+    const leftKeys = Object.keys(left);
+    const rightKeys = Object.keys(right);
+    if (leftKeys.length !== rightKeys.length) return false;
+    return leftKeys.every((key) => left[key] === right[key]);
 }
 
 function SelectionCheckbox({
@@ -236,6 +261,8 @@ export function DataTable<TData, TValue>({
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
     const [columnVisibility, setColumnVisibility] = React.useState<VisibilityState>({})
+    const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>([])
+    const [pinnedColumnIds, setPinnedColumnIds] = React.useState<string[]>([])
     const [rowSelection, setRowSelection] = React.useState({})
     const [pagination, setPagination] = React.useState<PaginationState>({
         pageIndex: urlPageIndex,
@@ -247,12 +274,19 @@ export function DataTable<TData, TValue>({
     const [isBulkDeleting, setIsBulkDeleting] = React.useState(false)
     const [isDesktop, setIsDesktop] = React.useState(false)
     const loadedVisibilityKeyRef = React.useRef<string | null>(null)
-    const [firstStickyColWidth, setFirstStickyColWidth] = React.useState(0)
-    const firstHeaderCellRef = React.useRef<HTMLTableCellElement | null>(null)
+    const loadedPinningKeyRef = React.useRef<string | null>(null)
+    const [hydratedVisibilityKey, setHydratedVisibilityKey] = React.useState<string | null>(null)
+    const [hydratedPinningKey, setHydratedPinningKey] = React.useState<string | null>(null)
+    const headerCellRefs = React.useRef(new Map<string, HTMLTableCellElement>())
+    const [leftPinnedOffsets, setLeftPinnedOffsets] = React.useState<Record<string, number>>({})
     const canBulkDelete = Boolean(excelEntity) && isAdmin
     const canSelectRows = canBulkDelete
     const visibilityStorageKey = React.useMemo(
         () => `datatable:visibility:${excelEntity || "default"}:${pathname}`,
+        [excelEntity, pathname]
+    )
+    const pinningStorageKey = React.useMemo(
+        () => `datatable:pinned:${excelEntity || "default"}:${pathname}`,
         [excelEntity, pathname]
     )
     const tableColumns = React.useMemo(() => {
@@ -332,6 +366,7 @@ export function DataTable<TData, TValue>({
             return typeof rowId === "string" && rowId.trim().length > 0 ? rowId : String(index)
         },
         onColumnVisibilityChange: setColumnVisibility,
+        onColumnOrderChange: setColumnOrder,
         onRowSelectionChange: setRowSelection,
         onPaginationChange: setPagination,
         autoResetPageIndex: false,
@@ -339,11 +374,14 @@ export function DataTable<TData, TValue>({
             sorting,
             columnFilters,
             columnVisibility,
+            columnOrder,
             rowSelection,
             pagination,
         },
     })
 
+    const allLeafColumns = table.getAllLeafColumns()
+    const statusColumnId = allLeafColumns.find((column) => !isNonDataColumnId(column.id) && isStatusColumn(column))?.id || null
     const filteredCount = table.getFilteredRowModel().rows.length
     const totalCount = data.length
     const pageIndex = table.getState().pagination.pageIndex
@@ -371,6 +409,27 @@ export function DataTable<TData, TValue>({
     const isReportRightScroll = isCompactToolbar && toolbarArrangement === "report-right-scroll"
     const visibleLeafColumns = table.getVisibleLeafColumns()
     const visibleColumnCount = visibleLeafColumns.length
+    const visibleColumnIds = visibleLeafColumns.map((column) => column.id)
+    const visibleColumnIdsKey = visibleColumnIds.join("\u001F")
+    const visibleColumnIdSet = React.useMemo(() => new Set(visibleColumnIds), [visibleColumnIdsKey])
+    const leftPinnedColumnIds = React.useMemo(() => {
+        const ordered: string[] = []
+
+        if (statusColumnId && visibleColumnIdSet.has(statusColumnId)) {
+            ordered.push(statusColumnId)
+        }
+
+        pinnedColumnIds.forEach((columnId) => {
+            if (columnId === statusColumnId) return
+            if (!visibleColumnIdSet.has(columnId)) return
+            if (isNonDataColumnId(columnId)) return
+            if (!ordered.includes(columnId)) ordered.push(columnId)
+        })
+
+        return ordered
+    }, [pinnedColumnIds, statusColumnId, visibleColumnIdSet])
+    const leftPinnedColumnIdsKey = leftPinnedColumnIds.join("\u001F")
+    const leftPinnedColumnIdSet = React.useMemo(() => new Set(leftPinnedColumnIds), [leftPinnedColumnIds])
     const stickyEnabled = isDesktop && visibleColumnCount >= 2
     const actionsColumnIndex = React.useMemo(() => {
         for (let i = visibleLeafColumns.length - 1; i >= 0; i -= 1) {
@@ -431,30 +490,93 @@ export function DataTable<TData, TValue>({
         loadedVisibilityKeyRef.current = visibilityStorageKey
 
         const raw = window.localStorage.getItem(visibilityStorageKey)
-        if (!raw) return
+        if (!raw) {
+            setHydratedVisibilityKey(visibilityStorageKey)
+            return
+        }
 
         try {
             const parsed = JSON.parse(raw) as Record<string, unknown>
-            if (!parsed || typeof parsed !== "object") return
+            if (!parsed || typeof parsed !== "object") {
+                setHydratedVisibilityKey(visibilityStorageKey)
+                return
+            }
             const allowed = new Set(table.getAllLeafColumns().map((column) => column.id))
             const nextState: VisibilityState = {}
 
             Object.entries(parsed).forEach(([key, value]) => {
                 if (!allowed.has(key)) return
                 if (typeof value !== "boolean") return
+                if (statusColumnId && key === statusColumnId) {
+                    nextState[key] = true
+                    return
+                }
                 nextState[key] = value
             })
 
             setColumnVisibility(nextState)
         } catch {
             // noop
+        } finally {
+            setHydratedVisibilityKey(visibilityStorageKey)
         }
-    }, [table, visibilityStorageKey])
+    }, [statusColumnId, table, visibilityStorageKey])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
+        if (hydratedVisibilityKey !== visibilityStorageKey) return
         window.localStorage.setItem(visibilityStorageKey, JSON.stringify(columnVisibility))
-    }, [columnVisibility, visibilityStorageKey])
+    }, [columnVisibility, hydratedVisibilityKey, visibilityStorageKey])
+
+    React.useEffect(() => {
+        if (!statusColumnId) return
+        setColumnVisibility((prev) => {
+            if (prev[statusColumnId] !== false) return prev
+            return { ...prev, [statusColumnId]: true }
+        })
+    }, [statusColumnId])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        if (loadedPinningKeyRef.current === pinningStorageKey) return
+        loadedPinningKeyRef.current = pinningStorageKey
+
+        const raw = window.localStorage.getItem(pinningStorageKey)
+        if (!raw) {
+            setHydratedPinningKey(pinningStorageKey)
+            return
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as unknown
+            if (!Array.isArray(parsed)) {
+                setHydratedPinningKey(pinningStorageKey)
+                return
+            }
+
+            const allowed = new Set(
+                table
+                    .getAllLeafColumns()
+                    .filter((column) => !isNonDataColumnId(column.id) && column.id !== statusColumnId)
+                    .map((column) => column.id)
+            )
+            const nextPinned = parsed
+                .filter((value): value is string => typeof value === "string")
+                .filter((value, index, array) => allowed.has(value) && array.indexOf(value) === index)
+
+            setPinnedColumnIds(nextPinned)
+        } catch {
+            // noop
+        } finally {
+            setHydratedPinningKey(pinningStorageKey)
+        }
+    }, [pinningStorageKey, statusColumnId, table])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        if (hydratedPinningKey !== pinningStorageKey) return
+        window.localStorage.setItem(pinningStorageKey, JSON.stringify(pinnedColumnIds))
+    }, [hydratedPinningKey, pinnedColumnIds, pinningStorageKey])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -472,38 +594,90 @@ export function DataTable<TData, TValue>({
         return () => media.removeListener(update)
     }, [])
 
+    React.useEffect(() => {
+        const allColumnIds = table.getAllLeafColumns().map((column) => column.id)
+        const statusIds = statusColumnId ? [statusColumnId] : []
+        const pinnedIds = pinnedColumnIds.filter(
+            (columnId) => columnId !== statusColumnId && allColumnIds.includes(columnId) && !isNonDataColumnId(columnId)
+        )
+        const reservedIds = new Set([...statusIds, ...pinnedIds])
+        const actionsIds = allColumnIds.filter((columnId) => isActionsColumnId(columnId))
+        const selectionIds = allColumnIds.filter((columnId) => columnId === "__select__")
+        actionsIds.forEach((columnId) => reservedIds.add(columnId))
+        selectionIds.forEach((columnId) => reservedIds.add(columnId))
+
+        const restIds = allColumnIds.filter((columnId) => !reservedIds.has(columnId))
+        const nextOrder = [...statusIds, ...pinnedIds, ...restIds, ...selectionIds, ...actionsIds]
+
+        setColumnOrder((prev) => (areStringArraysEqual(prev, nextOrder) ? prev : nextOrder))
+    }, [pinnedColumnIds, statusColumnId, table])
+
     React.useLayoutEffect(() => {
-        const element = firstHeaderCellRef.current
-        if (!element || !stickyEnabled) {
-            setFirstStickyColWidth(0)
+        if (!stickyEnabled || leftPinnedColumnIds.length === 0) {
+            setLeftPinnedOffsets({})
             return
         }
 
         const measure = () => {
-            setFirstStickyColWidth(Math.ceil(element.getBoundingClientRect().width))
+            let nextLeft = 0
+            const nextOffsets: Record<string, number> = {}
+
+            leftPinnedColumnIds.forEach((columnId) => {
+                nextOffsets[columnId] = nextLeft
+                const element = headerCellRefs.current.get(columnId)
+                nextLeft += Math.ceil(element?.getBoundingClientRect().width || 0)
+            })
+
+            setLeftPinnedOffsets((prev) => (areNumberRecordsEqual(prev, nextOffsets) ? prev : nextOffsets))
         }
 
         measure()
+
+        if (typeof ResizeObserver === "undefined") return
         const resizeObserver = new ResizeObserver(measure)
-        resizeObserver.observe(element)
+        leftPinnedColumnIds.forEach((columnId) => {
+            const element = headerCellRefs.current.get(columnId)
+            if (element) resizeObserver.observe(element)
+        })
+
         return () => resizeObserver.disconnect()
-    }, [stickyEnabled, visibleColumnCount, showColumnFilters, tableClassName])
+    }, [leftPinnedColumnIdsKey, leftPinnedColumnIds.length, stickyEnabled, visibleColumnCount, showColumnFilters, tableClassName])
+
+    const setHeaderCellRef = React.useCallback((columnId: string, element: HTMLTableCellElement | null) => {
+        if (element) {
+            headerCellRefs.current.set(columnId, element)
+            return
+        }
+
+        headerCellRefs.current.delete(columnId)
+    }, [])
+
+    const togglePinnedColumn = React.useCallback((columnId: string) => {
+        if (!columnId || columnId === statusColumnId || isNonDataColumnId(columnId)) return
+
+        setPinnedColumnIds((prev) => {
+            if (prev.includes(columnId)) {
+                return prev.filter((item) => item !== columnId)
+            }
+
+            return [...prev, columnId]
+        })
+    }, [statusColumnId])
 
     const getStickyStyle = React.useCallback(
-        (columnIndex: number): React.CSSProperties | undefined => {
+        (columnIndex: number, columnId: string): React.CSSProperties | undefined => {
             if (!stickyEnabled) return undefined
-            if (columnIndex === 0) return { left: 0 }
-            if (columnIndex === 1) return { left: firstStickyColWidth }
+            if (leftPinnedColumnIdSet.has(columnId)) return { left: leftPinnedOffsets[columnId] || 0 }
             if (actionsColumnIndex >= 0 && columnIndex === actionsColumnIndex) return { right: 0 }
             return undefined
         },
-        [actionsColumnIndex, firstStickyColWidth, stickyEnabled]
+        [actionsColumnIndex, leftPinnedColumnIdSet, leftPinnedOffsets, stickyEnabled]
     )
 
     const getStickyHeaderClass = React.useCallback(
-        (columnIndex: number) => {
+        (columnIndex: number, columnId: string) => {
             if (!stickyEnabled) return ""
-            if (columnIndex === 0 || columnIndex === 1) {
+            if (leftPinnedColumnIdSet.has(columnId)) {
                 return "sticky z-30 bg-slate-50/95 border-r border-slate-200"
             }
             if (actionsColumnIndex >= 0 && columnIndex === actionsColumnIndex) {
@@ -511,13 +685,13 @@ export function DataTable<TData, TValue>({
             }
             return ""
         },
-        [actionsColumnIndex, stickyEnabled]
+        [actionsColumnIndex, leftPinnedColumnIdSet, stickyEnabled]
     )
 
     const getStickyFilterClass = React.useCallback(
-        (columnIndex: number) => {
+        (columnIndex: number, columnId: string) => {
             if (!stickyEnabled) return ""
-            if (columnIndex === 0 || columnIndex === 1) {
+            if (leftPinnedColumnIdSet.has(columnId)) {
                 return "sticky z-20 bg-slate-50/95 border-r border-slate-200"
             }
             if (actionsColumnIndex >= 0 && columnIndex === actionsColumnIndex) {
@@ -525,13 +699,13 @@ export function DataTable<TData, TValue>({
             }
             return ""
         },
-        [actionsColumnIndex, stickyEnabled]
+        [actionsColumnIndex, leftPinnedColumnIdSet, stickyEnabled]
     )
 
     const getStickyBodyClass = React.useCallback(
-        (columnIndex: number) => {
+        (columnIndex: number, columnId: string) => {
             if (!stickyEnabled) return ""
-            if (columnIndex === 0 || columnIndex === 1) {
+            if (leftPinnedColumnIdSet.has(columnId)) {
                 return "sticky z-10 border-r border-slate-100 bg-white group-hover:bg-slate-50/80"
             }
             if (actionsColumnIndex >= 0 && columnIndex === actionsColumnIndex) {
@@ -539,7 +713,7 @@ export function DataTable<TData, TValue>({
             }
             return ""
         },
-        [actionsColumnIndex, stickyEnabled]
+        [actionsColumnIndex, leftPinnedColumnIdSet, stickyEnabled]
     )
 
     const handleBulkDelete = React.useCallback(async () => {
@@ -732,22 +906,66 @@ export function DataTable<TData, TValue>({
                                         Sütun Seç
                                     </Button>
                                 </DropdownMenuTrigger>
-                                <DropdownMenuContent align="start" className="w-60">
+                                <DropdownMenuContent align="start" className="w-72">
                                     <DropdownMenuLabel>Görünecek Sütunlar</DropdownMenuLabel>
                                     <DropdownMenuSeparator />
                                     {hideableColumns.map((column) => {
                                         const checked = column.getIsVisible()
                                         const disableHide = checked && visibleHideableColumnCount <= 1
+                                        const isStatus = statusColumnId === column.id
+                                        const isPinned = isStatus || pinnedColumnIds.includes(column.id)
+                                        const disableVisibilityToggle = isStatus || disableHide
+                                        const displayName = getColumnDisplayName(column)
                                         return (
-                                            <DropdownMenuCheckboxItem
+                                            <div
                                                 key={column.id}
-                                                checked={checked}
-                                                disabled={disableHide}
-                                                onCheckedChange={(nextChecked) => column.toggleVisibility(Boolean(nextChecked))}
-                                                onSelect={(event) => event.preventDefault()}
+                                                className="flex items-center gap-1 rounded-md px-1.5 py-1 text-sm text-slate-700 hover:bg-slate-100"
                                             >
-                                                {getColumnDisplayName(column)}
-                                            </DropdownMenuCheckboxItem>
+                                                <button
+                                                    type="button"
+                                                    aria-label={isStatus ? `${displayName} zaten sabit` : isPinned ? `${displayName} sabitlemesini kaldır` : `${displayName} sütununu sabitle`}
+                                                    title={isStatus ? "Durum sütunu her zaman sabit kalır" : isPinned ? "Sabitlemeyi kaldır" : "Sola sabitle"}
+                                                    disabled={isStatus}
+                                                    onClick={(event) => {
+                                                        event.preventDefault()
+                                                        event.stopPropagation()
+                                                        togglePinnedColumn(column.id)
+                                                    }}
+                                                    className={cn(
+                                                        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md border transition-colors",
+                                                        isPinned
+                                                            ? "border-indigo-200 bg-indigo-50 text-indigo-600"
+                                                            : "border-slate-200 bg-white text-slate-400 hover:border-indigo-200 hover:text-indigo-600",
+                                                        isStatus && "cursor-not-allowed opacity-70"
+                                                    )}
+                                                >
+                                                    {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    disabled={disableVisibilityToggle}
+                                                    onClick={(event) => {
+                                                        event.preventDefault()
+                                                        event.stopPropagation()
+                                                        if (disableVisibilityToggle) return
+                                                        column.toggleVisibility(!checked)
+                                                    }}
+                                                    className={cn(
+                                                        "flex min-w-0 flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left",
+                                                        disableVisibilityToggle ? "cursor-not-allowed opacity-70" : "hover:bg-white"
+                                                    )}
+                                                >
+                                                    <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-slate-300 bg-white text-slate-700">
+                                                        {checked ? <Check className="h-3 w-3" /> : null}
+                                                    </span>
+                                                    <span className="min-w-0 flex-1 truncate">{displayName}</span>
+                                                    {isStatus ? (
+                                                        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                                            Sabit
+                                                        </span>
+                                                    ) : null}
+                                                </button>
+                                            </div>
                                         )
                                     })}
                                     <DropdownMenuSeparator />
@@ -755,6 +973,7 @@ export function DataTable<TData, TValue>({
                                         onSelect={(event) => {
                                             event.preventDefault()
                                             table.resetColumnVisibility()
+                                            setPinnedColumnIds([])
                                         }}
                                     >
                                         Varsayılan Sütunlar
@@ -893,12 +1112,12 @@ export function DataTable<TData, TValue>({
                                 return (
                                     <TableHead
                                         key={header.id}
-                                        ref={headerIndex === 0 ? firstHeaderCellRef : undefined}
+                                        ref={(element) => setHeaderCellRef(header.column.id, element)}
                                         className={cn(
                                             "h-11 whitespace-nowrap px-4 py-3 text-[11px] font-bold uppercase tracking-wider text-slate-500",
-                                            getStickyHeaderClass(headerIndex)
+                                            getStickyHeaderClass(headerIndex, header.column.id)
                                         )}
-                                        style={getStickyStyle(headerIndex)}
+                                        style={getStickyStyle(headerIndex, header.column.id)}
                                     >
                                         {canSort ? (
                                             <button
@@ -937,8 +1156,8 @@ export function DataTable<TData, TValue>({
                                 return (
                                     <TableHead
                                         key={`filter-${column.id}`}
-                                        className={cn("px-3 py-2", getStickyFilterClass(columnIndex))}
-                                        style={getStickyStyle(columnIndex)}
+                                        className={cn("px-3 py-2", getStickyFilterClass(columnIndex, column.id))}
+                                        style={getStickyStyle(columnIndex, column.id)}
                                     >
                                         {canFilter ? (
                                             <Input
@@ -972,9 +1191,9 @@ export function DataTable<TData, TValue>({
                                         key={cell.id}
                                         className={cn(
                                             "px-4 py-3 align-middle text-[13px] text-slate-700",
-                                            getStickyBodyClass(cellIndex)
+                                            getStickyBodyClass(cellIndex, cell.column.id)
                                         )}
-                                        style={getStickyStyle(cellIndex)}
+                                        style={getStickyStyle(cellIndex, cell.column.id)}
                                     >
                                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
                                     </TableCell>
