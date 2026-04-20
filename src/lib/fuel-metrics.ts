@@ -2,7 +2,7 @@ type FuelMetricRecord = {
     id: string;
     aracId: string;
     tarih: Date | string;
-    km: number;
+    km: number | null | undefined;
     litre: number;
     tutar: number;
     soforId?: string | null;
@@ -68,6 +68,8 @@ export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
 
     for (const record of records) {
         if (!record?.id || !record?.aracId) continue;
+        const km = toSafeNumber(record.km);
+        if (km <= 0) continue;
         const list = groupedByVehicle.get(record.aracId) || [];
         list.push(record);
         groupedByVehicle.set(record.aracId, list);

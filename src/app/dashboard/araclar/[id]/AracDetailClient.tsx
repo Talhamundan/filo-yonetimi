@@ -3,7 +3,7 @@
 import React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/ui/card";
 import { Badge } from "../../../../components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
@@ -37,6 +37,7 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
+import { formatCurrency, formatKm, formatLitres, getFuelKmDelta, getZimmetKmDelta, sumBy } from "@/lib/detail-table-totals";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AracDetaySaaS = any;
@@ -128,7 +129,7 @@ export default function AracDetailClient({
     const [yakitForm, setYakitForm] = React.useState({
         tarih: nowDateTimeLocal(),
         litre: "",
-        km: String(arac.guncelKm || 0),
+        km: "",
         istasyon: "",
     });
     const [masrafForm, setMasrafForm] = React.useState({
@@ -301,6 +302,19 @@ export default function AracDetailClient({
     const disFirmaAdi = arac.disFirma?.ad
         ? `${arac.disFirma.ad}${arac.disFirma.tur ? ` (${arac.disFirma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})` : ""}`
         : "-";
+    const aracTabloToplamlari = React.useMemo(() => ({
+        zimmetKm: getZimmetKmDelta(arac.kullaniciGecmisi || []),
+        bakimTutar: sumBy(arac.bakimlar || [], (kayit) => kayit.tutar),
+        arizaTutar: sumBy(arac.arizalar || [], (kayit) => kayit.tutar),
+        yakitKm: getFuelKmDelta(arac.yakitlar || []),
+        yakitLitre: sumBy(arac.yakitlar || [], (kayit) => kayit.litre),
+        yakitTutar: sumBy(arac.yakitlar || [], (kayit) => kayit.tutar),
+        masrafTutar: sumBy(arac.masraflar || [], (kayit) => kayit.tutar),
+        cezaTutar: sumBy(arac.cezalar || [], (kayit) => kayit.tutar),
+        trafikTutar: sumBy(arac.trafikSigortasi || [], (kayit) => kayit.tutar),
+        kaskoTutar: sumBy(arac.kasko || [], (kayit) => kayit.tutar),
+        muayeneTutar: sumBy(arac.muayene || [], (kayit) => kayit.tutar),
+    }), [arac]);
     const editAracFormKullanicilar = React.useMemo(() => {
         if (!arac.kullanici?.id) {
             return sortedKullanicilar;
@@ -704,7 +718,7 @@ export default function AracDetailClient({
         setYakitEditForm({
             tarih: toDateTimeLocalInput(row.tarih),
             litre: String(row.litre),
-            km: String(row.km),
+            km: row.km != null ? String(row.km) : "",
             istasyon: row.istasyon || "",
         });
     };
@@ -717,7 +731,7 @@ export default function AracDetailClient({
         const res = await updateYakit(editYakitRow.id, {
             tarih: yakitEditForm.tarih,
             litre: Number(yakitEditForm.litre),
-            km: Number(yakitEditForm.km),
+            km: yakitEditForm.km ? Number(yakitEditForm.km) : null,
             istasyon: yakitEditForm.istasyon,
         });
         setActionLoading(false);
@@ -1057,7 +1071,7 @@ export default function AracDetailClient({
             setYakitForm({
                 tarih: nowDateTimeLocal(),
                 litre: "",
-                km: String(arac.guncelKm || 0),
+                km: "",
                 istasyon: "",
             });
         } else if (tab === "masraflar") {
@@ -2484,6 +2498,14 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Geçmiş zimmet kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.kullaniciGecmisi && arac.kullaniciGecmisi.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatKm(aracTabloToplamlari.zimmetKm)}</TableCell>
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2600,6 +2622,15 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Servis kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.bakimlar && arac.bakimlar.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.bakimTutar)}</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2695,6 +2726,15 @@ export default function AracDetailClient({
                                             </TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.arizalar && arac.arizalar.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.arizaTutar)}</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2755,6 +2795,17 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Yakıt kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.yakitlar && arac.yakitlar.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="font-bold text-slate-900">{formatKm(aracTabloToplamlari.yakitKm)}</TableCell>
+                                                <TableCell className="font-bold text-slate-900">{formatLitres(aracTabloToplamlari.yakitLitre)}</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.yakitTutar)}</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2790,6 +2841,15 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Ekstra masraf kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.masraflar && arac.masraflar.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={2} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.masrafTutar)}</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2867,6 +2927,15 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={7} className="h-32 text-center text-slate-500">Ceza kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.cezalar && arac.cezalar.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={5} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.cezaTutar)}</TableCell>
+                                                <TableCell />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>
@@ -2906,6 +2975,15 @@ export default function AracDetailClient({
                                                 <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Trafik sigortası kaydı bulunmuyor.</TableCell></TableRow>
                                             )}
                                         </TableBody>
+                                        {arac.trafikSigortasi && arac.trafikSigortasi.length > 0 ? (
+                                            <TableFooter className="bg-slate-50/90">
+                                                <TableRow>
+                                                    <TableCell colSpan={2} className="font-bold text-slate-900">Toplam</TableCell>
+                                                    <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.trafikTutar)}</TableCell>
+                                                    <TableCell />
+                                                </TableRow>
+                                            </TableFooter>
+                                        ) : null}
                                     </Table>
                                 </Card>
                                 <Card className="shadow-sm border border-[#E2E8F0] bg-white rounded-xl overflow-hidden">
@@ -2940,6 +3018,15 @@ export default function AracDetailClient({
                                                 <TableRow><TableCell colSpan={4} className="h-32 text-center text-slate-500">Kasko poliçesi bulunmuyor.</TableCell></TableRow>
                                             )}
                                         </TableBody>
+                                        {arac.kasko && arac.kasko.length > 0 ? (
+                                            <TableFooter className="bg-slate-50/90">
+                                                <TableRow>
+                                                    <TableCell colSpan={2} className="font-bold text-slate-900">Toplam</TableCell>
+                                                    <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.kaskoTutar)}</TableCell>
+                                                    <TableCell />
+                                                </TableRow>
+                                            </TableFooter>
+                                        ) : null}
                                     </Table>
                                 </Card>
                             </div>
@@ -2978,6 +3065,15 @@ export default function AracDetailClient({
                                             <TableRow><TableCell colSpan={5} className="h-32 text-center text-slate-500">Muayene kaydı bulunmuyor.</TableCell></TableRow>
                                         )}
                                     </TableBody>
+                                    {arac.muayene && arac.muayene.length > 0 ? (
+                                        <TableFooter className="bg-slate-50/90">
+                                            <TableRow>
+                                                <TableCell colSpan={2} className="font-bold text-slate-900">Toplam</TableCell>
+                                                <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.muayeneTutar)}</TableCell>
+                                                <TableCell colSpan={2} />
+                                            </TableRow>
+                                        </TableFooter>
+                                    ) : null}
                                 </Table>
                             </Card>
                         </TabsContent>

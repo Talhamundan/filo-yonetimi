@@ -6,6 +6,7 @@ import type {
     GenericWhere,
 } from "@/lib/dashboard-types";
 import { getVehicleUsageScopeWhere, toNumber } from "@/lib/dashboard-helpers";
+import { KIRALIK_SIRKET_ADI } from "@/lib/ruhsat-sahibi";
 
 const EXCLUDED_MASRAF_TURLERI: readonly MasrafKategorisi[] = [
     MasrafKategorisi.YAKIT,
@@ -126,8 +127,18 @@ function addVehicleFuel(map: Record<string, VehicleAccumulator>, rows: YakitGrou
 export async function getFleetStatusData(scope: GenericWhere, vehicleScopeOverride?: GenericWhere) {
     const usageScopedVehicleWhere = vehicleScopeOverride || getVehicleUsageScopeWhere(scope);
     const vehicleScope = {
-        ...(usageScopedVehicleWhere as Prisma.AracWhereInput),
-        deletedAt: null,
+        AND: [
+            usageScopedVehicleWhere as Prisma.AracWhereInput,
+            { deletedAt: null },
+            {
+                NOT: {
+                    OR: [
+                        { disFirma: { tur: "KIRALIK" } },
+                        { sirket: { ad: { equals: KIRALIK_SIRKET_ADI, mode: "insensitive" } } },
+                    ],
+                },
+            },
+        ],
     } as Prisma.AracWhereInput;
 
     const [toplamArac, aktifArac, servisteArac, arizaliArac, durumDagitimi] = await Promise.all([

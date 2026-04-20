@@ -309,7 +309,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         tarih: Date;
         tutar: number;
         litre: number;
-        km: number;
+        km: number | null;
         soforId: string | null;
         arac?: { kullaniciId?: string | null; kategori?: string | null } | null;
     }>);

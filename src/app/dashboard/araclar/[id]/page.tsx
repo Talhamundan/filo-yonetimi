@@ -288,7 +288,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             id: yakit.id,
             aracId: yakit.aracId,
             tarih: yakit.tarih,
-            km: Number(yakit.km || 0),
+            km: yakit.km == null ? null : Number(yakit.km),
             litre: Number(yakit.litre || 0),
             tutar: Number(yakit.tutar || 0),
             soforId: yakit.soforId || yakit.sofor?.id || null,

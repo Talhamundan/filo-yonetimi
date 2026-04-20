@@ -19,7 +19,7 @@ type FuelRow = {
     id: string;
     aracId: string;
     tarih: Date;
-    km: number;
+    km: number | null;
     litre: number;
     tutar: number;
     soforId: string | null;
@@ -182,7 +182,7 @@ export async function getDashboardFuelAverageData(params: {
             id: row.id,
             aracId: row.aracId,
             tarih: row.tarih,
-            km: Number(row.km || 0),
+            km: row.km == null ? null : Number(row.km),
             litre: Number(row.litre || 0),
             tutar: Number(row.tutar || 0),
             soforId:

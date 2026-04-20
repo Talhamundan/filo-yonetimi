@@ -217,7 +217,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             id: kayit.id,
             aracId: kayit.aracId,
             tarih: kayit.tarih,
-            km: Number(kayit.km || 0),
+            km: kayit.km == null ? null : Number(kayit.km),
             litre: Number(kayit.litre || 0),
             tutar: Number(kayit.tutar || 0),
             soforId: kayit.soforId || null,

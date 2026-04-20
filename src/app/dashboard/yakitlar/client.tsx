@@ -798,7 +798,7 @@ export default function YakitlarClient({
             soforId: normalizeSoforId(row.soforId || (row as any).kullanici?.id || row.arac.kullanici?.id),
             tarih: new Date(row.tarih).toISOString().slice(0, 10),
             litre: row.litre.toString(),
-            km: row.km.toString(),
+            km: row.km != null ? row.km.toString() : '',
             endeks: row.endeks?.toString() || '',
             istasyon: row.istasyon || '',
             odemeYontemi: row.odemeYontemi || 'NAKIT'

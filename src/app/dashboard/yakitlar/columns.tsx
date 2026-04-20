@@ -13,7 +13,7 @@ export type YakitRow = {
     tarih: Date;
     litre: number;
     tutar: number;
-    km: number;
+    km: number | null;
     istasyon: string | null;
     odemeYontemi: 'NAKIT' | 'TASIT_TANIMA';
     soforId?: string | null;
@@ -129,6 +129,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
             header: "KM",
             cell: ({ row }) => {
                 if (row.original.isStokHareketi) return <div className="text-slate-300 italic">-</div>;
+                if (row.original.km == null) return <div className="text-slate-400 italic">Belirtilmedi</div>;
                 return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km</div>
             },
         },

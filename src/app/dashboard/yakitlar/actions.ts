@@ -4,7 +4,7 @@ import { OdemeYontemi, YakitTankHareketTip } from "@prisma/client";
 import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
-import { assertKmWriteConsistency, getAracMaxKnownKm, syncAracGuncelKm } from "@/lib/km-consistency";
+import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
 import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
@@ -382,7 +382,7 @@ export async function createYakit(data: CreateYakitInput) {
         const parsedKm = parseKmInput(data.km);
         const km =
             parsedKm === null
-                ? await getAracMaxKnownKm(arac.id)
+                ? null
                 : await assertKmWriteConsistency({
                     aracId: arac.id,
                     km: parsedKm,
@@ -455,14 +455,14 @@ export async function createYakit(data: CreateYakitInput) {
         const result = await (prisma as any).$transaction(async (tx: any) => {
             const yakit = await tx.yakit.create({
                 data: {
-                    aracId: arac.id,
+                    arac: { connect: { id: arac.id } },
                     sirketId: usageContext.kullanimSirketId,
                     tarih: parsedTarih,
                     litre: parsedLitre,
                     tutar: finalTutar,
-                    km: Number(km),
+                    ...(km === null ? {} : { km: Number(km) }),
                     endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : null,
-                    ...(YAKIT_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
+                    ...(YAKIT_HAS_SOFOR_ID && resolvedSoforId ? { sofor: { connect: { id: resolvedSoforId } } } : {}),
                     istasyon: data.istasyon || null,
                     odemeYontemi: resolveOdemeYontemi(data.odemeYontemi),
                 }
@@ -482,10 +482,10 @@ export async function createYakit(data: CreateYakitInput) {
                         litre: parsedLitre,
                         birimMaliyet: tank.birimMaliyet,
                         toplamTutar: finalTutar,
-                        tankId: selectedTankId,
-                        aracId: arac.id,
-                        soforId: resolvedSoforId,
-                        yakitId: yakit.id,
+                        tank: { connect: { id: selectedTankId } },
+                        arac: { connect: { id: arac.id } },
+                        ...(resolvedSoforId ? { sofor: { connect: { id: resolvedSoforId } } } : {}),
+                        yakit: { connect: { id: yakit.id } },
                         endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : null
                     }
                 });
@@ -539,15 +539,11 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
         const normalizedKmInput = kmInput !== undefined ? parseKmInput(kmInput) : undefined;
         const vehicleChanged = Boolean(data.aracId && data.aracId !== mevcutKayit.aracId);
 
-        let normalizedKm: number | undefined;
+        let normalizedKm: number | null | undefined;
         if (normalizedKmInput === undefined) {
             normalizedKm = undefined;
         } else if (normalizedKmInput === null) {
-            normalizedKm = vehicleChanged
-                ? await getAracMaxKnownKm(arac.id)
-                : Number.isFinite(Number(mevcutKayit.km))
-                    ? Math.trunc(Number(mevcutKayit.km))
-                    : await getAracMaxKnownKm(arac.id);
+            normalizedKm = null;
         } else {
             const checkedKm = await assertKmWriteConsistency({
                 aracId: arac.id,
@@ -645,14 +641,16 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             const updated = await tx.yakit.update({
                 where: { id },
                 data: {
-                    aracId: arac.id,
+                    arac: { connect: { id: arac.id } },
                     sirketId: usageContext.kullanimSirketId,
                     tarih: parsedTarih,
                     litre: parsedLitre,
                     tutar: finalTutar,
-                    km: normalizedKm !== undefined ? Number(normalizedKm) : undefined,
+                    km: normalizedKm === undefined ? undefined : normalizedKm === null ? null : Number(normalizedKm),
                     endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : undefined,
-                    ...(YAKIT_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
+                    ...(YAKIT_HAS_SOFOR_ID
+                        ? { sofor: resolvedSoforId ? { connect: { id: resolvedSoforId } } : { disconnect: true } }
+                        : {}),
                     istasyon: data.istasyon !== undefined ? data.istasyon || null : undefined,
                     odemeYontemi: data.odemeYontemi ? resolveOdemeYontemi(data.odemeYontemi) : undefined,
                 }
@@ -672,10 +670,12 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                         litre: newLitre,
                         birimMaliyet: tank.birimMaliyet,
                         toplamTutar: finalTutar || (newLitre * tank.birimMaliyet),
-                        tankId: selectedTankId,
-                        aracId: arac.id,
-                        soforId: resolvedSoforId || oldValue.soforId,
-                        yakitId: id,
+                        tank: { connect: { id: selectedTankId } },
+                        arac: { connect: { id: arac.id } },
+                        ...((resolvedSoforId || oldValue.soforId)
+                            ? { sofor: { connect: { id: resolvedSoforId || oldValue.soforId } } }
+                            : {}),
+                        yakit: { connect: { id } },
                         endeks: data.endeks !== undefined ? (data.endeks === null ? null : Math.trunc(Number(data.endeks))) : (oldValue.endeks || null)
                     }
                 });

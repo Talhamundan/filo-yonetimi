@@ -4,7 +4,7 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import React from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "../../../../components/ui/card";
 import { Badge } from "../../../../components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../../../../components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components/ui/tabs";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
@@ -33,6 +33,7 @@ import { getRoleLabel } from "@/lib/role-label";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { sortByTextValue } from "@/lib/sort-utils";
+import { formatCurrency, formatKm, formatLitres, getFuelKmDelta, getZimmetKmDelta, sumBy } from "@/lib/detail-table-totals";
 
 export default function PersonelDetailClient({
     initialPersonel: p,
@@ -151,6 +152,16 @@ export default function PersonelDetailClient({
         return raw;
     }, [p.yakitKarsilastirmaReferans100Km]);
     const personelOrtalamaUstuYakit = Boolean(p.ortalamaUstuYakit);
+    const personelTabloToplamlari = React.useMemo(() => ({
+        zimmetKm: getZimmetKmDelta(p.zimmetler || []),
+        cezaTutar: sumBy(p.cezalar || [], (kayit) => kayit.tutar),
+        arizaTutar: sumBy(p.arizalar || [], (kayit) => kayit.tutar),
+        servisTutar: sumBy(p.bakimKayitlari || [], (kayit) => kayit.tutar),
+        yakitKm: getFuelKmDelta(p.yakitKayitlari || []),
+        yakitLitre: sumBy(p.yakitKayitlari || [], (kayit) => kayit.litre),
+        yakitTutar: sumBy(p.yakitKayitlari || [], (kayit) => kayit.tutar),
+        masrafTutar: sumBy(p.arac?.masraflar || [], (kayit) => kayit.tutar),
+    }), [p]);
 
     const handleUpdate = async () => {
         setLoading(true);
@@ -242,7 +253,7 @@ export default function PersonelDetailClient({
             tarih: toDateTimeLocalInput(row.tarih),
             litre: row.litre.toString(),
             tutar: row.tutar.toString(),
-            km: row.km.toString(),
+            km: row.km != null ? row.km.toString() : "",
             istasyon: row.istasyon || "",
             odemeYontemi: row.odemeYontemi,
             soforId: row.soforId || p.id,
@@ -781,6 +792,15 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.zimmetler && p.zimmetler.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatKm(personelTabloToplamlari.zimmetKm)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -830,6 +850,15 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.cezalar && p.cezalar.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-rose-600">{formatCurrency(personelTabloToplamlari.cezaTutar)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -905,6 +934,15 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.arizalar && p.arizalar.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={5} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatCurrency(personelTabloToplamlari.arizaTutar)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -962,6 +1000,15 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.bakimKayitlari && p.bakimKayitlari.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={6} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatCurrency(personelTabloToplamlari.servisTutar)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -1015,6 +1062,17 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.yakitKayitlari && p.yakitKayitlari.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatKm(personelTabloToplamlari.yakitKm)}</TableCell>
+                                            <TableCell className="font-bold text-slate-900">{formatLitres(personelTabloToplamlari.yakitLitre)}</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatCurrency(personelTabloToplamlari.yakitTutar)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -1055,6 +1113,15 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
+                                {p.arac?.masraflar && p.arac.masraflar.length > 0 ? (
+                                    <TableFooter className="bg-slate-50/90">
+                                        <TableRow>
+                                            <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
+                                            <TableCell className="text-right font-bold text-slate-900">{formatCurrency(personelTabloToplamlari.masrafTutar)}</TableCell>
+                                            <TableCell />
+                                        </TableRow>
+                                    </TableFooter>
+                                ) : null}
                             </Table>
                         </Card>
                     </TabsContent>
@@ -1120,7 +1187,7 @@ export default function PersonelDetailClient({
                                         tarih: yakitData.tarih,
                                         litre: Number(yakitData.litre),
                                         tutar: Number(yakitData.tutar),
-                                        km: Number(yakitData.km),
+                                        km: yakitData.km ? Number(yakitData.km) : null,
                                         istasyon: yakitData.istasyon,
                                         odemeYontemi: yakitData.odemeYontemi,
                                         soforId: yakitData.soforId,

@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/excel-entities";
+import { KIRALIK_SIRKET_ADI, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 // --- Re-exports ---
 export { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
@@ -65,6 +66,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "durum",
             "plaka",
             "ruhsatSahibi",
+            "disFirma",
             "calistigiKurum",
             "saseNo",
             "motorNo",
@@ -84,6 +86,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             durum: "Durum",
             plaka: "Plaka",
             ruhsatSahibi: "Ruhsat Sahibi",
+            disFirma: "Dış Firma",
             calistigiKurum: "Kullanıcı Firma",
             saseNo: "Şase No",
             motorNo: "Motor No",
@@ -107,6 +110,19 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
                 "ruhsatSahibiFirmasi",
                 "sirket",
                 "bagliSirket",
+            ],
+            disFirma: [
+                "disFirma",
+                "Dış Firma",
+                "Dis Firma",
+                "Dış Firma (Taşeron / Kiralık)",
+                "Dis Firma (Taseron / Kiralik)",
+                "Kiralık Firma",
+                "Kiralik Firma",
+                "Taşeron Firma",
+                "Taseron Firma",
+                "Araç Sahibi Dış Firma",
+                "Arac Sahibi Dis Firma",
             ],
             calistigiKurum: [
                 "Kullanıcı Firma",
@@ -502,6 +518,7 @@ const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "durum",
     "kullaniciId",
     "sirketId",
+    "disFirmaId",
     "calistigiKurum",
     "kategori",
     "saseNo",
@@ -699,11 +716,15 @@ export function buildRelationFieldByForeignKeyMap(model: NonNullable<ReturnType<
         const objectFieldByName = new Map(objectFields.map((field) => [field.name, field]));
         const sirketField = objectFieldByName.get("sirket");
         const kullaniciField = objectFieldByName.get("kullanici");
+        const disFirmaField = objectFieldByName.get("disFirma");
         if (!relationFieldByForeignKey.has("sirketId") && sirketField) {
             relationFieldByForeignKey.set("sirketId", sirketField);
         }
         if (!relationFieldByForeignKey.has("kullaniciId") && kullaniciField) {
             relationFieldByForeignKey.set("kullaniciId", kullaniciField);
+        }
+        if (!relationFieldByForeignKey.has("disFirmaId") && disFirmaField) {
+            relationFieldByForeignKey.set("disFirmaId", disFirmaField);
         }
     }
 
@@ -806,6 +827,8 @@ export function buildExportColumns(
                 const key =
                     modelName === "Arac" && field.name === "sirketId" && !usedKeys.has("ruhsatSahibi")
                         ? "ruhsatSahibi"
+                        : modelName === "Arac" && field.name === "disFirmaId" && !usedKeys.has("disFirma")
+                            ? "disFirma"
                         : getExportColumnKeyForRelationId(field.name, usedKeys);
                 usedKeys.add(key);
                 exportColumns.push({
@@ -844,14 +867,19 @@ export function getRelationImportHeaderAliases(modelName: string, foreignKeyFiel
             "ruhsatSahibiFirmasi",
         ];
     }
-    if (modelName === "arac" && foreignKeyFieldName === "sirketId") {
+    if (modelName === "arac" && foreignKeyFieldName === "disFirmaId") {
         return [
-            "Bağlı Şirket",
-            "Bagli Sirket",
-            "Şirket",
-            "Sirket",
-            "sirket",
-            "bagliSirket",
+            "disFirma",
+            "Dış Firma",
+            "Dis Firma",
+            "Dış Firma (Taşeron / Kiralık)",
+            "Dis Firma (Taseron / Kiralik)",
+            "Kiralık Firma",
+            "Kiralik Firma",
+            "Taşeron Firma",
+            "Taseron Firma",
+            "Araç Sahibi Dış Firma",
+            "Arac Sahibi Dis Firma",
         ];
     }
     if (modelName === "yakit" && foreignKeyFieldName === "sirketId") {
@@ -1440,6 +1468,29 @@ export function normalizeLookupString(value: unknown) {
     return String(normalized).trim();
 }
 
+function isKiralikImportText(value: unknown) {
+    const text = normalizeLookupString(value);
+    if (!text) return false;
+    return isKiralikSirketName(text) || normalizeTextToken(text) === "kiralik";
+}
+
+function inferDisFirmaTuruFromText(value: unknown): "KIRALIK" | "TASERON" | null {
+    const text = normalizeLookupString(value);
+    if (!text) return null;
+    const normalized = normalizeTextToken(text);
+    if (normalized.includes("kiralik")) return "KIRALIK";
+    if (normalized.includes("taseron")) return "TASERON";
+    return null;
+}
+
+function normalizeDisFirmaLookupName(value: unknown) {
+    const text = normalizeLookupString(value);
+    if (!text) return null;
+    return text
+        .replace(/\s*\((kiralık|kiralik|taşeron|taseron)\)\s*$/i, "")
+        .trim() || null;
+}
+
 async function findSirketIdByNameForImport(tx: unknown, value: unknown) {
     const name = normalizeLookupString(value);
     if (!name) return null;
@@ -1452,6 +1503,90 @@ async function findSirketIdByNameForImport(tx: unknown, value: unknown) {
     });
 
     const id = Array.isArray(sirket) ? normalizeLookupString(sirket[0]?.id) : null;
+    return id || null;
+}
+
+async function ensureKiralikSirketIdForImport(tx: unknown) {
+    const existingId = await findSirketIdByNameForImport(tx, KIRALIK_SIRKET_ADI);
+    if (existingId) return existingId;
+
+    const delegate = getModelDelegate(tx, "sirket");
+    if (!delegate?.create) return null;
+
+    const created = await delegate.create({
+        data: { ad: KIRALIK_SIRKET_ADI },
+        select: { id: true },
+    }) as { id?: string } | null;
+    return normalizeLookupString(created?.id);
+}
+
+async function resolveDisFirmaIdByNameForImport(
+    tx: unknown,
+    value: unknown,
+    preferredTur?: "KIRALIK" | "TASERON" | null,
+    createIfMissing = false
+) {
+    const name = normalizeDisFirmaLookupName(value);
+    if (!name) return null;
+
+    const delegate = getModelDelegate(tx, "disFirma");
+    if (!delegate?.findMany) return null;
+
+    const inferredTur = inferDisFirmaTuruFromText(value);
+    const targetTur = preferredTur || inferredTur || null;
+    const normalizedName = normalizeHeaderToken(name);
+
+    const findCandidates = async (tur?: "KIRALIK" | "TASERON" | null) => {
+        const rows = await delegate.findMany?.({
+            where: {
+                ...(tur ? { tur } : {}),
+            },
+            select: { id: true, ad: true, tur: true } as Record<string, boolean>,
+            orderBy: { id: "asc" },
+            take: 1000,
+        });
+        return (rows || []).filter((row) => normalizeHeaderToken(String(row.ad || "")) === normalizedName);
+    };
+
+    const preferredMatches = targetTur ? await findCandidates(targetTur) : [];
+    if (preferredMatches.length > 0) {
+        return normalizeLookupString(preferredMatches[0]?.id);
+    }
+
+    const allMatches = targetTur ? [] : await findCandidates(null);
+    if (allMatches.length === 1) {
+        return normalizeLookupString(allMatches[0]?.id);
+    }
+
+    if (allMatches.length > 1) {
+        const kiralikMatch = allMatches.find((row) => row.tur === "KIRALIK");
+        if (kiralikMatch) return normalizeLookupString(kiralikMatch.id);
+        return normalizeLookupString(allMatches[0]?.id);
+    }
+
+    if (!createIfMissing || !delegate.create) return null;
+
+    const created = await delegate.create({
+        data: {
+            ad: name,
+            tur: targetTur || "KIRALIK",
+        },
+        select: { id: true },
+    }) as { id?: string } | null;
+    return normalizeLookupString(created?.id);
+}
+
+async function findAracIdByKullaniciIdForImport(tx: unknown, kullaniciIdValue: unknown) {
+    const kullaniciId = normalizeLookupString(kullaniciIdValue);
+    if (!kullaniciId) return null;
+
+    const rows = await (getModelDelegate(tx, "arac") as any)?.findMany?.({
+        where: { kullaniciId },
+        select: { id: true },
+        take: 1,
+        orderBy: { id: "asc" },
+    });
+    const id = Array.isArray(rows) ? normalizeLookupString(rows[0]?.id) : null;
     return id || null;
 }
 
@@ -1887,6 +2022,22 @@ export async function resolveRelationValueToForeignKey(params: {
         throw new Error(`Satir ${params.rowIndex + 2}: ${params.relationColumnKey} icin iliski modeli bulunamadi.`);
     }
 
+    if (params.relationModelName === "DisFirma") {
+        const preferredTur = inferDisFirmaTuruFromText(params.rawRelationValue);
+        const disFirmaId = await resolveDisFirmaIdByNameForImport(
+            params.tx,
+            params.rawRelationValue,
+            preferredTur,
+            params.context?.importModelName === "arac" && Boolean(preferredTur)
+        );
+        if (disFirmaId) {
+            params.cache.set(cacheKey, disFirmaId);
+            return disFirmaId;
+        }
+        if (params.allowNotFound) return null;
+        throw new Error(`Satir ${params.rowIndex + 2}: ${params.relationColumnKey} icin dis firma bulunamadi (${relationText}).`);
+    }
+
     const whereCandidates = buildRelationLookupWheres(params.relationModelName, relationText);
     for (const where of whereCandidates) {
         const effectiveWhere =
@@ -2191,19 +2342,43 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             }
 
             // Business Logic Specifics (Yakit/Bakim/Arac)
+            if (config.prismaModel === "arac") {
+                const ruhsatHeader = resolveImportHeaderForRecord(
+                    availableHeaders,
+                    normalizedHeaderIndex,
+                    availableHeaders,
+                    normalizedHeaderIndex,
+                    getHeaderCandidates(config.prismaModel, "ruhsatSahibi", getRelationImportHeaderAliases(config.prismaModel, "sirketId"))
+                );
+                const rawRuhsatSahibi = ruhsatHeader ? record[ruhsatHeader] : null;
+                const ruhsatKiralikMi = isKiralikImportText(rawRuhsatSahibi);
+
+                if (ruhsatKiralikMi) {
+                    parsedRow.sirketId = await ensureKiralikSirketIdForImport(tx);
+                }
+
+                const disFirmaHeader = resolveImportHeaderForRecord(
+                    availableHeaders,
+                    normalizedHeaderIndex,
+                    availableHeaders,
+                    normalizedHeaderIndex,
+                    getHeaderCandidates(config.prismaModel, "disFirma", getRelationImportHeaderAliases(config.prismaModel, "disFirmaId"))
+                );
+                const rawDisFirma = disFirmaHeader ? record[disFirmaHeader] : null;
+                if (!parsedRow.disFirmaId && normalizeDisFirmaLookupName(rawDisFirma)) {
+                    parsedRow.disFirmaId = await resolveDisFirmaIdByNameForImport(
+                        tx,
+                        rawDisFirma,
+                        ruhsatKiralikMi ? "KIRALIK" : inferDisFirmaTuruFromText(rawDisFirma),
+                        ruhsatKiralikMi
+                    );
+                }
+            }
+
             if (config.prismaModel === "yakit") {
                 parsedRow.tutar = parsedRow.tutar || 0;
                 if (!parsedRow.aracId) { skipped++; continue; }
                 parsedRow.sirketId = await resolveYakitUsageSirketIdForImport(tx, parsedRow.aracId);
-                if (parsedRow.km === undefined || parsedRow.km === null) {
-                    let km = kmCache.get(parsedRow.aracId as string);
-                    if (km === undefined) {
-                        const arac = await (getModelDelegate(tx, "arac") as any).findUnique({ where: { id: parsedRow.aracId }, select: { guncelKm: true } });
-                        km = arac?.guncelKm || 0;
-                    }
-                    parsedRow.km = km;
-                }
-                kmCache.set(parsedRow.aracId as string, parsedRow.km as number);
             }
 
             if (config.prismaModel === "bakim") {
@@ -2272,16 +2447,6 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             validateRequiredFields(fields, parsedRow, modelMeta.name);
 
             const whereUnique = getWhereUnique(fields, parsedRow, config.prismaModel);
-            const createData = config.prismaModel === "yakit" ? applyYakitRelationWritesForCreate(buildCreateData(fields, parsedRow)) : buildCreateData(fields, parsedRow);
-            const updateData = config.prismaModel === "yakit" ? applyYakitRelationWritesForUpdate(buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName), parsedRow) : buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
-
-            if (config.prismaModel === "bakim") {
-                const prunedC = pruneDataByExistingColumns(createData, bakimExistingColumns);
-                const prunedU = pruneDataByExistingColumns(updateData, bakimExistingColumns);
-                Object.keys(createData).forEach(k => { if(!(k in prunedC)) delete createData[k]; });
-                Object.keys(updateData).forEach(k => { if(!(k in prunedU)) delete updateData[k]; });
-            }
-
             let existingId: string | null = null;
             if (whereUnique) {
                 const exists = await model.findUnique({ where: whereUnique.where, select: { id: true } }) as { id: string } | null;
@@ -2290,6 +2455,24 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
 
             if (!existingId) {
                 existingId = await findExistingBusinessRecord(tx, config.prismaModel, parsedRow) as string | null;
+            }
+
+            if (config.prismaModel === "arac" && parsedRow.kullaniciId) {
+                const assignedAracId = await findAracIdByKullaniciIdForImport(tx, parsedRow.kullaniciId);
+                if (assignedAracId && assignedAracId !== existingId) {
+                    // Arac.kullaniciId benzersizdir; importu durdurmak yerine sadece çakışan zimmeti atlarız.
+                    parsedRow.kullaniciId = undefined;
+                }
+            }
+
+            const createData = config.prismaModel === "yakit" ? applyYakitRelationWritesForCreate(buildCreateData(fields, parsedRow)) : buildCreateData(fields, parsedRow);
+            const updateData = config.prismaModel === "yakit" ? applyYakitRelationWritesForUpdate(buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName), parsedRow) : buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
+
+            if (config.prismaModel === "bakim") {
+                const prunedC = pruneDataByExistingColumns(createData, bakimExistingColumns);
+                const prunedU = pruneDataByExistingColumns(updateData, bakimExistingColumns);
+                Object.keys(createData).forEach(k => { if(!(k in prunedC)) delete createData[k]; });
+                Object.keys(updateData).forEach(k => { if(!(k in prunedU)) delete updateData[k]; });
             }
 
             if (existingId) {

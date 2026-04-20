@@ -13,7 +13,7 @@ type TxClient = {
     };
     yakit: {
         findFirst: (args: {
-            where: { aracId: string };
+            where: { aracId: string; km?: { not: null } };
             select: { km: true };
             orderBy: Array<Record<string, "asc" | "desc">>;
         }) => Promise<{ km: number | null } | null>;
@@ -193,7 +193,7 @@ export async function assertKmWriteConsistency(params: {
 export async function syncAracGuncelKm(aracId: string, tx: TxClient = prisma) {
     const latestFuelRow = await tx.yakit
         .findFirst({
-            where: { aracId },
+            where: { aracId, km: { not: null } },
             select: { km: true },
             orderBy: [{ tarih: "desc" }, { id: "desc" }],
         })
@@ -203,7 +203,15 @@ export async function syncAracGuncelKm(aracId: string, tx: TxClient = prisma) {
             }
             throw error;
         });
-    const latestFuelKm = Number(latestFuelRow?.km || 0);
+    if (latestFuelRow?.km === null || latestFuelRow?.km === undefined) {
+        const aracRow = await tx.arac.findUnique({
+            where: { id: aracId },
+            select: { guncelKm: true },
+        });
+        return Number(aracRow?.guncelKm || 0);
+    }
+
+    const latestFuelKm = Number(latestFuelRow.km);
     const nextKm = Number.isFinite(latestFuelKm) && latestFuelKm > 0 ? Math.trunc(latestFuelKm) : 0;
 
     await tx.arac.updateMany({

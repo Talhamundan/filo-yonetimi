@@ -307,7 +307,7 @@ model Yakit {
   tarih        DateTime          @default(now())
   litre        Float
   tutar        Float
-  km           Int
+  km           Int?
   istasyon     String?
   aracId       String
   sirketId     String?
