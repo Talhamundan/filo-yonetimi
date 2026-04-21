@@ -15,8 +15,8 @@ import { createArac, updateArac, deleteArac } from "./actions";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { RowActionButton } from "@/components/ui/row-action-button";
-import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
+import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const toDateTimeLocalInput = (value?: Date | string | null) => {
@@ -56,6 +56,7 @@ const FormFields = ({
     kullaniciFirmaOptions,
     showInitialMuayeneField = false,
     allowIndependentOption = true,
+    isExternalMode = false,
 }: {
     formData: any,
     setFormData: any,
@@ -65,15 +66,8 @@ const FormFields = ({
     kullaniciFirmaOptions: string[],
     showInitialMuayeneField?: boolean,
     allowIndependentOption?: boolean,
+    isExternalMode?: boolean,
 }) => {
-    const hasKiralikSirket = React.useMemo(
-        () => sirketler.some((sirket) => isKiralikSirketName(sirket.ad)),
-        [sirketler]
-    );
-
-    const searchParams = useSearchParams();
-    const disFirmaIdParam = searchParams.get("disFirmaId");
-    const isExternalMode = Boolean(disFirmaIdParam);
     const firmaOptions = React.useMemo(() => {
         const options = [...kullaniciFirmaOptions];
         const currentFirma = typeof formData.calistigiKurum === "string" ? formData.calistigiKurum.trim() : "";
@@ -148,7 +142,6 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 {allowIndependentOption ? <option value="">Şirket Seçiniz (Bağımsız)</option> : <option value="" disabled>Şirket Seçiniz</option>}
-                {allowIndependentOption && !hasKiralikSirket && !isExternalMode && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
@@ -163,7 +156,7 @@ const FormFields = ({
                     onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
-                    <option value="">Dış firma yok</option>
+                    <option value="">Firma seçiniz</option>
                     {disFirmalar.map((firma) => (
                         <option key={firma.id} value={firma.id}>
                             {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
@@ -262,13 +255,17 @@ export default function AraclarClient({
     sirketler, 
     disFirmalar,
     kullanicilar,
-    role
+    role,
+    isExternalMode = false,
+    externalMode = null,
 }: { 
     initialAraclar: AracRow[], 
     sirketler: { id: string, ad: string, bulunduguIl: string }[],
     disFirmalar: Array<{ id: string; ad: string; tur: string }>,
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
-    role?: string | null
+    role?: string | null,
+    isExternalMode?: boolean,
+    externalMode?: ExternalVendorMode | null,
 }) {
     const isTeknik = role === "TEKNIK";
     const isAdminUser = role === "ADMIN";
@@ -277,6 +274,7 @@ export default function AraclarClient({
     const searchParams = useSearchParams();
     const scopedHref = useDashboardScopedHref();
     const scopedSirketId = searchParams.get("sirket")?.trim() || "";
+    const scopedDisFirmaId = searchParams.get("disFirmaId")?.trim() || "";
     const defaultCreateSirketId = React.useMemo(() => {
         if (scopedSirketId && sirketler.some((s) => s.id === scopedSirketId)) {
             return scopedSirketId;
@@ -289,10 +287,14 @@ export default function AraclarClient({
         }
         return "";
     }, [canAssignIndependentRecords, scopedSirketId, sirketler]);
+    const defaultCreateDisFirmaId = React.useMemo(() => {
+        if (!isExternalMode || !scopedDisFirmaId) return "";
+        return disFirmalar.some((firma) => firma.id === scopedDisFirmaId) ? scopedDisFirmaId : "";
+    }, [disFirmalar, isExternalMode, scopedDisFirmaId]);
     const router = useRouter();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<AracRow | null>(null);
-    const [formData, setFormData] = useState({ ...EMPTY, sirketId: defaultCreateSirketId });
+    const [formData, setFormData] = useState({ ...EMPTY, sirketId: defaultCreateSirketId, disFirmaId: defaultCreateDisFirmaId });
     const [loading, setLoading] = useState(false);
     const sortedKullanicilar = useMemo(() => sortByTextValue(kullanicilar, (u) => u.adSoyad), [kullanicilar]);
     const kullaniciFirmaOptions = useMemo(() => {
@@ -328,15 +330,25 @@ export default function AraclarClient({
         return sortByTextValue([...sortedKullanicilar, mevcutKullanici], (u) => u.adSoyad);
     }, [editRow, sortedKullanicilar]);
 
+    const vendorLabel = externalMode === "KIRALIK" ? "Kiralık" : externalMode === "TASERON" ? "Taşeron" : "Dış";
+    const pageTitle = isExternalMode ? `${vendorLabel} Araçlar` : "Araç Envanteri";
+    const pageDescription = isExternalMode
+        ? `${vendorLabel} araç kayıtlarını ana araç listesinden ayrı yönetin.`
+        : "Sistemdeki tüm araçların detaylı listesi. Durumlarını, güncel KM ve şoför bilgilerini buradan yönetin.";
+    const createButtonLabel = isExternalMode ? `Yeni ${vendorLabel} Araç Ekle` : "Yeni Araç Ekle";
+
     const handleCreate = async () => {
         if (!formData.plaka || !formData.marka) {
             return toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
+        }
+        if (isExternalMode && !formData.disFirmaId) {
+            return toast.warning("Eksik Bilgi", { description: "Lütfen dış firma seçin." });
         }
         setLoading(true);
         const res = await createArac(formData);
         if (res.success) {
             setCreateOpen(false);
-            setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+            setFormData({ ...EMPTY, sirketId: defaultCreateSirketId, disFirmaId: defaultCreateDisFirmaId });
             toast.success("Araç Kaydedildi", { description: "Yeni araç envantere başarıyla eklendi." });
             router.refresh();
         } else {
@@ -353,6 +365,9 @@ export default function AraclarClient({
         if (!formData.plaka || !formData.marka) {
             toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
             return;
+        }
+        if (isExternalMode && !formData.disFirmaId) {
+            return toast.warning("Eksik Bilgi", { description: "Lütfen dış firma seçin." });
         }
         if (loading) return;
 
@@ -464,8 +479,8 @@ export default function AraclarClient({
         {confirmModal}
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">Araç Envanteri</h2>
-                    <p className="text-slate-500 text-sm mt-1">Sistemdeki tüm araçların detaylı listesi. Durumlarını, güncel KM ve şoför bilgilerini buradan yönetin.</p>
+                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">{pageTitle}</h2>
+                    <p className="text-slate-500 text-sm mt-1">{pageDescription}</p>
                 </div>
                 <div className="flex items-center gap-3">
                     <Dialog
@@ -473,14 +488,14 @@ export default function AraclarClient({
                         onOpenChange={(open) => {
                             setCreateOpen(open);
                             if (!open) {
-                                setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                                setFormData({ ...EMPTY, sirketId: defaultCreateSirketId, disFirmaId: defaultCreateDisFirmaId });
                             }
                         }}
                     >
                         <DialogTrigger asChild>
                             <button className="bg-[#0F172A] hover:bg-[#1E293B] text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                                 <Plus size={16} />
-                                Yeni Araç Ekle
+                                {createButtonLabel}
                             </button>
                         </DialogTrigger>
                         <DialogContent className="max-h-[88vh] overflow-y-auto">
@@ -499,6 +514,7 @@ export default function AraclarClient({
                                 kullaniciFirmaOptions={kullaniciFirmaOptions}
                                 showInitialMuayeneField={true}
                                 allowIndependentOption={canAssignIndependentRecords}
+                                isExternalMode={isExternalMode}
                             />
                             <DialogFooter>
                         <button
@@ -518,14 +534,14 @@ export default function AraclarClient({
             <Dialog open={!!editRow} onOpenChange={(o) => {
                 if (!o) {
                     setEditRow(null);
-                    setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });
+                    setFormData({ ...EMPTY, sirketId: defaultCreateSirketId, disFirmaId: defaultCreateDisFirmaId });
                 }
             }}>
                 <DialogContent className="max-h-[88vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Araç Bilgilerini Güncelle</DialogTitle>
                         <DialogDescription>
-                             "{editRow?.plaka}" plakalı aracın kayıtlı bilgilerini düzenleyin.
+                            {editRow?.plaka} plakalı aracın kayıtlı bilgilerini düzenleyin.
                         </DialogDescription>
                     </DialogHeader>
                     <FormFields
@@ -537,6 +553,7 @@ export default function AraclarClient({
                         kullaniciFirmaOptions={kullaniciFirmaOptions}
                         showInitialMuayeneField={true}
                         allowIndependentOption={canAssignIndependentRecords}
+                        isExternalMode={isExternalMode}
                     />
                     <DialogFooter>
                         <button
@@ -571,7 +588,13 @@ export default function AraclarClient({
                 toolbarArrangement="report-right-scroll"
                 tableClassName="min-w-[1960px]"
                 onRowClick={(row) => router.push(scopedHref(`/dashboard/araclar/${row.id}`))}
-                excelEntity="arac"
+                excelEntity={
+                    isExternalMode
+                        ? externalMode === "KIRALIK"
+                            ? "kiralikArac"
+                            : "taseronArac"
+                        : "arac"
+                }
             />
         </div>
     );

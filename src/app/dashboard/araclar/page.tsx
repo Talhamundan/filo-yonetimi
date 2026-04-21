@@ -6,6 +6,7 @@ import { getCommonListFilters } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { parseExternalVendorModeFromSearchParams } from "@/lib/external-vendor-mode";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT"] as const;
 const ARAC_FALLBACK_SELECT = {
@@ -383,13 +384,16 @@ async function getAraclarWithTakipBilgileri(
 }
 
 export default async function AraclarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
     const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
-        getSelectedSirketId(props.searchParams),
-        getSelectedYil(props.searchParams),
-        getSelectedAy(props.searchParams),
-        getCommonListFilters(props.searchParams),
+        getSelectedSirketId(resolvedSearchParams),
+        getSelectedYil(resolvedSearchParams),
+        getSelectedAy(resolvedSearchParams),
+        getCommonListFilters(resolvedSearchParams),
     ]);
-    const selectedDisFirmaId = await getSelectedDisFirmaId(props.searchParams);
+    const selectedDisFirmaId = await getSelectedDisFirmaId(resolvedSearchParams);
+    const externalMode = parseExternalVendorModeFromSearchParams(resolvedSearchParams);
+    const isExternalMode = Boolean(externalMode);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
@@ -421,10 +425,13 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     if (commonFilters.type) {
         filterParts.push({ kategori: commonFilters.type });
     }
-    if (selectedDisFirmaId) {
+    if (isExternalMode && selectedDisFirmaId) {
         filterParts.push({ disFirmaId: selectedDisFirmaId });
-    } else {
+    } else if (!isExternalMode) {
         filterParts.push({ disFirmaId: null });
+    }
+    if (externalMode) {
+        filterParts.push({ disFirma: { is: { tur: externalMode } } });
     }
     const safeFilterParts = filterParts.filter((part) => {
         if (!part || typeof part !== "object") return false;
@@ -466,6 +473,12 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
                         bitis: null,
                     },
                 },
+                ...(externalMode
+                    ? {
+                        ...(selectedDisFirmaId ? { disFirmaId: selectedDisFirmaId } : {}),
+                        disFirma: { is: { tur: externalMode } },
+                    }
+                    : { disFirmaId: null }),
             } as any,
             select: {
                 id: true,
@@ -480,6 +493,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
             return [];
         }),
         (prisma as any).disFirma.findMany({
+            where: externalMode ? { tur: externalMode } : undefined,
             select: { id: true, ad: true, tur: true },
             orderBy: { ad: "asc" },
         }).catch(() => []),
@@ -522,6 +536,8 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
                 sirketAd: u.sirket?.ad || null,
             }))}
             role={rol}
+            isExternalMode={isExternalMode}
+            externalMode={externalMode}
         />
     );
 }

@@ -183,8 +183,8 @@ export default function Sidebar({
                     {canManageCompanies ? (
                         <>
                             <NavItem href="/dashboard/sirketler" icon={Building2} label="Şirket Yönetimi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                            <NavItem href="/dashboard/taseronlar" icon={Building2} label="Taşeron Firmalar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                            <NavItem href="/dashboard/kiraliklar" icon={Truck} label="Kiralıklar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                            <NavItem href="/dashboard/taseronlar" icon={Building2} label="Taşeron Yönetimi" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                            <NavItem href="/dashboard/kiraliklar" icon={Truck} label="Kiralık Araç/Personel" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                         </>
                     ) : null}
                     <NavItem href="/dashboard/personel" icon={Users} label="Personeller" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />

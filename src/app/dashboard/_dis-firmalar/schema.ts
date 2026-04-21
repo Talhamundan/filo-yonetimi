@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const disFirmaTurleri = ["TASERON", "KIRALIK"] as const;
 export type DisFirmaTuruValue = (typeof disFirmaTurleri)[number];
+export type DisFirmaScopeValue = DisFirmaTuruValue | "ALL";
 
 export const disFirmaFormSchema = z.object({
     ad: z.string().trim().min(2, "Firma adı en az 2 karakter olmalı."),
@@ -15,6 +16,7 @@ export const disFirmaFormSchema = z.object({
 
 export type DisFirmaFormValues = z.infer<typeof disFirmaFormSchema>;
 
-export function getDisFirmaTurLabel(tur: DisFirmaTuruValue) {
+export function getDisFirmaTurLabel(tur: DisFirmaScopeValue) {
+    if (tur === "ALL") return "Dış";
     return tur === "TASERON" ? "Taşeron" : "Kiralık";
 }

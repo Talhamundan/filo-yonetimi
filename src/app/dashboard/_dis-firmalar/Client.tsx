@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Building2, Plus, Truck } from "lucide-react";
@@ -11,7 +11,7 @@ import { RowActionButton } from "@/components/ui/row-action-button";
 import { useConfirm } from "@/components/ui/confirm-modal";
 import { columns, type DisFirmaRow } from "./columns";
 import { createDisFirma, deleteDisFirma, updateDisFirma } from "./actions";
-import { disFirmaFormSchema, getDisFirmaTurLabel, type DisFirmaFormValues, type DisFirmaTuruValue } from "./schema";
+import { disFirmaFormSchema, getDisFirmaTurLabel, type DisFirmaFormValues, type DisFirmaScopeValue, type DisFirmaTuruValue } from "./schema";
 
 const EMPTY_BASE = {
     ad: "",
@@ -25,7 +25,7 @@ const EMPTY_BASE = {
 type Props = {
     title: string;
     description: string;
-    tur: DisFirmaTuruValue;
+    tur: DisFirmaScopeValue;
     initialData: DisFirmaRow[];
     sirketler: Array<{ id: string; ad: string }>;
 };
@@ -38,10 +38,12 @@ function FormFields({
     formData,
     setFormData,
     sirketler,
+    allowTypeSelection,
 }: {
     formData: DisFirmaFormValues;
     setFormData: React.Dispatch<React.SetStateAction<DisFirmaFormValues>>;
     sirketler: Array<{ id: string; ad: string }>;
+    allowTypeSelection: boolean;
 }) {
     const hasCurrentKurum = Boolean(
         formData.calistigiKurum &&
@@ -50,6 +52,19 @@ function FormFields({
 
     return (
         <div className="grid gap-4 py-4">
+            {allowTypeSelection ? (
+                <div className="space-y-1.5">
+                    <label className="text-sm font-medium">Firma Türü <span className="text-rose-500">*</span></label>
+                    <select
+                        value={formData.tur}
+                        onChange={(e) => setFormData({ ...formData, tur: e.target.value as DisFirmaTuruValue })}
+                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                    >
+                        <option value="TASERON">Taşeron</option>
+                        <option value="KIRALIK">Kiralık</option>
+                    </select>
+                </div>
+            ) : null}
             <div className="space-y-1.5">
                 <label className="text-sm font-medium">Firma Adı <span className="text-rose-500">*</span></label>
                 <Input value={formData.ad} onChange={(e) => setFormData({ ...formData, ad: forceUppercase(e.target.value) })} placeholder="ANIT ASFALT" className="h-9 uppercase" />
@@ -95,26 +110,35 @@ export default function DisFirmalarClient({ title, description, tur, initialData
     const { confirmModal, openConfirm } = useConfirm();
     const [createOpen, setCreateOpen] = useState(false);
     const [editRow, setEditRow] = useState<DisFirmaRow | null>(null);
-    const [formData, setFormData] = useState<DisFirmaFormValues>({ ...EMPTY_BASE, tur });
+    const [formData, setFormData] = useState<DisFirmaFormValues>({
+        ...EMPTY_BASE,
+        tur: tur === "ALL" ? "TASERON" : tur,
+    });
     const [loading, setLoading] = useState(false);
-    const Icon = tur === "KIRALIK" ? Truck : Building2;
-    const entityLabel = getDisFirmaTurLabel(tur);
+    const allowTypeSelection = tur === "ALL";
+    const displayTur = allowTypeSelection ? formData.tur : tur;
+    const Icon = displayTur === "KIRALIK" ? Truck : Building2;
+    const entityLabel = getDisFirmaTurLabel(displayTur);
 
-    const columnsWithActions = useMemo(() => [
+    const columnsWithActions = [
         ...columns,
         {
             id: "actions",
             header: "İşlemler",
-            cell: ({ row }: any) => (
+            cell: ({ row }: { row: { original: DisFirmaRow } }) => (
                 <div className="flex items-center gap-2">
                     <RowActionButton variant="edit" onClick={() => openEdit(row.original)} />
                     <RowActionButton variant="delete" onClick={() => handleDelete(row.original)} />
                 </div>
             ),
         },
-    ], [initialData]);
+    ];
 
-    const resetForm = () => setFormData({ ...EMPTY_BASE, tur });
+    const resetForm = () =>
+        setFormData({
+            ...EMPTY_BASE,
+            tur: tur === "ALL" ? "TASERON" : tur,
+        });
 
     const validateForm = () => {
         const result = disFirmaFormSchema.safeParse(formData);
@@ -132,7 +156,7 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         if (res.success) {
             setCreateOpen(false);
             resetForm();
-            toast.success(`${entityLabel} firma kaydedildi.`);
+            toast.success(`${getDisFirmaTurLabel(parsed.tur)} firma kaydedildi.`);
             router.refresh();
             return;
         }
@@ -149,7 +173,7 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         if (res.success) {
             setEditRow(null);
             resetForm();
-            toast.success(`${entityLabel} firma güncellendi.`);
+            toast.success(`${getDisFirmaTurLabel(parsed.tur)} firma güncellendi.`);
             router.refresh();
             return;
         }
@@ -157,8 +181,9 @@ export default function DisFirmalarClient({ title, description, tur, initialData
     };
 
     const handleDelete = async (row: DisFirmaRow) => {
+        const rowTypeLabel = getDisFirmaTurLabel(row.tur);
         const confirmed = await openConfirm({
-            title: `${entityLabel} Firmayı Sil`,
+            title: `${rowTypeLabel} Firmayı Sil`,
             message: `${row.ad} firmasını silmek istediğinizden emin misiniz? Bağlı araç veya personel varsa silinemez.`,
             confirmText: "Evet, Sil",
             variant: "danger",
@@ -176,7 +201,7 @@ export default function DisFirmalarClient({ title, description, tur, initialData
     const openEdit = (row: DisFirmaRow) => {
         setFormData({
             ad: row.ad,
-            tur,
+            tur: row.tur,
             sehir: row.sehir,
             vergiNo: row.vergiNo === "Belirtilmedi" ? "" : row.vergiNo,
             yetkiliKisi: row.yetkiliKisi === "-" ? "" : row.yetkiliKisi,
@@ -185,6 +210,8 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         });
         setEditRow(row);
     };
+
+    const excelEntity = tur === "KIRALIK" ? "kiralikFirma" : tur === "TASERON" ? "taseronFirma" : undefined;
 
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
@@ -199,15 +226,20 @@ export default function DisFirmalarClient({ title, description, tur, initialData
                 <Dialog open={createOpen} onOpenChange={(open) => { setCreateOpen(open); if (!open) resetForm(); }}>
                     <DialogTrigger asChild>
                         <button className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
-                            <Plus size={16} /> Yeni {entityLabel} Firma Ekle
+                            <Plus size={16} /> Yeni {allowTypeSelection ? "Dış" : entityLabel} Firma Ekle
                         </button>
                     </DialogTrigger>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Yeni {entityLabel} Firma Kaydı</DialogTitle>
+                            <DialogTitle>Yeni {allowTypeSelection ? "Dış" : entityLabel} Firma Kaydı</DialogTitle>
                             <DialogDescription>Dış hizmet aldığımız firmayı sisteme ekleyin.</DialogDescription>
                         </DialogHeader>
-                        <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} />
+                        <FormFields
+                            formData={formData}
+                            setFormData={setFormData}
+                            sirketler={sirketler}
+                            allowTypeSelection={allowTypeSelection}
+                        />
                         <DialogFooter>
                             <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                                 {loading ? "Kaydediliyor..." : "Kaydet"}
@@ -223,7 +255,12 @@ export default function DisFirmalarClient({ title, description, tur, initialData
                         <DialogTitle>Firmayı Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.ad} firmasının bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
-                    <FormFields formData={formData} setFormData={setFormData} sirketler={sirketler} />
+                    <FormFields
+                        formData={formData}
+                        setFormData={setFormData}
+                        sirketler={sirketler}
+                        allowTypeSelection={allowTypeSelection}
+                    />
                     <DialogFooter>
                         <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                             {loading ? "Güncelleniyor..." : "Güncelle"}
@@ -233,12 +270,13 @@ export default function DisFirmalarClient({ title, description, tur, initialData
             </Dialog>
 
             <DataTable
-                columns={columnsWithActions as any}
+                columns={columnsWithActions}
                 data={initialData}
                 searchKey="ad"
                 searchPlaceholder="Firma adı ara..."
-                excelEntity={tur === "KIRALIK" ? "kiralikFirma" : "taseronFirma"}
+                excelEntity={excelEntity}
             />
         </div>
     );
 }
+

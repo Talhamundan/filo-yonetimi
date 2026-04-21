@@ -29,8 +29,24 @@ const BULK_IMPORT_ORDER: ExcelEntityKey[] = [
     "dokuman"
 ];
 
-// Export edilecek tüm entity'ler
-const ALL_ENTITIES: ExcelEntityKey[] = Object.keys(EXCEL_ENTITY_CONFIG) as ExcelEntityKey[];
+// Export edilecek tüm entity'ler (tekrarlı dış kapsam entity'leri dahil edilmez)
+const ALL_ENTITIES: ExcelEntityKey[] = [
+    "sirket",
+    "personel",
+    "arac",
+    "taseronFirma",
+    "kiralikFirma",
+    "zimmet",
+    "yakit",
+    "bakim",
+    "muayene",
+    "kasko",
+    "trafikSigortasi",
+    "ariza",
+    "masraf",
+    "ceza",
+    "dokuman",
+];
 
 export async function GET() {
     try {

@@ -3,6 +3,7 @@ type AracOptionLabelInput = {
     marka?: string | null;
     model?: string | null;
     durum?: string | null;
+    disFirmaTur?: string | null;
 };
 
 const MAX_NATIVE_SELECT_LABEL_LENGTH = 52;
@@ -37,8 +38,11 @@ export function formatAracOptionLabel(arac: AracOptionLabelInput): string {
     const plaka = (arac.plaka || "-").trim() || "-";
     const markaModel = `${(arac.marka || "").trim()} ${(arac.model || "").trim()}`.trim();
     const durumLabel = formatAracDurumLabel(arac.durum);
+    const disFirmaTur = (arac.disFirmaTur || "").trim().toUpperCase();
+    const disFirmaEtiketi = disFirmaTur === "KIRALIK" ? " (kiralık)" : disFirmaTur === "TASERON" ? " (taşeron)" : "";
+    const plakaEtiketli = `${plaka}${disFirmaEtiketi}`;
     const label = markaModel
-        ? `(${durumLabel}) ${plaka} - ${markaModel}`
-        : `(${durumLabel}) ${plaka}`;
+        ? `(${durumLabel}) ${plakaEtiketli} - ${markaModel}`
+        : `(${durumLabel}) ${plakaEtiketli}`;
     return truncateNativeSelectLabel(label);
 }

@@ -164,6 +164,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 calistigiKurum: true,
                 guncelKm: true,
                 durum: true,
+                disFirma: { select: { tur: true, ad: true } },
                 sirket: { select: { ad: true } },
                 kullanici: {
                     select: {
@@ -306,6 +307,8 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 aktifSoforAdSoyad: aktifSofor ? getPersonelDisplayName(aktifSofor) : null,
                 kullaniciId: a.kullanici?.id || null,
                 kullanici: a.kullanici || null,
+                disFirmaTur: a.disFirma?.tur || null,
+                disFirmaAd: a.disFirma?.ad || null,
             };
             })}
             personeller={(personeller as any[]).map((p) => ({

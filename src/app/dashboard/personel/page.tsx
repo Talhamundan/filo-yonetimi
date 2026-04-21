@@ -7,6 +7,7 @@ import { getAyDateRange, getSelectedAy, getSelectedDisFirmaId, getSelectedSirket
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
+import { parseExternalVendorModeFromSearchParams } from "@/lib/external-vendor-mode";
 
 const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "PERSONEL" | "TEKNIK"> = {
     ADMIN: "ADMIN",
@@ -17,7 +18,6 @@ const PERSONEL_ROLE_FILTER_MAP: Record<string, "ADMIN" | "YETKILI" | "PERSONEL" 
     MUDUR: "YETKILI",
     MUHASEBECI: "YETKILI",
 };
-const MACHINE_CATEGORY = "SANTIYE";
 
 function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
@@ -66,14 +66,17 @@ async function hasDatabaseColumn(tableName: string, columnName: string) {
 }
 
 export default async function PersonelPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
     const [selectedSirketId, selectedYil, selectedAy, selectedDisFirmaId, commonFilters, role] = await Promise.all([
-        getSelectedSirketId(props.searchParams),
-        getSelectedYil(props.searchParams),
-        getSelectedAy(props.searchParams),
-        getSelectedDisFirmaId(props.searchParams),
-        getCommonListFilters(props.searchParams),
+        getSelectedSirketId(resolvedSearchParams),
+        getSelectedYil(resolvedSearchParams),
+        getSelectedAy(resolvedSearchParams),
+        getSelectedDisFirmaId(resolvedSearchParams),
+        getCommonListFilters(resolvedSearchParams),
         getCurrentUserRole(),
     ]);
+    const externalMode = parseExternalVendorModeFromSearchParams(resolvedSearchParams);
+    const isExternalMode = Boolean(externalMode);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
     const [filter, sirketListFilter, cezaFilter, yakitFilter, zimmetFilter] = await Promise.all([
@@ -112,8 +115,13 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             personelWhereParts.push({ rol: normalizedRoleStatus });
         }
     }
-    if (selectedDisFirmaId) {
-        personelWhereParts.push({ disFirmaId: selectedDisFirmaId });
+    if (externalMode) {
+        personelWhereParts.push({ disFirma: { is: { tur: externalMode } } });
+    }
+    if (isExternalMode) {
+        if (selectedDisFirmaId) {
+            personelWhereParts.push({ disFirmaId: selectedDisFirmaId });
+        }
     } else {
         personelWhereParts.push({ disFirmaId: null });
     }
@@ -169,6 +177,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             orderBy: { ad: 'asc' }
         }),
         (prisma as any).disFirma.findMany({
+            where: externalMode ? { tur: externalMode } : undefined,
             select: { id: true, ad: true, tur: true },
             orderBy: { ad: "asc" },
         }).catch(() => []),
@@ -379,5 +388,14 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         };
     });
 
-    return <PersonelClient initialData={formattedData} sirketler={sirketler} disFirmalar={disFirmalar} isTeknik={role === "TEKNIK"} />;
+    return (
+        <PersonelClient
+            initialData={formattedData}
+            sirketler={sirketler}
+            disFirmalar={disFirmalar}
+            isTeknik={role === "TEKNIK"}
+            isExternalMode={isExternalMode}
+            externalMode={externalMode}
+        />
+    );
 }

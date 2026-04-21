@@ -12,7 +12,6 @@ import { createArac } from "@/app/dashboard/araclar/actions";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
-import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 const ILLER = [
     { value: "ISTANBUL", label: "İSTANBUL" },
@@ -56,7 +55,6 @@ const FormFields = ({
 }) => (
     <div className="grid grid-cols-2 gap-4 py-2">
         {(() => {
-            const hasKiralikSirket = sirketler.some((sirket) => isKiralikSirketName(sirket.ad));
             return (
                 <>
                     <div className="col-span-2">
@@ -112,7 +110,6 @@ const FormFields = ({
                             className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                         >
                             {allowIndependentOption ? <option value="">Şirket Seçiniz (Bağımsız)</option> : <option value="" disabled>Şirket Seçiniz</option>}
-                            {allowIndependentOption && !hasKiralikSirket && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
                             {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
                         </select>
                     </div>

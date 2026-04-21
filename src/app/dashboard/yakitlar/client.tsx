@@ -99,6 +99,8 @@ type AracOption = {
     aktifSoforId?: string | null;
     aktifSofor?: { id: string; ad: string; soyad: string } | null;
     aktifSoforAdSoyad?: string | null;
+    disFirmaTur?: string | null;
+    disFirmaAd?: string | null;
 };
 
 type PersonelOption = {

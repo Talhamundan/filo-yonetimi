@@ -3,10 +3,10 @@ import { prisma } from "@/lib/prisma";
 import { canAccessAllCompanies, getCurrentUserRole, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import type { DisFirmaRow } from "./columns";
-import type { DisFirmaTuruValue } from "./schema";
+import type { DisFirmaScopeValue } from "./schema";
 
 type PageConfig = {
-    tur: DisFirmaTuruValue;
+    tur: DisFirmaScopeValue;
     searchParams?: Promise<DashboardSearchParams>;
 };
 
@@ -38,7 +38,7 @@ export async function getDisFirmaPageData({ tur, searchParams }: PageConfig) {
 
     const relationFilter = selectedSirketId ? { sirketId: selectedSirketId } : {};
     const vendorWhere: Prisma.DisFirmaWhereInput = {
-        tur,
+        ...(tur === "ALL" ? {} : { tur }),
         ...(selectedSirketId
             ? {
                 OR: [

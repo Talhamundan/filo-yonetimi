@@ -23,8 +23,12 @@ type DeleteResult = { success: boolean; error?: string };
 async function deleteByEntity(entity: ExcelEntityKey, id: string): Promise<DeleteResult> {
     switch (entity) {
         case "arac":
+        case "kiralikArac":
+        case "taseronArac":
             return deleteArac(id);
         case "personel":
+        case "kiralikPersonel":
+        case "taseronPersonel":
             return deletePersonel(id);
         case "sirket":
             return deleteSirket(id);

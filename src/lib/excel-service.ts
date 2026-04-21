@@ -3,6 +3,7 @@ import * as XLSX from "xlsx";
 import { randomUUID } from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/excel-entities";
+import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 import { KIRALIK_SIRKET_ADI, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 
 // --- Re-exports ---
@@ -51,6 +52,11 @@ export type ExcelModelProfile = {
     strictVisibleColumns?: boolean;
 };
 
+export type ImportEntityOptions = {
+    selectedDisFirmaId?: string | null;
+    selectedExternalMode?: ExternalVendorMode | null;
+};
+
 // --- Config & Constants ---
 export const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -66,7 +72,6 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "durum",
             "plaka",
             "ruhsatSahibi",
-            "disFirma",
             "calistigiKurum",
             "saseNo",
             "motorNo",
@@ -168,6 +173,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             calistigiKurum: "Çalıştığı Kurum",
             rol: "Rol",
             sirket: "Çalıştığı Firma",
+            disFirma: "Dış Firma",
             zimmetliArac: "Zimmetli Araç",
             onayDurumu: "Onay Durumu",
             eposta: "E-Posta",
@@ -190,6 +196,16 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
                 "Bagli Sirket",
                 "Şirket",
                 "Sirket",
+            ],
+            disFirma: [
+                "Dış Firma",
+                "Dis Firma",
+                "Kiralık Firma",
+                "Kiralik Firma",
+                "Taşeron Firma",
+                "Taseron Firma",
+                "Firma",
+                "Firması",
             ],
             zimmetliArac: ["Zimmetli Araç", "Zimmetli Arac", "Plaka", "Araç", "Arac"],
             tcNo: ["TC No", "TCKN", "TC Kimlik"],
@@ -468,6 +484,127 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
     },
 };
 
+const ARAC_EXTERNAL_VISIBLE_COLUMNS = [
+    "plaka",
+    "ruhsatSahibi",
+    "disFirma",
+    "kullanici",
+];
+
+const ARAC_TASERON_VISIBLE_COLUMNS = [
+    "durum",
+    "plaka",
+    "ruhsatSahibi",
+    "disFirma",
+    "calistigiKurum",
+    "saseNo",
+    "motorNo",
+    "kategori",
+    "marka",
+    "model",
+    "yil",
+    "bulunduguIl",
+    "bedel",
+    "guncelKm",
+    "kullanici",
+    "ruhsatSeriNo",
+    "aciklama",
+];
+
+const PERSONEL_EXTERNAL_VISIBLE_COLUMNS = [
+    "ad",
+    "soyad",
+    "telefon",
+    "sirket",
+    "disFirma",
+    "zimmetliArac",
+];
+
+const PERSONEL_TASERON_VISIBLE_COLUMNS = [
+    "ad",
+    "soyad",
+    "telefon",
+    "tcNo",
+    "calistigiKurum",
+    "rol",
+    "sirket",
+    "disFirma",
+    "zimmetliArac",
+    "onayDurumu",
+    "eposta",
+];
+
+EXCEL_MODEL_PROFILES.kiralikArac = {
+    ...(EXCEL_MODEL_PROFILES.arac || {}),
+    visibleColumns: ARAC_EXTERNAL_VISIBLE_COLUMNS,
+    labels: {
+        ...(EXCEL_MODEL_PROFILES.arac?.labels || {}),
+        ruhsatSahibi: "Çalıştığı Firmamız",
+        disFirma: "Taşeron Firma",
+        kullanici: "Şoför",
+    },
+    aliases: {
+        ...(EXCEL_MODEL_PROFILES.arac?.aliases || {}),
+        ruhsatSahibi: [
+            ...(EXCEL_MODEL_PROFILES.arac?.aliases?.ruhsatSahibi || []),
+            "Çalıştığı Firmamız",
+            "Calistigi Firmamiz",
+            "Çalıştığı Firma",
+            "Calistigi Firma",
+        ],
+        disFirma: [
+            ...(EXCEL_MODEL_PROFILES.arac?.aliases?.disFirma || []),
+            "Taşeron Firma",
+            "Taseron Firma",
+            "Kiralık Firma",
+            "Kiralik Firma",
+        ],
+        kullanici: [
+            ...(EXCEL_MODEL_PROFILES.arac?.aliases?.kullanici || []),
+            "Şoför",
+            "Sofor",
+            "Sürücü",
+            "Surucu",
+        ],
+    },
+};
+
+EXCEL_MODEL_PROFILES.taseronArac = {
+    ...(EXCEL_MODEL_PROFILES.arac || {}),
+    visibleColumns: ARAC_TASERON_VISIBLE_COLUMNS,
+};
+
+EXCEL_MODEL_PROFILES.kiralikPersonel = {
+    ...(EXCEL_MODEL_PROFILES.kullanici || {}),
+    visibleColumns: PERSONEL_EXTERNAL_VISIBLE_COLUMNS,
+    labels: {
+        ...(EXCEL_MODEL_PROFILES.kullanici?.labels || {}),
+        sirket: "Çalıştığı Firmamız",
+        disFirma: "Taşeron Firma",
+        zimmetliArac: "Araç Plakası",
+    },
+    aliases: {
+        ...(EXCEL_MODEL_PROFILES.kullanici?.aliases || {}),
+        sirket: [
+            ...(EXCEL_MODEL_PROFILES.kullanici?.aliases?.sirket || []),
+            "Çalıştığı Firmamız",
+            "Calistigi Firmamiz",
+        ],
+        disFirma: [
+            ...(EXCEL_MODEL_PROFILES.kullanici?.aliases?.disFirma || []),
+            "Taşeron Firma",
+            "Taseron Firma",
+            "Kiralık Firma",
+            "Kiralik Firma",
+        ],
+    },
+};
+
+EXCEL_MODEL_PROFILES.taseronPersonel = {
+    ...(EXCEL_MODEL_PROFILES.kullanici || {}),
+    visibleColumns: PERSONEL_TASERON_VISIBLE_COLUMNS,
+};
+
 const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {
     AracKategori: {
         TIR: "SANTIYE",
@@ -527,10 +664,81 @@ const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "deletedBy",
 ]);
 
+type EntityImportScope = {
+    forceInternal: boolean;
+    fixedDisFirmaTuru: ExternalVendorMode | null;
+};
+
+function normalizeOptionalId(value: string | null | undefined) {
+    const normalized = (value || "").trim();
+    return normalized.length > 0 ? normalized : null;
+}
+
+function normalizeExternalVendorMode(value: ExternalVendorMode | string | null | undefined): ExternalVendorMode | null {
+    const normalized = String(value || "").trim().toUpperCase();
+    if (normalized === "KIRALIK" || normalized === "TASERON") {
+        return normalized;
+    }
+    return null;
+}
+
+function getEntityImportScope(entityKey: string, options?: ImportEntityOptions): EntityImportScope {
+    const explicitMode = normalizeExternalVendorMode(options?.selectedExternalMode);
+    if (entityKey === "arac" || entityKey === "personel") {
+        return { forceInternal: true, fixedDisFirmaTuru: null };
+    }
+    if (entityKey === "kiralikArac" || entityKey === "kiralikPersonel") {
+        return { forceInternal: false, fixedDisFirmaTuru: "KIRALIK" };
+    }
+    if (entityKey === "taseronArac" || entityKey === "taseronPersonel") {
+        return { forceInternal: false, fixedDisFirmaTuru: "TASERON" };
+    }
+    if (explicitMode) {
+        return { forceInternal: false, fixedDisFirmaTuru: explicitMode };
+    }
+    return { forceInternal: false, fixedDisFirmaTuru: null };
+}
+
+async function validateDisFirmaIdForImportScope(
+    tx: unknown,
+    disFirmaId: unknown,
+    expectedTur: ExternalVendorMode,
+    cache: Map<string, ExternalVendorMode | null>
+) {
+    const normalizedId = normalizeOptionalId(typeof disFirmaId === "string" ? disFirmaId : null);
+    if (!normalizedId) return false;
+
+    const cachedTur = cache.get(normalizedId);
+    if (cachedTur !== undefined) {
+        return cachedTur === expectedTur;
+    }
+
+    const disFirmaDelegate = getModelDelegate(tx, "disFirma");
+    if (!disFirmaDelegate?.findUnique) {
+        cache.set(normalizedId, null);
+        return false;
+    }
+
+    const disFirma = await disFirmaDelegate.findUnique({
+        where: { id: normalizedId },
+        select: { tur: true },
+    });
+    const tur = normalizeExternalVendorMode(disFirma?.tur as string | null | undefined);
+    cache.set(normalizedId, tur);
+    return tur === expectedTur;
+}
+
 // --- Utility Functions ---
 
 export function lowerFirst(value: string) {
     return value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+export function getExcelProfileKey(modelName: string, entityKey?: string) {
+    if (entityKey && EXCEL_MODEL_PROFILES[entityKey]) {
+        return entityKey;
+    }
+    return modelName;
 }
 
 export function getExcelModelProfile(modelName: string): ExcelModelProfile | null {
@@ -1506,6 +1714,20 @@ async function findSirketIdByNameForImport(tx: unknown, value: unknown) {
     return id || null;
 }
 
+async function findSirketNameByIdForImport(tx: unknown, value: unknown) {
+    const id = normalizeLookupString(value);
+    if (!id) return null;
+
+    const sirketRows = await (getModelDelegate(tx, "sirket") as any)?.findMany?.({
+        where: { id },
+        select: { ad: true },
+        take: 1,
+    });
+
+    const ad = Array.isArray(sirketRows) ? normalizeLookupString(sirketRows[0]?.ad) : null;
+    return ad || null;
+}
+
 async function ensureKiralikSirketIdForImport(tx: unknown) {
     const existingId = await findSirketIdByNameForImport(tx, KIRALIK_SIRKET_ADI);
     if (existingId) return existingId;
@@ -2138,6 +2360,7 @@ export async function resolveRelationValueToForeignKey(params: {
 export async function exportEntity(entityKey: string, where?: WhereData) {
     const config = getEntityOrNull(entityKey);
     if (!config) throw new Error("Desteklenmeyen export modeli.");
+    const profileKey = getExcelProfileKey(config.prismaModel, entityKey);
 
     const modelMeta = getModelMeta(config.prismaModel);
     if (!modelMeta) throw new Error("Model metadata bulunamadi.");
@@ -2249,11 +2472,11 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
             ? [...columns, "bagliSirket", "calistigiKurum"].filter((v, i, a) => a.indexOf(v) === i)
             : columns;
     
-    const finalColumns = applyExportProfile(config.prismaModel, internalColumns);
+    const finalColumns = applyExportProfile(profileKey, internalColumns);
     const exportRows = normalizedRows.map((row) => {
         const output: Record<string, unknown> = {};
         for (const key of finalColumns) {
-            output[getExportHeaderLabel(config.prismaModel, key)] = row[key] ?? null;
+            output[getExportHeaderLabel(profileKey, key)] = row[key] ?? null;
         }
         return output;
     });
@@ -2261,13 +2484,16 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
     return { 
         data: exportRows, 
         sheetName: config.sheetName, 
-        headers: finalColumns.map(key => getExportHeaderLabel(config.prismaModel, key)) 
+        headers: finalColumns.map(key => getExportHeaderLabel(profileKey, key)) 
     };
 }
 
-export async function importEntity(entityKey: string, records: any[], tx: any) {
+export async function importEntity(entityKey: string, records: any[], tx: any, options?: ImportEntityOptions) {
     const config = getEntityOrNull(entityKey);
     if (!config) throw new Error("Desteklenmeyen import modeli.");
+    const profileKey = getExcelProfileKey(config.prismaModel, entityKey);
+    const importScope = getEntityImportScope(entityKey, options);
+    const forcedDisFirmaId = normalizeOptionalId(options?.selectedDisFirmaId);
 
     const modelMeta = getModelMeta(config.prismaModel);
     if (!modelMeta) throw new Error("Model metadata bulunamadi.");
@@ -2278,9 +2504,17 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
     const exportColumns = buildExportColumns(fields, relationFieldByForeignKey, modelMeta.name);
     const scalarImportColumns = exportColumns.filter((c): c is any => c.type === "scalar");
     const relationImportColumns = exportColumns.filter((c): c is any => c.type === "relationLookup");
-    const fixedDisFirmaTuru = entityKey === "taseronFirma" ? "TASERON" : entityKey === "kiralikFirma" ? "KIRALIK" : null;
+    const fixedDisFirmaTuru = entityKey === "taseronFirma"
+        ? "TASERON"
+        : entityKey === "kiralikFirma"
+            ? "KIRALIK"
+            : importScope.fixedDisFirmaTuru;
     const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name)
-        .filter((group) => !(config.prismaModel === "disFirma" && fixedDisFirmaTuru && group.fieldName === "tur"));
+        .filter((group) => !(config.prismaModel === "disFirma" && fixedDisFirmaTuru && group.fieldName === "tur"))
+        .filter((group) => {
+            if (entityKey !== "kiralikArac") return true;
+            return !["marka", "model", "yil"].includes(group.fieldName);
+        });
     const enumMap = getEnumValueMap();
 
     const firstRecord = records[0] || {};
@@ -2288,7 +2522,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
     const normalizedHeaderIndex = buildHeaderIndex([...availableHeaders]);
 
     const missingGroups = requiredGroups.filter((group) => {
-        const groupCandidates = group.candidates.flatMap((candidate) => getHeaderCandidates(config.prismaModel, candidate));
+        const groupCandidates = group.candidates.flatMap((candidate) => getHeaderCandidates(profileKey, candidate));
         return !findHeaderByCandidates(availableHeaders, normalizedHeaderIndex, groupCandidates);
     });
     
@@ -2301,6 +2535,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
 
     let created = 0, updated = 0, skipped = 0;
     const relationCache = new Map<string, string>();
+    const disFirmaTurCache = new Map<string, ExternalVendorMode | null>();
     const bakimExistingColumns = config.prismaModel === "bakim" ? await getExistingTableColumns(tx, "Bakim") : null;
     const kmCache = new Map<string, number>();
 
@@ -2313,13 +2548,13 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
         try {
             for (const column of scalarImportColumns) {
                 const field = fieldsByName.get(column.fieldName)!;
-                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, column.key));
+                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(profileKey, column.key));
                 parsedRow[field.name] = header ? coerceValue(field, record[header], enumMap) : undefined;
             }
 
             for (const column of relationImportColumns) {
                 const field = fieldsByName.get(column.foreignKeyFieldName)!;
-                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, column.key, getRelationImportHeaderAliases(config.prismaModel, field.name)));
+                const header = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(profileKey, column.key, getRelationImportHeaderAliases(config.prismaModel, field.name)));
                 if (!header) { parsedRow[field.name] = undefined; continue; }
                 
                 const rawVal = record[header];
@@ -2348,7 +2583,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                     normalizedHeaderIndex,
                     availableHeaders,
                     normalizedHeaderIndex,
-                    getHeaderCandidates(config.prismaModel, "ruhsatSahibi", getRelationImportHeaderAliases(config.prismaModel, "sirketId"))
+                    getHeaderCandidates(profileKey, "ruhsatSahibi", getRelationImportHeaderAliases(config.prismaModel, "sirketId"))
                 );
                 const rawRuhsatSahibi = ruhsatHeader ? record[ruhsatHeader] : null;
                 const ruhsatKiralikMi = isKiralikImportText(rawRuhsatSahibi);
@@ -2362,7 +2597,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                     normalizedHeaderIndex,
                     availableHeaders,
                     normalizedHeaderIndex,
-                    getHeaderCandidates(config.prismaModel, "disFirma", getRelationImportHeaderAliases(config.prismaModel, "disFirmaId"))
+                    getHeaderCandidates(profileKey, "disFirma", getRelationImportHeaderAliases(config.prismaModel, "disFirmaId"))
                 );
                 const rawDisFirma = disFirmaHeader ? record[disFirmaHeader] : null;
                 if (!parsedRow.disFirmaId && normalizeDisFirmaLookupName(rawDisFirma)) {
@@ -2372,6 +2607,49 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
                         ruhsatKiralikMi ? "KIRALIK" : inferDisFirmaTuruFromText(rawDisFirma),
                         ruhsatKiralikMi
                     );
+                }
+
+                if (entityKey === "kiralikArac") {
+                    if (!normalizeLookupString(parsedRow.marka)) {
+                        parsedRow.marka = "KIRALIK";
+                    }
+                    if (!normalizeLookupString(parsedRow.model)) {
+                        parsedRow.model = "ARAC";
+                    }
+                    const yilValue = Number(parsedRow.yil);
+                    if (!Number.isInteger(yilValue) || yilValue < 1990 || yilValue > new Date().getFullYear() + 1) {
+                        parsedRow.yil = new Date().getFullYear();
+                    }
+                    if (!normalizeLookupString(parsedRow.sirketId)) {
+                        throw new Error(`Satir ${index + 2}: Çalıştığı firmamız zorunludur.`);
+                    }
+                    if (!normalizeLookupString(parsedRow.calistigiKurum)) {
+                        parsedRow.calistigiKurum = await findSirketNameByIdForImport(tx, parsedRow.sirketId);
+                    }
+                }
+            }
+
+            if (config.prismaModel === "arac" || config.prismaModel === "kullanici") {
+                if (importScope.forceInternal) {
+                    parsedRow.disFirmaId = null;
+                } else {
+                    if (forcedDisFirmaId) {
+                        parsedRow.disFirmaId = forcedDisFirmaId;
+                    }
+                    if (fixedDisFirmaTuru) {
+                        if (!parsedRow.disFirmaId) {
+                            throw new Error(`Satir ${index + 2}: Dış firma zorunlu. Lütfen dış firma sütununu doldurun veya firma filtresi seçin.`);
+                        }
+                        const valid = await validateDisFirmaIdForImportScope(
+                            tx,
+                            parsedRow.disFirmaId,
+                            fixedDisFirmaTuru,
+                            disFirmaTurCache
+                        );
+                        if (!valid) {
+                            throw new Error(`Satir ${index + 2}: Seçilen dış firma ${fixedDisFirmaTuru.toLocaleLowerCase("tr-TR")} türünde değil.`);
+                        }
+                    }
                 }
             }
 
@@ -2429,7 +2707,16 @@ export async function importEntity(entityKey: string, records: any[], tx: any) {
             }
 
             if (config.prismaModel === "kullanici") {
-                const aracHeader = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(config.prismaModel, "zimmetliArac"));
+                if (entityKey === "kiralikPersonel") {
+                    parsedRow.rol = "PERSONEL";
+                    if (!normalizeLookupString(parsedRow.sirketId)) {
+                        throw new Error(`Satir ${index + 2}: Çalıştığı firmamız zorunludur.`);
+                    }
+                    if (!normalizeLookupString(parsedRow.calistigiKurum)) {
+                        parsedRow.calistigiKurum = await findSirketNameByIdForImport(tx, parsedRow.sirketId);
+                    }
+                }
+                const aracHeader = resolveImportHeaderForRecord(availableHeaders, normalizedHeaderIndex, availableHeaders, normalizedHeaderIndex, getHeaderCandidates(profileKey, "zimmetliArac"));
                 const rawAracVal = aracHeader ? record[aracHeader] : null;
                 const normalizedPlaka = normalizeAracPlaka(rawAracVal);
                 

@@ -31,7 +31,7 @@ export function applyExcelWorksheetFormats(
     worksheet: XLSX.WorkSheet,
     options: { entityKey?: string; headers?: string[] } = {}
 ) {
-    if (options.entityKey !== "arac") return;
+    if (!["arac", "kiralikArac", "taseronArac"].includes(options.entityKey || "")) return;
 
     const ref = worksheet["!ref"];
     if (!ref) return;

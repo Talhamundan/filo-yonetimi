@@ -764,9 +764,13 @@ export function DataTable<TData, TValue>({
             const selectedSirket = searchParams.get("sirket")
             const selectedYil = searchParams.get("yil")
             const selectedAy = searchParams.get("ay")
+            const selectedDisFirmaId = searchParams.get("disFirmaId")
+            const selectedExternalMode = searchParams.get("externalMode")
             if (selectedSirket) params.set("sirket", selectedSirket)
             if (selectedYil) params.set("yil", selectedYil)
             if (selectedAy) params.set("ay", selectedAy)
+            if (selectedDisFirmaId) params.set("disFirmaId", selectedDisFirmaId)
+            if (selectedExternalMode) params.set("externalMode", selectedExternalMode)
 
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
             const response = await fetch(endpoint, { method: "GET" })
@@ -809,8 +813,14 @@ export function DataTable<TData, TValue>({
             const params = new URLSearchParams()
             const selectedSirket = searchParams.get("sirket")
             const selectedYil = searchParams.get("yil")
+            const selectedAy = searchParams.get("ay")
+            const selectedDisFirmaId = searchParams.get("disFirmaId")
+            const selectedExternalMode = searchParams.get("externalMode")
             if (selectedSirket) params.set("sirket", selectedSirket)
             if (selectedYil) params.set("yil", selectedYil)
+            if (selectedAy) params.set("ay", selectedAy)
+            if (selectedDisFirmaId) params.set("disFirmaId", selectedDisFirmaId)
+            if (selectedExternalMode) params.set("externalMode", selectedExternalMode)
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
 
             const response = await fetch(endpoint, {

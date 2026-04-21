@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
 import { withAyDateFilter } from "@/lib/company-scope";
+import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 import { applyExcelWorksheetFormats } from "@/lib/excel-worksheet-format";
 import * as XLSX from "xlsx";
 import { 
@@ -13,8 +14,7 @@ import {
     ensureBakimColumns,
     isBakimSchemaCompatibilityError,
     ensureCezaFineTrackingColumns,
-    isCezaSchemaCompatibilityError,
-    syncAracGuncelKm
+    isCezaSchemaCompatibilityError
 } from "@/lib/excel-service";
 
 function parseSelectedAy(val: string | null | undefined): number | null {
@@ -25,6 +25,61 @@ function parseSelectedAy(val: string | null | undefined): number | null {
     const parsed = Number(val);
     if (!Number.isInteger(parsed) || parsed < 1 || parsed > 12) return null;
     return parsed;
+}
+
+function parseSelectedDisFirmaId(val: string | null | undefined): string | null {
+    const normalized = (val || "").trim();
+    return normalized.length > 0 ? normalized : null;
+}
+
+function parseExternalVendorMode(val: string | null | undefined): ExternalVendorMode | null {
+    const normalized = (val || "").trim().toUpperCase();
+    if (normalized === "KIRALIK" || normalized === "TASERON") return normalized;
+    return null;
+}
+
+function buildExcelEntityScopeFilter(
+    entity: string,
+    selectedDisFirmaId: string | null,
+    selectedExternalMode: ExternalVendorMode | null
+) {
+    const fallbackTur = selectedExternalMode || null;
+    const turByEntity: Record<string, ExternalVendorMode | null> = {
+        kiralikArac: "KIRALIK",
+        taseronArac: "TASERON",
+        kiralikPersonel: "KIRALIK",
+        taseronPersonel: "TASERON",
+        kiralikFirma: "KIRALIK",
+        taseronFirma: "TASERON",
+    };
+
+    const explicitTur = Object.prototype.hasOwnProperty.call(turByEntity, entity)
+        ? turByEntity[entity]
+        : null;
+    const tur = explicitTur ?? fallbackTur;
+
+    if (entity === "arac" || entity === "personel") {
+        return { disFirmaId: null };
+    }
+
+    if (entity === "kiralikArac" || entity === "taseronArac" || entity === "kiralikPersonel" || entity === "taseronPersonel") {
+        const scopeParts: Record<string, unknown>[] = [];
+        if (tur) {
+            scopeParts.push({ disFirma: { is: { tur } } });
+        }
+        if (selectedDisFirmaId) {
+            scopeParts.push({ disFirmaId: selectedDisFirmaId });
+        }
+        if (scopeParts.length === 0) return {};
+        return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+    }
+
+    if (entity === "kiralikFirma" || entity === "taseronFirma") {
+        if (!tur) return {};
+        return { tur };
+    }
+
+    return {};
 }
 
 export async function GET(
@@ -49,18 +104,25 @@ export async function GET(
         const selectedSirketId = req.nextUrl.searchParams.get("sirket");
         const selectedYil = parseSelectedYil(req.nextUrl.searchParams.get("yil"));
         const selectedAy = parseSelectedAy(req.nextUrl.searchParams.get("ay"));
+        const selectedDisFirmaId = parseSelectedDisFirmaId(req.nextUrl.searchParams.get("disFirmaId"));
+        const selectedExternalMode = parseExternalVendorMode(req.nextUrl.searchParams.get("externalMode"));
         const scopedFilter = config.prismaModel === "disFirma"
             ? {}
             : await getModelFilter(config.filterModel, selectedSirketId);
-        const entityFilter =
-            entity === "taseronFirma"
-                ? { tur: "TASERON" }
-                : entity === "kiralikFirma"
-                    ? { tur: "KIRALIK" }
-                    : {};
-        const baseFilter = Object.keys(entityFilter).length
-            ? { AND: [(scopedFilter || {}) as Record<string, unknown>, entityFilter] }
-            : scopedFilter;
+        const entityFilter = buildExcelEntityScopeFilter(entity, selectedDisFirmaId, selectedExternalMode);
+        const baseFilterParts: Record<string, unknown>[] = [];
+        if (scopedFilter && Object.keys(scopedFilter).length > 0) {
+            baseFilterParts.push(scopedFilter as Record<string, unknown>);
+        }
+        if (entityFilter && Object.keys(entityFilter).length > 0) {
+            baseFilterParts.push(entityFilter);
+        }
+        const baseFilter =
+            baseFilterParts.length === 0
+                ? {}
+                : baseFilterParts.length === 1
+                    ? baseFilterParts[0]
+                    : { AND: baseFilterParts };
         const where =
             config.dateField && selectedYil
                 ? withAyDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil, selectedAy)
@@ -119,6 +181,8 @@ export async function POST(
         if (config.filterModel === "sirket" && role !== "ADMIN") {
             return NextResponse.json({ error: "Şirket verisi import işlemi sadece admin yetkisi gerektirir." }, { status: 403 });
         }
+        const selectedDisFirmaId = parseSelectedDisFirmaId(req.nextUrl.searchParams.get("disFirmaId"));
+        const selectedExternalMode = parseExternalVendorMode(req.nextUrl.searchParams.get("externalMode"));
 
         const formData = await req.formData();
         const fileEntry = formData.get("file");
@@ -148,7 +212,10 @@ export async function POST(
 
         let result: { created: number; updated: number; skipped: number; total: number } | undefined;
         await prisma.$transaction(async (tx) => {
-            result = await importEntity(entity, records, tx);
+            result = await importEntity(entity, records, tx, {
+                selectedDisFirmaId,
+                selectedExternalMode,
+            });
         });
 
         if (config.prismaModel === "yakit" && result) {

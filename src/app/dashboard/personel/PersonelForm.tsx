@@ -4,6 +4,7 @@ import React from "react";
 import { Input } from "../../../components/ui/input";
 import type { Rol } from "@prisma/client";
 import { getRoleLabel } from "@/lib/role-label";
+import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 
 export type PersonelFormData = {
     ad: string;
@@ -27,6 +28,7 @@ export const FormFields = ({
     allowAdminRole = false,
     allowIndependentOption = true,
     isExternalMode = false,
+    externalMode = null,
 }: {
     formData: PersonelFormData,
     setFormData: React.Dispatch<React.SetStateAction<PersonelFormData>>,
@@ -35,6 +37,7 @@ export const FormFields = ({
     allowAdminRole?: boolean,
     allowIndependentOption?: boolean,
     isExternalMode?: boolean,
+    externalMode?: ExternalVendorMode | null,
 }) => {
     const baseRoleOptions = allowAdminRole ? ROLLER : ROLLER.filter((item) => item !== "ADMIN");
     const roleOptions = baseRoleOptions.includes(formData.rol)
@@ -116,13 +119,15 @@ export const FormFields = ({
         </div>
         {isExternalMode && (
             <div className="space-y-1.5">
-                <label className="text-sm font-medium">Dış Firma (Taşeron / Kiralık)</label>
+                <label className="text-sm font-medium">
+                    {externalMode === "KIRALIK" ? "Kiralık Firma" : externalMode === "TASERON" ? "Taşeron Firma" : "Dış Firma"}
+                </label>
                 <select
                     value={formData.disFirmaId || ""}
                     onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
-                    <option value="">Dış firma yok</option>
+                    <option value="">Firma seçiniz</option>
                     {disFirmalar.map((firma) => (
                         <option key={firma.id} value={firma.id}>
                             {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})

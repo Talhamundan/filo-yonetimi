@@ -30,6 +30,13 @@ function formatCurrency(value: number) {
     return `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
 }
 
+function getVendorScopedHref(basePath: string, row: DisFirmaRow) {
+    const params = new URLSearchParams();
+    params.set("externalMode", row.tur);
+    params.set("disFirmaId", row.id);
+    return `${basePath}?${params.toString()}`;
+}
+
 export const columns: ColumnDef<DisFirmaRow>[] = [
     {
         accessorKey: "ad",
@@ -87,7 +94,7 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         accessorKey: "aracSayisi",
         header: "Kayıtlı Araç",
         cell: ({ row }) => (
-            <Link href={`/dashboard/araclar?disFirmaId=${encodeURIComponent(row.original.id)}`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href={getVendorScopedHref("/dashboard/araclar", row.original)} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
                 {row.original.aracSayisi} Araç
             </Link>
         ),
@@ -96,7 +103,7 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         accessorKey: "personelSayisi",
         header: "Kayıtlı Personel",
         cell: ({ row }) => (
-            <Link href={`/dashboard/personel?disFirmaId=${encodeURIComponent(row.original.id)}`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href={getVendorScopedHref("/dashboard/personel", row.original)} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
                 {row.original.personelSayisi} Kişi
             </Link>
         ),
