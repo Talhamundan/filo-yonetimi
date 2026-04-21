@@ -211,7 +211,7 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         setEditRow(row);
     };
 
-    const excelEntity = tur === "KIRALIK" ? "kiralikFirma" : tur === "TASERON" ? "taseronFirma" : undefined;
+    const excelEntity = tur === "KIRALIK" ? "kiralikFirma" : tur === "TASERON" ? "taseronFirma" : "disFirma";
 
     return (
         <div className="p-6 md:p-8 xl:p-10 max-w-[1400px] mx-auto">
@@ -279,4 +279,3 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         </div>
     );
 }
-

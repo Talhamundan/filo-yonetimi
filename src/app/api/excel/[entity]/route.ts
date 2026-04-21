@@ -74,9 +74,16 @@ function buildExcelEntityScopeFilter(
         return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
     }
 
-    if (entity === "kiralikFirma" || entity === "taseronFirma") {
-        if (!tur) return {};
-        return { tur };
+    if (entity === "disFirma" || entity === "kiralikFirma" || entity === "taseronFirma") {
+        const scopeParts: Record<string, unknown>[] = [];
+        if (tur) {
+            scopeParts.push({ tur });
+        }
+        if (selectedDisFirmaId) {
+            scopeParts.push({ id: selectedDisFirmaId });
+        }
+        if (scopeParts.length === 0) return {};
+        return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
     }
 
     return {};

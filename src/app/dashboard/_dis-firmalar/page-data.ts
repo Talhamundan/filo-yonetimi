@@ -37,17 +37,33 @@ export async function getDisFirmaPageData({ tur, searchParams }: PageConfig) {
     const { start, end } = getAyDateRange(selectedYil, selectedAy);
 
     const relationFilter = selectedSirketId ? { sirketId: selectedSirketId } : {};
+    const selectedSirket = selectedSirketId
+        ? await (prisma as any).sirket.findFirst({
+            where: { id: selectedSirketId },
+            select: { ad: true },
+        }).catch(() => null)
+        : null;
+    const selectedSirketName = typeof selectedSirket?.ad === "string" ? selectedSirket.ad.trim() : "";
+    const scopedVendorFilters: Prisma.DisFirmaWhereInput[] = selectedSirketId
+        ? [
+            { araclar: { some: { ...relationFilter, deletedAt: null } } },
+            { kullanicilar: { some: { ...relationFilter, deletedAt: null } } },
+            ...(selectedSirketName
+                ? [
+                    {
+                        calistigiKurum: {
+                            equals: selectedSirketName,
+                            mode: "insensitive",
+                        },
+                    } as Prisma.DisFirmaWhereInput,
+                ]
+                : []),
+        ]
+        : [];
     const vendorWhere: Prisma.DisFirmaWhereInput = {
         ...(tur === "ALL" ? {} : { tur }),
-        ...(selectedSirketId
-            ? {
-                OR: [
-                    { araclar: { some: { ...relationFilter, deletedAt: null } } },
-                    { kullanicilar: { some: { ...relationFilter, deletedAt: null } } },
-                ],
-            }
-            : {}),
-    } as any;
+        ...(scopedVendorFilters.length > 0 ? { OR: scopedVendorFilters } : {}),
+    };
 
     const [disFirmalar, sirketler] = await Promise.all([
         (prisma as any).disFirma.findMany({

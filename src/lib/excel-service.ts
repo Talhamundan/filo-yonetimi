@@ -215,6 +215,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
     disFirma: {
         visibleColumns: [
             "ad",
+            "tur",
             "calistigiKurum",
             "sehir",
             "vergiNo",
@@ -537,6 +538,7 @@ const PERSONEL_TASERON_VISIBLE_COLUMNS = [
 EXCEL_MODEL_PROFILES.kiralikArac = {
     ...(EXCEL_MODEL_PROFILES.arac || {}),
     visibleColumns: ARAC_EXTERNAL_VISIBLE_COLUMNS,
+    strictVisibleColumns: true,
     labels: {
         ...(EXCEL_MODEL_PROFILES.arac?.labels || {}),
         ruhsatSahibi: "Çalıştığı Firmamız",
@@ -577,6 +579,7 @@ EXCEL_MODEL_PROFILES.taseronArac = {
 EXCEL_MODEL_PROFILES.kiralikPersonel = {
     ...(EXCEL_MODEL_PROFILES.kullanici || {}),
     visibleColumns: PERSONEL_EXTERNAL_VISIBLE_COLUMNS,
+    strictVisibleColumns: true,
     labels: {
         ...(EXCEL_MODEL_PROFILES.kullanici?.labels || {}),
         sirket: "Çalıştığı Firmamız",
@@ -603,6 +606,27 @@ EXCEL_MODEL_PROFILES.kiralikPersonel = {
 EXCEL_MODEL_PROFILES.taseronPersonel = {
     ...(EXCEL_MODEL_PROFILES.kullanici || {}),
     visibleColumns: PERSONEL_TASERON_VISIBLE_COLUMNS,
+};
+
+const DIS_FIRMA_BASE_VISIBLE_COLUMNS = [
+    "ad",
+    "calistigiKurum",
+    "sehir",
+    "vergiNo",
+    "yetkiliKisi",
+    "telefon",
+];
+
+EXCEL_MODEL_PROFILES.taseronFirma = {
+    ...(EXCEL_MODEL_PROFILES.disFirma || {}),
+    visibleColumns: DIS_FIRMA_BASE_VISIBLE_COLUMNS,
+    strictVisibleColumns: true,
+};
+
+EXCEL_MODEL_PROFILES.kiralikFirma = {
+    ...(EXCEL_MODEL_PROFILES.disFirma || {}),
+    visibleColumns: DIS_FIRMA_BASE_VISIBLE_COLUMNS,
+    strictVisibleColumns: true,
 };
 
 const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {

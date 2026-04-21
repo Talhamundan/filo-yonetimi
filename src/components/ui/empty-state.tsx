@@ -131,6 +131,13 @@ const CONFIG: Record<string, StateConfig> = {
         colorClass: "text-slate-600",
         bgClass: "bg-slate-50",
     },
+    disFirma: {
+        icon: Building2,
+        title: "Dış Firma Kaydı Yok",
+        description: "Henüz bir taşeron veya kiralık dış firma kaydı bulunmuyor.",
+        colorClass: "text-slate-600",
+        bgClass: "bg-slate-50",
+    },
     default: {
         icon: Search,
         title: "Kayıt Bulunamadı",

@@ -32,6 +32,7 @@ async function deleteByEntity(entity: ExcelEntityKey, id: string): Promise<Delet
             return deletePersonel(id);
         case "sirket":
             return deleteSirket(id);
+        case "disFirma":
         case "taseronFirma":
         case "kiralikFirma":
             return deleteDisFirma(id);

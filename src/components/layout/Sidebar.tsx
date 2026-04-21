@@ -187,13 +187,13 @@ export default function Sidebar({
                             <NavItem href="/dashboard/kiraliklar" icon={Truck} label="Kiralık Araç/Personel" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                         </>
                     ) : null}
-                    <NavItem href="/dashboard/personel" icon={Users} label="Personeller" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Fleet Management */}
                 <SectionTitle title="Filo Yönetimi" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-0.5 mb-4">
                     <NavItem href="/dashboard/araclar" icon={Car} label="Araçlar" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/personel" icon={Users} label="Personeller" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/zimmetler" icon={ClipboardList} label="Zimmet Kayıtları" collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
