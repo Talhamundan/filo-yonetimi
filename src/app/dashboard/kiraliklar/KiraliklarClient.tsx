@@ -3,6 +3,7 @@
 import React from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { Building2, Plus, Truck, User } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { DataTable } from "@/components/ui/data-table";
@@ -44,6 +45,9 @@ type KiralikAracRow = {
     disFirmaAd: string;
     soforId: string;
     soforAdSoyad: string;
+    yakitToplamLitre?: number;
+    ortalamaYakit100Km?: number | null;
+    ortalamaYakitIntervalSayisi?: number;
 };
 
 type KiralikAracForm = {
@@ -82,6 +86,10 @@ function normalizeText(value: string) {
 
 function normalizePlateInput(value: string) {
     return value.replace(/\s+/g, "").toLocaleUpperCase("tr-TR").trim();
+}
+
+function formatDecimal(value: number, fractionDigits = 2) {
+    return value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
 }
 
 export default function KiraliklarClient({
@@ -125,11 +133,41 @@ export default function KiraliklarClient({
             {
                 accessorKey: "plaka",
                 header: "Plaka",
-                cell: ({ row }) => <span className="font-mono font-semibold">{row.original.plaka || "-"}</span>,
+                cell: ({ row }) => (
+                    <Link
+                        href={`/dashboard/kiraliklar/${row.original.id}`}
+                        className="font-mono font-semibold text-slate-900 hover:text-indigo-600 hover:underline"
+                        onClick={(event) => event.stopPropagation()}
+                    >
+                        {row.original.plaka || "-"}
+                    </Link>
+                ),
             },
             {
                 accessorKey: "soforAdSoyad",
                 header: "Şoför",
+            },
+            {
+                accessorKey: "ortalamaYakit100Km",
+                header: "Ortalama Yakıt",
+                cell: ({ row }) => {
+                    const litre100 = row.original.ortalamaYakit100Km;
+                    const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
+                    const toplamLitre = row.original.yakitToplamLitre || 0;
+
+                    if (litre100 == null || intervalSayisi <= 0) {
+                        return toplamLitre > 0
+                            ? <span className="text-slate-400 italic text-xs">Yetersiz veri</span>
+                            : <span className="text-slate-400 italic text-xs">-</span>;
+                    }
+
+                    return (
+                        <div className="min-w-[140px]">
+                            <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} L/100 km</div>
+                            <div className="text-[11px] text-slate-400">{intervalSayisi} dolum aralığı</div>
+                        </div>
+                    );
+                },
             },
             {
                 id: "actions",
@@ -333,11 +371,11 @@ export default function KiraliklarClient({
                 </p>
             </div>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section id="kiralik-arac-listesi" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 className="text-lg font-semibold text-slate-900">Kiralık Araç Listesi</h3>
-                        <p className="text-sm text-slate-500">Alanlar: Çalıştığı firmamız, dış firma, plaka, şoför.</p>
+                        <p className="text-sm text-slate-500">Alanlar: Çalıştığı firmamız, dış firma, plaka, şoför, ortalama yakıt.</p>
                     </div>
                     <Dialog
                         open={aracCreateOpen}
@@ -383,11 +421,11 @@ export default function KiraliklarClient({
                     searchKey="plaka"
                     searchPlaceholder="Plaka ara..."
                     excelEntity="kiralikArac"
-                    tableClassName="min-w-[920px]"
+                    tableClassName="min-w-[1080px]"
                 />
             </section>
 
-            <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+            <section id="kiralik-personel-listesi" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 className="text-lg font-semibold text-slate-900">Kiralık Personel Listesi</h3>

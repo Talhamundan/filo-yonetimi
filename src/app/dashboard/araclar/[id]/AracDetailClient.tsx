@@ -2780,7 +2780,9 @@ export default function AracDetailClient({
                                                         })()}
                                                     </TableCell>
                                                     <TableCell className="text-slate-900">{y.istasyon || '-'}</TableCell>
-                                                    <TableCell className="text-slate-700">{y.km.toLocaleString()} km</TableCell>
+                                                    <TableCell className="text-slate-700">
+                                                        {y.km != null ? `${Number(y.km).toLocaleString("tr-TR")} km` : "-"}
+                                                    </TableCell>
                                                     <TableCell className="text-slate-700">{y.litre} L</TableCell>
                                                     <TableCell className="font-bold text-slate-900 text-right">₺{y.tutar.toLocaleString()}</TableCell>
                                                     <TableCell className="text-right">

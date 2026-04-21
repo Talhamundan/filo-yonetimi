@@ -94,7 +94,7 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         accessorKey: "aracSayisi",
         header: "Kayıtlı Araç",
         cell: ({ row }) => (
-            <Link href={getVendorScopedHref("/dashboard/araclar", row.original)} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href={`${getVendorScopedHref("/dashboard/kiraliklar", row.original)}#kiralik-arac-listesi`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
                 {row.original.aracSayisi} Araç
             </Link>
         ),
@@ -103,7 +103,7 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         accessorKey: "personelSayisi",
         header: "Kayıtlı Personel",
         cell: ({ row }) => (
-            <Link href={getVendorScopedHref("/dashboard/personel", row.original)} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
+            <Link href={`${getVendorScopedHref("/dashboard/kiraliklar", row.original)}#kiralik-personel-listesi`} className="font-semibold text-indigo-600 hover:text-indigo-700 hover:underline">
                 {row.original.personelSayisi} Kişi
             </Link>
         ),
