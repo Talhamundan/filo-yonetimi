@@ -6,7 +6,6 @@ import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import {
     assertAuthenticatedUser,
     getScopedAracOrThrow,
-    getScopedKullaniciOrThrow,
     getScopedRecordOrThrow,
     resolveActionSirketId,
 } from "@/lib/action-scope";
@@ -20,18 +19,15 @@ import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 const PATH = "/dashboard/servis-kayitlari";
 const LEGACY_PATH = "/dashboard/bakimlar";
 const ARACLAR_PATH = "/dashboard/araclar";
-const PERSONEL_PATH = "/dashboard/personel";
 const BAKIM_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.Bakim?.fields?.some((field: any) => field?.name === "soforId")
 );
 
-function revalidateBakimPages(aracId?: string, soforId?: string | null) {
+function revalidateBakimPages(aracId?: string) {
     revalidatePath(PATH);
     revalidatePath(LEGACY_PATH);
     revalidatePath(ARACLAR_PATH);
-    revalidatePath(PERSONEL_PATH);
     if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
-    if (soforId) revalidatePath(`${PERSONEL_PATH}/${soforId}`);
 }
 
 function normalizeOptionalText(value: string | null | undefined) {
@@ -89,40 +85,6 @@ function resolveLegacyBakimTuru(kategori: ServisKategoriInput, tur?: LegacyBakim
     return kategori === "ARIZA" ? "ARIZA" : "PERIYODIK";
 }
 
-async function getAracActiveSoforId(aracId: string, fallbackSoforId?: string | null) {
-    const aktifZimmet = await (prisma as any).kullaniciZimmet
-        .findFirst({
-            where: { aracId, bitis: null },
-            orderBy: { baslangic: "desc" },
-            select: { kullaniciId: true },
-        })
-        .catch(() => null);
-
-    return aktifZimmet?.kullaniciId || fallbackSoforId || null;
-}
-
-async function resolveBakimSoforId(inputSoforId: string | null | undefined, fallbackSoforId?: string | null) {
-    if (!BAKIM_HAS_SOFOR_ID) {
-        return null;
-    }
-
-    if (typeof inputSoforId === "undefined") {
-        return fallbackSoforId || null;
-    }
-
-    const normalized = inputSoforId?.trim();
-    if (!normalized) {
-        return null;
-    }
-
-    const personel = await getScopedKullaniciOrThrow(normalized, { id: true, rol: true });
-    if ((personel as any)?.rol === "ADMIN") {
-        throw new Error("Servis kaydı için admin seçilemez.");
-    }
-
-    return (personel as any).id as string;
-}
-
 export async function addBakim(data: {
     aracId?: string | null;
     plaka?: string | null;
@@ -177,7 +139,6 @@ export async function addBakim(data: {
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
         const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
         const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
-        const resolvedSoforId = null;
         const resolvedSirketId = arac
             ? await resolveVehicleUsageCompanyId({ aracId: arac.id })
             : (await resolveActionSirketId());
@@ -225,11 +186,10 @@ export async function addBakim(data: {
                 degisenParca,
                 islemYapanFirma,
                 yapilanIslemler,
-                soforId: BAKIM_HAS_SOFOR_ID ? (created as any).soforId || null : null,
             },
         });
 
-        revalidateBakimPages(arac?.id, resolvedSoforId);
+        revalidateBakimPages(arac?.id);
         return { success: true };
     } catch (error) {
         console.error("Bakım eklenirken hata:", error);
@@ -263,7 +223,6 @@ export async function updateBakim(id: string, data: {
                 plaka: true,
                 sirketId: true,
                 yapilanKm: true,
-                ...(BAKIM_HAS_SOFOR_ID ? { soforId: true } : {}),
             },
             errorMessage: "Bakim kaydi bulunamadi veya yetkiniz yok.",
         });
@@ -305,7 +264,6 @@ export async function updateBakim(id: string, data: {
         const tur = resolveLegacyBakimTuru(kategori, data.tur);
         const effectiveKategori = arizaSikayet && kategori !== "ARIZA" ? "ARIZA" : kategori;
         const effectiveTur = resolveLegacyBakimTuru(effectiveKategori, tur);
-        const resolvedSoforId = null;
         const resolvedSirketId = arac
             ? await resolveVehicleUsageCompanyId({
                 aracId: arac.id
@@ -359,16 +317,12 @@ export async function updateBakim(id: string, data: {
                 degisenParca,
                 islemYapanFirma,
                 yapilanIslemler,
-                soforId: BAKIM_HAS_SOFOR_ID ? (updated as any).soforId || null : null,
             },
         });
 
-        revalidateBakimPages(nextAracId || undefined, resolvedSoforId);
+        revalidateBakimPages(nextAracId || undefined);
         if (oldAracId && oldAracId !== nextAracId) {
             revalidateBakimPages(oldAracId);
-        }
-        if ((mevcutKayit as any).soforId && (mevcutKayit as any).soforId !== resolvedSoforId) {
-            revalidateBakimPages(undefined, (mevcutKayit as any).soforId);
         }
         return { success: true };
     } catch (error) {

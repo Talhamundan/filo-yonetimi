@@ -61,8 +61,17 @@ export default function LoginPage() {
             />
             <div className="relative mx-auto flex min-h-[calc(100vh-4rem)] w-full max-w-5xl items-center justify-center rounded-2xl border border-[#d7eeea] bg-[#edf5f4] px-6 py-10 shadow-[0_20px_45px_rgba(15,23,42,0.12)]">
                 <div className="w-full max-w-md">
-                    <div className="mb-10 flex justify-center">
-                        <Image src="/logo.png" alt="Bera Filo" width={400} height={120} priority className="h-auto w-auto" />
+                    <div className="mb-8 flex justify-center">
+                        <div className="relative h-24 w-[300px] overflow-hidden rounded-lg sm:h-28 sm:w-[340px]">
+                            <Image
+                                src="/logo.jpeg"
+                                alt="Bera Asfalt"
+                                fill
+                                priority
+                                sizes="(max-width: 640px) 300px, 340px"
+                                className="object-cover object-center"
+                            />
+                        </div>
                     </div>
                     <form onSubmit={handleSubmit} className="space-y-5">
                         <div className="space-y-2">

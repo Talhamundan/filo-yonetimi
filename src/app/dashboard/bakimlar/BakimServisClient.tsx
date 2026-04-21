@@ -17,21 +17,12 @@ type AracOption = {
     aktifSoforAdSoyad?: string | null;
 };
 
-type PersonelOption = {
-    id: string;
-    ad: string;
-    soyad: string;
-    rol?: string | null;
-};
-
 export default function BakimServisClient({
     initialBakimlar,
     activeAraclar = [],
-    personeller = [],
 }: {
     initialBakimlar: BakimRow[];
     activeAraclar?: AracOption[];
-    personeller?: PersonelOption[];
 }) {
-    return <BakimlarClient initialBakimlar={initialBakimlar} activeAraclar={activeAraclar} personeller={personeller} />;
+    return <BakimlarClient initialBakimlar={initialBakimlar} activeAraclar={activeAraclar} />;
 }

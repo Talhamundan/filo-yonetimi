@@ -25,15 +25,15 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
             orderBy: { ad: "asc" },
         }),
         prisma.disFirma.findMany({
-            where: { tur: "KIRALIK" },
-            select: { id: true, ad: true },
+            where: { tur: { in: ["KIRALIK", "TASERON"] } },
+            select: { id: true, ad: true, tur: true },
             orderBy: { ad: "asc" },
         }),
         prisma.arac.findMany({
             where: {
                 AND: [
                     aracFilter as Prisma.AracWhereInput,
-                    { disFirma: { is: { tur: "KIRALIK" } } },
+                    { disFirma: { is: { tur: { in: ["KIRALIK", "TASERON"] } } } },
                 ],
             },
             select: {
@@ -43,7 +43,7 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
                 disFirmaId: true,
                 kullaniciId: true,
                 sirket: { select: { id: true, ad: true } },
-                disFirma: { select: { id: true, ad: true } },
+                disFirma: { select: { id: true, ad: true, tur: true } },
                 kullanici: { select: { id: true, ad: true, soyad: true } },
             },
             orderBy: { plaka: "asc" },
@@ -52,7 +52,7 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
             where: {
                 AND: [
                     personelFilter as Prisma.KullaniciWhereInput,
-                    { disFirma: { is: { tur: "KIRALIK" } } },
+                    { disFirma: { is: { tur: { in: ["KIRALIK", "TASERON"] } } } },
                 ],
             },
             select: {
@@ -63,7 +63,7 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
                 sirketId: true,
                 disFirmaId: true,
                 sirket: { select: { id: true, ad: true } },
-                disFirma: { select: { id: true, ad: true } },
+                disFirma: { select: { id: true, ad: true, tur: true } },
                 arac: { select: { plaka: true } },
             },
             orderBy: [{ ad: "asc" }, { soyad: "asc" }],
@@ -80,7 +80,7 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
                 sirketId: arac.sirketId || "",
                 sirketAd: arac.sirket?.ad || "-",
                 disFirmaId: arac.disFirmaId || "",
-                disFirmaAd: arac.disFirma?.ad || "-",
+                disFirmaAd: arac.disFirma ? `${arac.disFirma.ad} (${arac.disFirma.tur === "TASERON" ? "Taşeron" : "Kiralık"})` : "-",
                 soforId: arac.kullaniciId || "",
                 soforAdSoyad: arac.kullanici ? `${arac.kullanici.ad} ${arac.kullanici.soyad}`.trim() : "-",
             }))}
@@ -93,7 +93,7 @@ export default async function KiraliklarPage(props: { searchParams?: Promise<Das
                 sirketId: personel.sirketId || "",
                 sirketAd: personel.sirket?.ad || "-",
                 disFirmaId: personel.disFirmaId || "",
-                disFirmaAd: personel.disFirma?.ad || "-",
+                disFirmaAd: personel.disFirma ? `${personel.disFirma.ad} (${personel.disFirma.tur === "TASERON" ? "Taşeron" : "Kiralık"})` : "-",
                 zimmetliArac: personel.arac?.plaka || "-",
             }))}
         />

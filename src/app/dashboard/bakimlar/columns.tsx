@@ -4,8 +4,6 @@ import { ColumnDef } from "@tanstack/react-table"
 import { format } from "date-fns"
 import { tr } from "date-fns/locale"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
-import { PersonelLink } from "@/components/links/RecordLinks"
-import { ESKI_PERSONEL_ETIKETI, getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display"
 
 export type BakimRow = {
     id: string;
@@ -19,8 +17,6 @@ export type BakimRow = {
     tutar: number;
     kategori?: "PERIYODIK_BAKIM" | "ARIZA";
     tur?: string;
-    soforId?: string | null;
-    sofor?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
     arac?: {
         id: string;
         plaka: string | null;
@@ -58,27 +54,6 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<BakimRow>[] => {
                 companyName={row.original.arac?.sirket?.ad}
                 showCompanyInfo={showCompanyInfo}
             />
-        },
-    },
-    {
-        accessorKey: "sofor",
-        header: "Şoför",
-        accessorFn: (row) => {
-            const seciliPersonel = row.sofor || row.arac?.kullanici || null;
-            return seciliPersonel ? getPersonelDisplayName(seciliPersonel) : (row.soforId ? ESKI_PERSONEL_ETIKETI : "-");
-        },
-        cell: ({ row }) => {
-            const seciliPersonel = row.original.sofor || row.original.arac?.kullanici || null;
-            const personelText = seciliPersonel
-                ? getPersonelDisplayName(seciliPersonel)
-                : (row.original.soforId ? ESKI_PERSONEL_ETIKETI : "-");
-            const personelId = getActivePersonelId(seciliPersonel);
-
-            return (
-                <PersonelLink personelId={personelId} className="font-semibold text-indigo-600 hover:underline">
-                    {personelText}
-                </PersonelLink>
-            );
         },
     },
     {

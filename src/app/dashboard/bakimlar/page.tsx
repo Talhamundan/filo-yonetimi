@@ -1,15 +1,11 @@
 import { prisma } from "../../../lib/prisma";
 import BakimlarClient from "./client";
 import { BakimRow } from "./columns";
-import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
+import { getModelFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display";
-
-const BAKIM_HAS_SOFOR_ID = Boolean(
-    (prisma as any)?._runtimeDataModel?.models?.Bakim?.fields?.some((field: any) => field?.name === "soforId")
-);
 const BAKIM_KATEGORI_FILTER_MAP = {
     PERIYODIK_BAKIM: "PERIYODIK_BAKIM",
     PERIYODIK: "PERIYODIK_BAKIM",
@@ -31,17 +27,13 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         getCommonListFilters(props.searchParams),
     ]);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
-    const [filter, aracFilter, personelFilter] = await Promise.all([
+    const [filter, aracFilter] = await Promise.all([
         getModelFilter('bakim', selectedSirketId).catch((error) => {
             console.warn("Servis kaydı filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
             return {};
         }),
         getModelFilter('arac', selectedSirketId).catch((error) => {
             console.warn("Araç filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
-            return {};
-        }),
-        getPersonnelSelectFilter().catch((error) => {
-            console.warn("Personel filtreleri yüklenemedi, boş filtre ile devam ediliyor.", error);
             return {};
         }),
     ]);
@@ -64,12 +56,6 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         { arac: { plaka: { contains: token, mode: "insensitive" } } },
         { arac: { marka: { contains: token, mode: "insensitive" } } },
         { arac: { model: { contains: token, mode: "insensitive" } } },
-        ...(BAKIM_HAS_SOFOR_ID
-            ? [
-                { sofor: { ad: { contains: token, mode: "insensitive" } } },
-                { sofor: { soyad: { contains: token, mode: "insensitive" } } },
-            ]
-            : []),
     ]);
     if (qFilter) {
         whereParts.push(qFilter);
@@ -83,23 +69,11 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
     }
     const scopedBakimWhere = whereParts.length > 1 ? { AND: whereParts } : whereParts[0];
 
-    const [bakimlar, araclar, personeller] = await Promise.all([
+    const [bakimlar, araclar] = await Promise.all([
         (prisma as any).bakim.findMany({
             where: scopedBakimWhere as any,
             orderBy: { bakimTarihi: 'desc' },
             include: {
-                ...(BAKIM_HAS_SOFOR_ID
-                    ? {
-                        sofor: {
-                            select: {
-                                id: true,
-                                ad: true,
-                                soyad: true,
-                                deletedAt: true,
-                            },
-                        },
-                    }
-                    : {}),
                 arac: {
                     include: {
                         sirket: { select: { ad: true } },
@@ -144,24 +118,6 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
         }).catch((error: unknown) => {
             console.error("Araç listesi yüklenemedi, servis formunda boş liste gösterilecek.", error);
             return [];
-        }),
-        (prisma as any).kullanici.findMany({
-            where: {
-                ...(personelFilter as any),
-                rol: { not: "ADMIN" },
-            },
-            select: {
-                id: true,
-                ad: true,
-                soyad: true,
-                rol: true,
-                calistigiKurum: true,
-                sirket: { select: { ad: true } },
-            },
-            orderBy: [{ ad: "asc" }, { soyad: "asc" }],
-        }).catch((error: unknown) => {
-            console.error("Personel listesi yüklenemedi, servis formunda boş liste gösterilecek.", error);
-            return [];
         })
     ]);
 
@@ -197,11 +153,6 @@ export default async function BakimlarPage(props: { searchParams?: Promise<Dashb
                     kullanici: a.kullanici || null,
                 };
             })}
-            personeller={(personeller as any[]).map((p) => ({
-                ...p,
-                sirketAd: p.sirket?.ad || null,
-                calistigiKurum: p.calistigiKurum || null,
-            }))}
         />
     );
 }

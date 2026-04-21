@@ -20,7 +20,7 @@ import {
 } from "./actions";
 
 type SirketOption = { id: string; ad: string };
-type DisFirmaOption = { id: string; ad: string };
+type DisFirmaOption = { id: string; ad: string; tur?: "KIRALIK" | "TASERON" | null };
 
 type KiralikPersonelRow = {
     id: string;
@@ -120,7 +120,7 @@ export default function KiraliklarClient({
             },
             {
                 accessorKey: "disFirmaAd",
-                header: "Taşeron Firma",
+                header: "Dış Firma",
             },
             {
                 accessorKey: "plaka",
@@ -189,7 +189,7 @@ export default function KiraliklarClient({
             },
             {
                 accessorKey: "disFirmaAd",
-                header: "Taşeron Firma",
+                header: "Dış Firma",
             },
             {
                 accessorKey: "telefon",
@@ -249,7 +249,7 @@ export default function KiraliklarClient({
 
     const handleCreateArac = async () => {
         if (!aracForm.plaka.trim() || !aracForm.sirketId || !aracForm.disFirmaId) {
-            toast.warning("Plaka, çalıştığı firmamız ve taşeron firma zorunludur.");
+            toast.warning("Plaka, çalıştığı firmamız ve dış firma zorunludur.");
             return;
         }
         setSavingArac(true);
@@ -268,7 +268,7 @@ export default function KiraliklarClient({
     const handleUpdateArac = async () => {
         if (!editingArac) return;
         if (!aracForm.plaka.trim() || !aracForm.sirketId || !aracForm.disFirmaId) {
-            toast.warning("Plaka, çalıştığı firmamız ve taşeron firma zorunludur.");
+            toast.warning("Plaka, çalıştığı firmamız ve dış firma zorunludur.");
             return;
         }
 
@@ -287,7 +287,7 @@ export default function KiraliklarClient({
 
     const handleCreatePersonel = async () => {
         if (!personelForm.ad.trim() || !personelForm.soyad.trim() || !personelForm.sirketId || !personelForm.disFirmaId) {
-            toast.warning("Ad, soyad, çalıştığı firmamız ve taşeron firma zorunludur.");
+            toast.warning("Ad, soyad, çalıştığı firmamız ve dış firma zorunludur.");
             return;
         }
         setSavingPersonel(true);
@@ -306,7 +306,7 @@ export default function KiraliklarClient({
     const handleUpdatePersonel = async () => {
         if (!editingPersonel) return;
         if (!personelForm.ad.trim() || !personelForm.soyad.trim() || !personelForm.sirketId || !personelForm.disFirmaId) {
-            toast.warning("Ad, soyad, çalıştığı firmamız ve taşeron firma zorunludur.");
+            toast.warning("Ad, soyad, çalıştığı firmamız ve dış firma zorunludur.");
             return;
         }
 
@@ -337,7 +337,7 @@ export default function KiraliklarClient({
                 <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
                         <h3 className="text-lg font-semibold text-slate-900">Kiralık Araç Listesi</h3>
-                        <p className="text-sm text-slate-500">Alanlar: Çalıştığı firmamız, taşeron firma, plaka, şoför.</p>
+                        <p className="text-sm text-slate-500">Alanlar: Çalıştığı firmamız, dış firma, plaka, şoför.</p>
                     </div>
                     <Dialog
                         open={aracCreateOpen}
@@ -537,7 +537,7 @@ function KiralikAracFormFields({
                 <div className="space-y-1.5">
                     <label className="flex items-center gap-1.5 text-sm font-medium">
                         <Building2 size={14} className="text-slate-400" />
-                        Taşeron Firma <span className="text-rose-500">*</span>
+                        Dış Firma <span className="text-rose-500">*</span>
                     </label>
                     <select
                         value={form.disFirmaId}
@@ -547,7 +547,7 @@ function KiralikAracFormFields({
                         <option value="">Firma seçiniz</option>
                         {disFirmalar.map((firma) => (
                             <option key={firma.id} value={firma.id}>
-                                {firma.ad}
+                                {firma.ad}{firma.tur ? ` (${firma.tur === "TASERON" ? "Taşeron" : "Kiralık"})` : ""}
                             </option>
                         ))}
                     </select>
@@ -639,7 +639,7 @@ function KiralikPersonelFormFields({
                 </div>
                 <div className="space-y-1.5">
                     <label className="text-sm font-medium">
-                        Taşeron Firma <span className="text-rose-500">*</span>
+                        Dış Firma <span className="text-rose-500">*</span>
                     </label>
                     <select
                         value={form.disFirmaId}
@@ -649,7 +649,7 @@ function KiralikPersonelFormFields({
                         <option value="">Firma seçiniz</option>
                         {disFirmalar.map((firma) => (
                             <option key={firma.id} value={firma.id}>
-                                {firma.ad}
+                                {firma.ad}{firma.tur ? ` (${firma.tur === "TASERON" ? "Taşeron" : "Kiralık"})` : ""}
                             </option>
                         ))}
                     </select>

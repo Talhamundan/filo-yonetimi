@@ -15,12 +15,10 @@ import { RowActionButton } from "@/components/ui/row-action-button";
 import { nowDateTimeLocal, toDateTimeLocalInput } from "@/lib/datetime-local";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 
 const EMPTY = {
     aracId: "",
     plaka: "",
-    soforId: "",
     bakimTarihi: nowDateTimeLocal(),
     arizaSikayet: "",
     yapilanIslemler: "",
@@ -45,23 +43,12 @@ type AracOption = {
     aktifSoforAdSoyad?: string | null;
 };
 
-type PersonelOption = {
-    id: string;
-    ad: string;
-    soyad: string;
-    rol?: string | null;
-    sirketAd?: string | null;
-    calistigiKurum?: string | null;
-};
-
 export default function BakimlarClient({
     initialBakimlar,
     activeAraclar,
-    personeller,
 }: {
     initialBakimlar: BakimRow[],
     activeAraclar: AracOption[],
-    personeller: PersonelOption[],
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -83,8 +70,6 @@ export default function BakimlarClient({
         }
     }, [shouldOpenCreate, router, searchParams]);
     const selectedArac = activeAraclar.find((arac) => arac.id === formData.aracId);
-    const personelIdSet = React.useMemo(() => new Set(personeller.map((personel) => personel.id)), [personeller]);
-    const normalizeSoforId = (soforId?: string | null) => (soforId && personelIdSet.has(soforId) ? soforId : "");
 
     const handleAracSelection = (aracId: string) => {
         const seciliArac = activeAraclar.find((arac) => arac.id === aracId);
@@ -92,7 +77,6 @@ export default function BakimlarClient({
             ...prev,
             aracId,
             plaka: seciliArac?.plaka ? forceUppercase(seciliArac.plaka) : prev.plaka,
-            soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
         }));
     };
 
@@ -107,7 +91,6 @@ export default function BakimlarClient({
         const res = await addBakim({
             aracId: formData.aracId || null,
             plaka: formData.plaka || null,
-            soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
             arizaSikayet: formData.arizaSikayet || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
@@ -137,7 +120,6 @@ export default function BakimlarClient({
         const res = await updateBakim(editRow.id, {
             aracId: formData.aracId || null,
             plaka: formData.plaka || null,
-            soforId: formData.soforId || null,
             bakimTarihi: new Date(formData.bakimTarihi),
             arizaSikayet: formData.arizaSikayet || undefined,
             yapilanIslemler: formData.yapilanIslemler || undefined,
@@ -172,7 +154,6 @@ export default function BakimlarClient({
         setFormData({
             aracId: row.arac?.id || "",
             plaka: row.arac?.plaka || row.plaka || "",
-            soforId: normalizeSoforId(row.soforId || row.sofor?.id || row.arac?.kullanici?.id),
             bakimTarihi: toDateTimeLocalInput(row.bakimTarihi),
             arizaSikayet: row.arizaSikayet || "",
             yapilanIslemler: row.yapilanIslemler || "",
@@ -243,25 +224,8 @@ export default function BakimlarClient({
                                         })),
                                     ]}
                                 />
-                                <SelectedAracInfo arac={selectedArac} />
-                            </div>
-                            <div className="space-y-1.5 col-span-2">
-                                <label className="text-sm font-medium">Servise Götüren Personel</label>
-                                <SearchableSelect
-                                    value={formData.soforId}
-                                    onValueChange={(value) => setFormData({ ...formData, soforId: value })}
-                                    placeholder="Seçilmedi"
-                                    searchPlaceholder="Personel ara..."
-                                    options={[
-                                        { value: "", label: "Seçilmedi" },
-                                        ...personeller.map((personel) => ({
-                                            value: personel.id,
-                                            label: getPersonelOptionLabel(personel),
-                                            searchText: getPersonelOptionSearchText(personel),
-                                        })),
-                                    ]}
-                                />
-                            </div>
+                            <SelectedAracInfo arac={selectedArac} />
+                        </div>
                             <div className="space-y-1.5">
                                 <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>
                                 <Input type="datetime-local" value={formData.bakimTarihi} onChange={e => setFormData({ ...formData, bakimTarihi: e.target.value })} className="h-9" />
@@ -345,24 +309,7 @@ export default function BakimlarClient({
                                     })),
                                 ]}
                             />
-                            <SelectedAracInfo arac={selectedArac} />
-                        </div>
-                        <div className="space-y-1.5 col-span-2">
-                            <label className="text-sm font-medium">Servise Götüren Personel</label>
-                            <SearchableSelect
-                                value={formData.soforId}
-                                onValueChange={(value) => setFormData({ ...formData, soforId: value })}
-                                placeholder="Seçilmedi"
-                                searchPlaceholder="Personel ara..."
-                                options={[
-                                    { value: "", label: "Seçilmedi" },
-                                    ...personeller.map((personel) => ({
-                                        value: personel.id,
-                                        label: getPersonelOptionLabel(personel),
-                                        searchText: getPersonelOptionSearchText(personel),
-                                    })),
-                                ]}
-                            />
+                                <SelectedAracInfo arac={selectedArac} />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-sm font-medium">Tarih <span className="text-red-500">*</span></label>

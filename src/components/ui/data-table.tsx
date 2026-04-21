@@ -408,6 +408,14 @@ export function DataTable<TData, TValue>({
     const isCompactToolbar = toolbarLayout === "compact"
     const isReportRightScroll = isCompactToolbar && toolbarArrangement === "report-right-scroll"
     const visibleLeafColumns = table.getVisibleLeafColumns()
+    const selectedExportColumns = React.useMemo(
+        () =>
+            visibleLeafColumns
+                .filter((column) => !isNonDataColumnId(column.id))
+                .map((column) => getColumnDisplayName(column).trim())
+                .filter((value) => value.length > 0),
+        [visibleLeafColumns]
+    )
     const visibleColumnCount = visibleLeafColumns.length
     const visibleColumnIds = visibleLeafColumns.map((column) => column.id)
     const visibleColumnIdsKey = visibleColumnIds.join("\u001F")
@@ -771,6 +779,7 @@ export function DataTable<TData, TValue>({
             if (selectedAy) params.set("ay", selectedAy)
             if (selectedDisFirmaId) params.set("disFirmaId", selectedDisFirmaId)
             if (selectedExternalMode) params.set("externalMode", selectedExternalMode)
+            selectedExportColumns.forEach((column) => params.append("column", column))
 
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
             const response = await fetch(endpoint, { method: "GET" })
@@ -800,7 +809,7 @@ export function DataTable<TData, TValue>({
         } finally {
             setIsExporting(false)
         }
-    }, [excelEntity, isExporting, isImporting, searchParams])
+    }, [excelEntity, isExporting, isImporting, searchParams, selectedExportColumns])
 
     const handleImportFileChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]

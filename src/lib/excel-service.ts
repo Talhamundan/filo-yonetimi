@@ -57,6 +57,10 @@ export type ImportEntityOptions = {
     selectedExternalMode?: ExternalVendorMode | null;
 };
 
+export type ExportEntityOptions = {
+    selectedColumns?: string[];
+};
+
 // --- Config & Constants ---
 export const MAX_IMPORT_FILE_BYTES = 10 * 1024 * 1024;
 
@@ -895,6 +899,37 @@ export function applyExportProfile(modelName: string, columnKeys: string[]) {
         }
     }
     return next;
+}
+
+function selectExportColumnsByRequestedTokens(modelName: string, availableColumns: string[], requestedTokens: string[]) {
+    const normalizedRequestedTokens = [...new Set(
+        (requestedTokens || [])
+            .map((token) => normalizeHeaderToken(token))
+            .filter((token) => token.length > 0)
+    )];
+
+    if (normalizedRequestedTokens.length === 0) {
+        return availableColumns;
+    }
+
+    const candidateKeyByNormalizedToken = new Map<string, string>();
+    for (const key of availableColumns) {
+        const candidates = getHeaderCandidates(modelName, key);
+        for (const candidate of candidates) {
+            const normalized = normalizeHeaderToken(candidate);
+            if (!normalized || candidateKeyByNormalizedToken.has(normalized)) continue;
+            candidateKeyByNormalizedToken.set(normalized, key);
+        }
+    }
+
+    const selectedColumns: string[] = [];
+    for (const token of normalizedRequestedTokens) {
+        const matchedKey = candidateKeyByNormalizedToken.get(token);
+        if (!matchedKey || selectedColumns.includes(matchedKey)) continue;
+        selectedColumns.push(matchedKey);
+    }
+
+    return selectedColumns.length > 0 ? selectedColumns : availableColumns;
 }
 
 
@@ -2381,7 +2416,7 @@ export async function resolveRelationValueToForeignKey(params: {
 
 // --- Orchestration Functions ---
 
-export async function exportEntity(entityKey: string, where?: WhereData) {
+export async function exportEntity(entityKey: string, where?: WhereData, options?: ExportEntityOptions) {
     const config = getEntityOrNull(entityKey);
     if (!config) throw new Error("Desteklenmeyen export modeli.");
     const profileKey = getExcelProfileKey(config.prismaModel, entityKey);
@@ -2496,7 +2531,8 @@ export async function exportEntity(entityKey: string, where?: WhereData) {
             ? [...columns, "bagliSirket", "calistigiKurum"].filter((v, i, a) => a.indexOf(v) === i)
             : columns;
     
-    const finalColumns = applyExportProfile(profileKey, internalColumns);
+    const profiledColumns = applyExportProfile(profileKey, internalColumns);
+    const finalColumns = selectExportColumnsByRequestedTokens(profileKey, profiledColumns, options?.selectedColumns || []);
     const exportRows = normalizedRows.map((row) => {
         const output: Record<string, unknown> = {};
         for (const key of finalColumns) {

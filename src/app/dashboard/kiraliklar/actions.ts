@@ -24,6 +24,8 @@ type KiralikPersonelInput = {
     disFirmaId: string;
 };
 
+const DIS_FIRMA_TURLERI: Array<"KIRALIK" | "TASERON"> = ["KIRALIK", "TASERON"];
+
 function normalizePlaka(value: string) {
     return value.replace(/\s+/g, "").toLocaleUpperCase("tr-TR").trim();
 }
@@ -68,15 +70,15 @@ async function ensureAccessibleSirket(sirketId: string) {
 async function ensureKiralikDisFirma(disFirmaId: string) {
     const normalizedId = (disFirmaId || "").trim();
     if (!normalizedId) {
-        throw new Error("Taşeron firma zorunludur.");
+        throw new Error("Dış firma zorunludur.");
     }
 
     const disFirma = await prisma.disFirma.findFirst({
-        where: { id: normalizedId, tur: "KIRALIK" },
-        select: { id: true, ad: true },
+        where: { id: normalizedId, tur: { in: DIS_FIRMA_TURLERI } },
+        select: { id: true, ad: true, tur: true },
     });
     if (!disFirma) {
-        throw new Error("Seçilen firma kiralık türünde bulunamadı.");
+        throw new Error("Seçilen dış firma bulunamadı.");
     }
     return disFirma;
 }
@@ -206,7 +208,7 @@ export async function updateKiralikArac(id: string, input: KiralikAracInput) {
         const mevcut = await prisma.arac.findFirst({
             where: {
                 AND: [
-                    { id, deletedAt: null, disFirma: { is: { tur: "KIRALIK" } } },
+                    { id, deletedAt: null, disFirma: { is: { tur: { in: DIS_FIRMA_TURLERI } } } },
                     aracScopeFilter as Prisma.AracWhereInput,
                 ],
             },
@@ -277,7 +279,7 @@ export async function deleteKiralikArac(id: string) {
         const kiralikArac = await prisma.arac.findFirst({
             where: {
                 AND: [
-                    { id, deletedAt: null, disFirma: { is: { tur: "KIRALIK" } } },
+                    { id, deletedAt: null, disFirma: { is: { tur: { in: DIS_FIRMA_TURLERI } } } },
                     aracScopeFilter as Prisma.AracWhereInput,
                 ],
             },
@@ -360,7 +362,7 @@ export async function deleteKiralikPersonel(id: string) {
         const personel = await prisma.kullanici.findFirst({
             where: {
                 AND: [
-                    { id, deletedAt: null, disFirma: { is: { tur: "KIRALIK" } } },
+                    { id, deletedAt: null, disFirma: { is: { tur: { in: DIS_FIRMA_TURLERI } } } },
                     personelScope as Prisma.KullaniciWhereInput,
                 ],
             },
