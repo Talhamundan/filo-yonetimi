@@ -423,6 +423,8 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     }
     if (selectedDisFirmaId) {
         filterParts.push({ disFirmaId: selectedDisFirmaId });
+    } else {
+        filterParts.push({ disFirmaId: null });
     }
     const safeFilterParts = filterParts.filter((part) => {
         if (!part || typeof part !== "object") return false;

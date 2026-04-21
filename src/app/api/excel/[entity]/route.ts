@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
 import { withAyDateFilter } from "@/lib/company-scope";
+import { applyExcelWorksheetFormats } from "@/lib/excel-worksheet-format";
 import * as XLSX from "xlsx";
 import { 
     getEntityOrNull, 
@@ -68,6 +69,7 @@ export async function GET(
         const { data, sheetName, headers } = await exportEntity(entity, where as any);
 
         const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+        applyExcelWorksheetFormats(worksheet, { entityKey: entity, headers });
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
         const fileBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });

@@ -70,6 +70,10 @@ const FormFields = ({
         () => sirketler.some((sirket) => isKiralikSirketName(sirket.ad)),
         [sirketler]
     );
+
+    const searchParams = useSearchParams();
+    const disFirmaIdParam = searchParams.get("disFirmaId");
+    const isExternalMode = Boolean(disFirmaIdParam);
     const firmaOptions = React.useMemo(() => {
         const options = [...kullaniciFirmaOptions];
         const currentFirma = typeof formData.calistigiKurum === "string" ? formData.calistigiKurum.trim() : "";
@@ -144,28 +148,30 @@ const FormFields = ({
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
             >
                 {allowIndependentOption ? <option value="">Şirket Seçiniz (Bağımsız)</option> : <option value="" disabled>Şirket Seçiniz</option>}
-                {allowIndependentOption && !hasKiralikSirket && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
+                {allowIndependentOption && !hasKiralikSirket && !isExternalMode && <option value={KIRALIK_SIRKET_OPTION_VALUE}>{KIRALIK_SIRKET_ADI}</option>}
                 {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
             </select>
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium flex items-center gap-1.5">
-                <Building2 size={14} className="text-slate-400" />
-                Dış Firma
-            </label>
-            <select
-                value={formData.disFirmaId}
-                onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Dış firma yok</option>
-                {disFirmalar.map((firma) => (
-                    <option key={firma.id} value={firma.id}>
-                        {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
-                    </option>
-                ))}
-            </select>
-        </div>
+        {!isExternalMode ? null : (
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium flex items-center gap-1.5">
+                    <Building2 size={14} className="text-slate-400" />
+                    Dış Firma
+                </label>
+                <select
+                    value={formData.disFirmaId}
+                    onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                    <option value="">Dış firma yok</option>
+                    {disFirmalar.map((firma) => (
+                        <option key={firma.id} value={firma.id}>
+                            {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
+                        </option>
+                    ))}
+                </select>
+            </div>
+        )}
         <div className="space-y-1.5">
             <label className="text-sm font-medium flex items-center gap-1.5">
                 <Building2 size={14} className="text-slate-400" />

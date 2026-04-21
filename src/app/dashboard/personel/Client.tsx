@@ -16,6 +16,7 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
 import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
+import { useSearchParams } from "next/navigation";
 
 const EMPTY: PersonelFormData = { ad: '', soyad: '', telefon: '', rol: 'PERSONEL', sirketId: '', disFirmaId: '', calistigiKurum: '', tcNo: '' };
 
@@ -32,6 +33,8 @@ export default function PersonelClient({
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { isAdmin, canAssignIndependentRecords } = useDashboardScope();
+    const searchParams = useSearchParams();
+    const isExternalMode = Boolean(searchParams.get("disFirmaId"));
     const defaultCreateSirketId = !canAssignIndependentRecords && sirketler.length === 1 ? sirketler[0]?.id || "" : "";
     const router = useRouter();
     const scopedHref = useDashboardScopedHref();
@@ -158,6 +161,7 @@ export default function PersonelClient({
                             disFirmalar={disFirmalar}
                             allowAdminRole={isAdmin}
                             allowIndependentOption={canAssignIndependentRecords}
+                            isExternalMode={isExternalMode}
                         />
                         <DialogFooter>
                             <button onClick={handleCreate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
@@ -186,6 +190,7 @@ export default function PersonelClient({
                         disFirmalar={disFirmalar}
                         allowAdminRole={isAdmin}
                         allowIndependentOption={canAssignIndependentRecords}
+                        isExternalMode={isExternalMode}
                     />
                     <DialogFooter>
                         <button onClick={handleUpdate} disabled={loading} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">

@@ -114,6 +114,8 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
     }
     if (selectedDisFirmaId) {
         personelWhereParts.push({ disFirmaId: selectedDisFirmaId });
+    } else {
+        personelWhereParts.push({ disFirmaId: null });
     }
     const personelWhere = personelWhereParts.length > 1 ? { AND: personelWhereParts } : personelWhereParts[0];
 

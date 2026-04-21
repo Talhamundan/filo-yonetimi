@@ -26,6 +26,7 @@ export const FormFields = ({
     disFirmalar = [],
     allowAdminRole = false,
     allowIndependentOption = true,
+    isExternalMode = false,
 }: {
     formData: PersonelFormData,
     setFormData: React.Dispatch<React.SetStateAction<PersonelFormData>>,
@@ -33,6 +34,7 @@ export const FormFields = ({
     disFirmalar?: { id: string; ad: string; tur: string }[],
     allowAdminRole?: boolean,
     allowIndependentOption?: boolean,
+    isExternalMode?: boolean,
 }) => {
     const baseRoleOptions = allowAdminRole ? ROLLER : ROLLER.filter((item) => item !== "ADMIN");
     const roleOptions = baseRoleOptions.includes(formData.rol)
@@ -112,21 +114,23 @@ export const FormFields = ({
                 />
             </div>
         </div>
-        <div className="space-y-1.5">
-            <label className="text-sm font-medium">Dış Firma (Taşeron / Kiralık)</label>
-            <select
-                value={formData.disFirmaId || ""}
-                onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
-                className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-            >
-                <option value="">Dış firma yok</option>
-                {disFirmalar.map((firma) => (
-                    <option key={firma.id} value={firma.id}>
-                        {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
-                    </option>
-                ))}
-            </select>
-        </div>
+        {isExternalMode && (
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Dış Firma (Taşeron / Kiralık)</label>
+                <select
+                    value={formData.disFirmaId || ""}
+                    onChange={e => setFormData({ ...formData, disFirmaId: e.target.value })}
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                    <option value="">Dış firma yok</option>
+                    {disFirmalar.map((firma) => (
+                        <option key={firma.id} value={firma.id}>
+                            {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
+                        </option>
+                    ))}
+                </select>
+            </div>
+        )}
     </div>
     );
 };

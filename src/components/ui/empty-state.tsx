@@ -106,7 +106,7 @@ const CONFIG: Record<string, StateConfig> = {
     default: {
         icon: Search,
         title: "Kayıt Bulunamadı",
-        description: "Aradığınız kriterlere uygun herhangi bir veri bulunamadı. Lütfen filtrelerinizi kontrol edin.",
+        description: "Aradığınız kriterlere uygun herhangi bir veri bulunamadı.",
         colorClass: "text-slate-400",
         bgClass: "bg-slate-50",
     }

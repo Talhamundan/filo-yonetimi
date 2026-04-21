@@ -38,6 +38,7 @@ function normalizeCitySearchValue(value: string) {
 }
 
 function normalizeSirketSelection(value: unknown) {
+    if (value === undefined) return undefined;
     if (typeof value !== "string") return null;
     const normalized = value.trim();
     return normalized || null;
@@ -72,7 +73,7 @@ async function resolveRuhsatSahibiSirketId(inputSirketId?: string | null) {
         }
         return ensureKiralikSirketId();
     }
-    return resolveActionSirketId(normalized);
+    return resolveActionSirketId(normalized as any);
 }
 
 function normalizeIlEnum(value: unknown): string {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole } from "@/lib/auth-utils";
+import { applyExcelWorksheetFormats } from "@/lib/excel-worksheet-format";
 import * as XLSX from "xlsx";
 import { 
     exportEntity, 
@@ -45,6 +46,7 @@ export async function GET() {
                 const { data, sheetName, headers } = await exportEntity(entityKey);
                 // Sheet'i her durumda ekle (boş olsa bile headers ile kalsın)
                 const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+                applyExcelWorksheetFormats(worksheet, { entityKey, headers });
                 XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
             } catch (err) {
                 console.error(`!!!! [BULK EXPORT ERROR] Entity: ${entityKey} !!!!`, err);

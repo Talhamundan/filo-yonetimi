@@ -18,6 +18,11 @@ export async function resolveActionSirketId(inputSirketId?: string | null) {
         canAccessAllCompanies(),
         getCurrentSirketId(),
     ]);
+
+    if (inputSirketId === undefined) {
+        return currentSirketId || null;
+    }
+
     const requestedSirketId = inputSirketId?.trim() || null;
 
     if (requestedSirketId) {
@@ -28,10 +33,6 @@ export async function resolveActionSirketId(inputSirketId?: string | null) {
             return currentSirketId;
         }
         throw new Error("Secilen sirket icin yetkiniz yok.");
-    }
-
-    if (currentSirketId) {
-        return currentSirketId;
     }
 
     if (hasGlobalAccess && canRoleAssignIndependentRecords((actor as any).rol, currentSirketId)) {
