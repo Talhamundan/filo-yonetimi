@@ -11,8 +11,9 @@ import { DataTable } from "../../../components/ui/data-table";
 import { columns, SirketRow } from "./columns";
 import { createSirket, updateSirket, deleteSirket } from "./actions";
 import { RowActionButton } from "@/components/ui/row-action-button";
+import { serializeSantiyeList } from "@/lib/santiye";
 
-const EMPTY = { ad: '', bulunduguIl: 'BURSA', vergiNo: '' };
+const EMPTY = { ad: '', bulunduguIl: 'BURSA', vergiNo: '', santiyelerText: '' };
 
 const FormFields = ({ formData, setFormData }: { formData: any, setFormData: any }) => (
     <div className="grid gap-4 py-4">
@@ -23,6 +24,17 @@ const FormFields = ({ formData, setFormData }: { formData: any, setFormData: any
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Faaliyet İli</label>
             <Input value={formData.bulunduguIl} onChange={e => setFormData({...formData, bulunduguIl: e.target.value})} placeholder="Örn: BURSA" className="h-9" />
+        </div>
+        <div className="space-y-1.5">
+            <label className="text-sm font-medium">Şantiye Sahaları</label>
+            <textarea
+                value={formData.santiyelerText}
+                onChange={e => setFormData({ ...formData, santiyelerText: e.target.value })}
+                placeholder={"Örn:\nOCAK\nDOKUM\nASFALT PLENTİ"}
+                rows={4}
+                className="w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400"
+            />
+            <p className="text-[11px] text-slate-500">Her satıra bir şantiye yazın. Araç ve personel formlarında seçim olarak çıkacaktır.</p>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Vergi No</label>
@@ -86,7 +98,12 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
     };
 
     const openEdit = (row: SirketRow) => {
-        setFormData({ ad: row.ad, bulunduguIl: row.bulunduguIl, vergiNo: row.vergiNo === 'Belirtilmedi' ? '' : row.vergiNo });
+        setFormData({
+            ad: row.ad,
+            bulunduguIl: row.bulunduguIl,
+            vergiNo: row.vergiNo === 'Belirtilmedi' ? '' : row.vergiNo,
+            santiyelerText: serializeSantiyeList(row.santiyeler || []),
+        });
         setEditRow(row);
     };
 

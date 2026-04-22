@@ -14,13 +14,6 @@ import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import { ARAC_UST_KATEGORI_OPTIONS, getAracAltKategoriOptions, resolveAracKategoriFields } from "@/lib/arac-kategori";
 
-const ILLER = [
-    { value: "ISTANBUL", label: "İSTANBUL" },
-    { value: "BURSA", label: "BURSA" },
-    { value: "SANLIURFA", label: "ŞANLIURFA" },
-    { value: "ANKARA", label: "ANKARA" },
-    { value: "DIGER", label: "DİĞER" },
-];
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 
 const EMPTY = {
@@ -29,7 +22,7 @@ const EMPTY = {
     model: '',
     yil: new Date().getFullYear(),
     muayeneGecerlilikTarihi: '',
-    bulunduguIl: 'ISTANBUL',
+    bulunduguIl: 'MERKEZ',
     guncelKm: 0,
     aciklama: '',
     sirketId: '',
@@ -45,14 +38,12 @@ const FormFields = ({
     setFormData,
     sirketler,
     kullanicilar,
-    ILLER,
     allowIndependentOption = true,
 }: {
     formData: any,
     setFormData: any,
-    sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    sirketler: { id: string; ad: string; bulunduguIl?: string; santiyeler?: string[] }[],
     kullanicilar: any[],
-    ILLER: { value: string; label: string }[],
     allowIndependentOption?: boolean,
 }) => (
     <div className="grid grid-cols-2 gap-4 py-2">
@@ -62,6 +53,9 @@ const FormFields = ({
                 altKategori: formData.altKategori,
             });
             const altKategoriOptions = getAracAltKategoriOptions(resolvedKategoriFields.kategori);
+            const selectedSirket = sirketler.find((item) => item.id === formData.sirketId);
+            const santiyeOptions = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
+            const santiyeListId = formData.sirketId ? `shortcut-arac-santiye-${formData.sirketId}` : "shortcut-arac-santiye-generic";
             return (
                 <>
                     <div className="col-span-2">
@@ -108,10 +102,11 @@ const FormFields = ({
                             onChange={e => {
                                 const nextSirketId = e.target.value;
                                 const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                                const nextSantiyeler = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
                                 setFormData({
                                     ...formData,
                                     sirketId: nextSirketId,
-                                    bulunduguIl: selectedSirket?.bulunduguIl || formData.bulunduguIl
+                                    bulunduguIl: nextSantiyeler[0] || selectedSirket?.bulunduguIl || formData.bulunduguIl
                                 });
                             }}
                             className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -146,13 +141,18 @@ const FormFields = ({
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-                        <select 
-                            value={formData.bulunduguIl} 
-                            onChange={e => setFormData({...formData, bulunduguIl: e.target.value})}
-                            className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
-                        >
-                            {ILLER.map(il => <option key={il.value} value={il.value}>{il.label}</option>)}
-                        </select>
+                        <Input
+                            value={formData.bulunduguIl}
+                            onChange={e => setFormData({ ...formData, bulunduguIl: forceUppercase(e.target.value) })}
+                            list={santiyeListId}
+                            placeholder={santiyeOptions.length > 0 ? "Şantiye seçin veya yazın" : "Şantiye adı yazın"}
+                            className="h-9 uppercase"
+                        />
+                        <datalist id={santiyeListId}>
+                            {santiyeOptions.map((santiye) => (
+                                <option key={santiye} value={santiye} />
+                            ))}
+                        </datalist>
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Üst Kategori</label>
@@ -302,7 +302,6 @@ export default function YeniAracShortcut({ className, asDropdownItem }: { classN
                         setFormData={setFormData}
                         sirketler={sirketler}
                         kullanicilar={kullanicilar}
-                        ILLER={ILLER}
                         allowIndependentOption={canAssignIndependentRecords}
                     />
                 )}

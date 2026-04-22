@@ -269,7 +269,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             }),
         (prisma as any).sirket.findMany({
             where: sirketListFilter as any,
-            select: { id: true, ad: true, bulunduguIl: true },
+            select: { id: true, ad: true, bulunduguIl: true, santiyeler: true },
             orderBy: { ad: "asc" },
         }).catch((error: unknown) => {
             console.warn("Sirket listesi getirilemedi, bos liste ile devam ediliyor.", error);

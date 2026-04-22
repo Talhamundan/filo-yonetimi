@@ -7,6 +7,7 @@ export type SirketRow = {
     id: string;
     ad: string;
     bulunduguIl: string;
+    santiyeler: string[];
     vergiNo: string;
     aracSayisi: number;
     personelSayisi: number;
@@ -42,7 +43,33 @@ export const columns: ColumnDef<SirketRow>[] = [
     },
     {
         accessorKey: "bulunduguIl",
-        header: "Şehir",
+        header: "Merkez İl",
+    },
+    {
+        accessorKey: "santiyeler",
+        header: "Şantiyeler",
+        cell: ({ row }) => {
+            const santiyeler = row.original.santiyeler || [];
+            if (santiyeler.length === 0) {
+                return <span className="text-slate-400 text-xs italic">Şantiye yok</span>;
+            }
+            return (
+                <div className="max-w-[280px]">
+                    <div className="flex flex-wrap gap-1">
+                        {santiyeler.slice(0, 3).map((santiye) => (
+                            <span key={`${row.original.id}-${santiye}`} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                                {santiye}
+                            </span>
+                        ))}
+                        {santiyeler.length > 3 ? (
+                            <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                                +{santiyeler.length - 3}
+                            </span>
+                        ) : null}
+                    </div>
+                </div>
+            );
+        },
     },
     {
         accessorKey: "vergiNo",

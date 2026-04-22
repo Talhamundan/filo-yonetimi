@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
 import {
-    Mail, Phone, Building2, Briefcase, Car, ArrowLeft, Calendar, Plus, Pencil, Trash2, Fuel
+    Mail, Phone, Building2, Briefcase, Car, ArrowLeft, Calendar, Plus, Pencil, Trash2, Fuel, MapPin
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
@@ -56,6 +56,7 @@ export default function PersonelDetailClient({
         rol: p.rol,
         sirketId: p.sirketId || '',
         calistigiKurum: p.calistigiKurum || p.sehir || '',
+        santiye: p.santiye || p.arac?.bulunduguIl || '',
         tcNo: p.tcNo || ''
     });
     const [loading, setLoading] = useState(false);
@@ -508,6 +509,7 @@ export default function PersonelDetailClient({
                                 <div className="flex items-center gap-1.5"><Briefcase size={16} /> {p.sirket?.ad || 'Firma Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5"><Building2 size={16} /> {p.calistigiKurum || p.sehir || 'Kurum Belirtilmemiş'}</div>
+                                <div className="flex items-center gap-1.5"><MapPin size={16} /> {p.santiye || 'Şantiye Belirtilmemiş'}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5">
                                     <Fuel size={16} />

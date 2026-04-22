@@ -48,6 +48,12 @@ function supportsKullaniciCalistigiKurumField() {
     return model.fields.some((field) => field.name === "calistigiKurum");
 }
 
+function supportsKullaniciSantiyeField() {
+    const model = Prisma.dmmf.datamodel.models.find((item) => item.name === "Kullanici");
+    if (!model) return false;
+    return model.fields.some((field) => field.name === "santiye");
+}
+
 async function hasDatabaseColumn(tableName: string, columnName: string) {
     try {
         const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
@@ -93,6 +99,11 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         ? await hasDatabaseColumn("Personel", "calistigiKurum")
         : false;
     const canQueryCalistigiKurum = hasCalistigiKurumModelField && hasCalistigiKurumColumn;
+    const hasSantiyeModelField = supportsKullaniciSantiyeField();
+    const hasSantiyeColumn = hasSantiyeModelField
+        ? await hasDatabaseColumn("Personel", "santiye")
+        : false;
+    const canQuerySantiye = hasSantiyeModelField && hasSantiyeColumn;
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => {
         const clauses: Record<string, unknown>[] = [
             { ad: { contains: token, mode: "insensitive" } },
@@ -103,6 +114,9 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         ];
         if (canQueryCalistigiKurum) {
             clauses.push({ calistigiKurum: { contains: token, mode: "insensitive" } });
+        }
+        if (canQuerySantiye) {
+            clauses.push({ santiye: { contains: token, mode: "insensitive" } });
         }
         return clauses;
     });
@@ -139,10 +153,13 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         disFirma: { select: { id: true, ad: true, tur: true } },
         sirket: { select: { id: true, ad: true } },
         hesap: { select: { kullaniciAdi: true } },
-        arac: { select: { id: true, plaka: true, marka: true, model: true } },
+        arac: { select: { id: true, plaka: true, marka: true, model: true, bulunduguIl: true } },
     };
     if (canQueryCalistigiKurum) {
         personelSelect.calistigiKurum = true;
+    }
+    if (canQuerySantiye) {
+        personelSelect.santiye = true;
     }
 
     const personellerPromise = (prisma as any).kullanici
@@ -154,14 +171,18 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         .catch(async (error: unknown) => {
             const message = error instanceof Error ? error.message : "";
             const shouldRetryWithoutKurumField =
-                canQueryCalistigiKurum &&
+                (canQueryCalistigiKurum || canQuerySantiye) &&
                 (message.includes("Unknown argument `calistigiKurum`") ||
+                    message.includes("Unknown argument `santiye`") ||
                     message.includes("column \"calistigiKurum\" does not exist") ||
-                    message.includes("The column `Personel.calistigiKurum` does not exist"));
+                    message.includes("column \"santiye\" does not exist") ||
+                    message.includes("The column `Personel.calistigiKurum` does not exist") ||
+                    message.includes("The column `Personel.santiye` does not exist"));
             if (!shouldRetryWithoutKurumField) throw error;
 
             const fallbackSelect = { ...personelSelect };
             delete fallbackSelect.calistigiKurum;
+            delete fallbackSelect.santiye;
             return (prisma as any).kullanici.findMany({
                 where: personelWhere as any,
                 orderBy: { ad: "asc" },
@@ -173,7 +194,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         personellerPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
-            select: { id: true, ad: true, bulunduguIl: true },
+            select: { id: true, ad: true, bulunduguIl: true, santiyeler: true },
             orderBy: { ad: 'asc' }
         }),
         (prisma as any).disFirma.findMany({
@@ -371,6 +392,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             disFirmaId: p.disFirmaId || "",
             disFirmaAdi: p.disFirma?.ad || "",
             calistigiKurum: p.calistigiKurum || p.sehir || p.sirket?.ad || "-",
+            santiye: p.santiye || p.arac?.bulunduguIl || "-",
             zimmetliArac: zimmetliArac ? `${zimmetliArac.plaka} (${zimmetliArac.marka} ${zimmetliArac.model})` : null,
             zimmetliAracPlaka: zimmetliArac?.plaka || null,
             zimmetliAracMarkaModel: zimmetliArac ? `${zimmetliArac.marka} ${zimmetliArac.model}` : null,

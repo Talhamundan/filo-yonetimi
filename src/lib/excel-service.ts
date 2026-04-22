@@ -180,6 +180,20 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             toplamMaliyet: ["Maliyet Özeti", "Maliyet Ozeti", "toplamMaliyet", "maliyetOzeti"],
         },
     },
+    sirket: {
+        visibleColumns: ["ad", "bulunduguIl", "vergiNo"],
+        strictVisibleColumns: true,
+        labels: {
+            ad: "Şirket Adı",
+            bulunduguIl: "Merkez İl",
+            vergiNo: "Vergi No",
+        },
+        aliases: {
+            ad: ["Şirket Adı", "Sirket Adi", "Şirket", "Sirket"],
+            bulunduguIl: ["Merkez İl", "Merkez Il", "Şehir", "Sehir", "İl", "Il"],
+            vergiNo: ["Vergi No", "Vergi Numarası", "Vergi Numarasi"],
+        },
+    },
     kullanici: {
         visibleColumns: [
             "ad",
@@ -187,6 +201,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "telefon",
             "tcNo",
             "calistigiKurum",
+            "santiye",
             "rol",
             "sirket",
             "zimmetliArac",
@@ -200,6 +215,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             telefon: "Telefon",
             tcNo: "TC Kimlik No",
             calistigiKurum: "Çalıştığı Kurum",
+            santiye: "Şantiye",
             rol: "Rol",
             sirket: "Çalıştığı Firma",
             disFirma: "Dış Firma",
@@ -217,6 +233,13 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
                 "Şehir",
                 "Sehir",
                 "sehir",
+            ],
+            santiye: [
+                "Şantiye",
+                "Santiye",
+                "Bulunduğu Şantiye",
+                "Bulundugu Santiye",
+                "Saha",
             ],
             sirket: [
                 "Çalıştığı Firma",
@@ -548,6 +571,7 @@ const PERSONEL_EXTERNAL_VISIBLE_COLUMNS = [
     "ad",
     "soyad",
     "telefon",
+    "santiye",
     "sirket",
     "disFirma",
     "zimmetliArac",
@@ -559,6 +583,7 @@ const PERSONEL_TASERON_VISIBLE_COLUMNS = [
     "telefon",
     "tcNo",
     "calistigiKurum",
+    "santiye",
     "rol",
     "sirket",
     "disFirma",

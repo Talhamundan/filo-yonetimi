@@ -4,6 +4,7 @@ import prisma from "../../../lib/prisma";
 import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { canRoleAccessAllCompanies, normalizeRole } from "@/lib/policy";
+import { parseSantiyeTextInput } from "@/lib/santiye";
 
 const PATH = "/dashboard/sirketler";
 
@@ -18,15 +19,21 @@ async function assertCompanyManager() {
     }
 }
 
-export async function createSirket(data: { ad: string; bulunduguIl: string; vergiNo?: string }) {
+export async function createSirket(data: { ad: string; bulunduguIl: string; vergiNo?: string; santiyelerText?: string }) {
     try {
         await assertCompanyManager();
+        const santiyeler = parseSantiyeTextInput(data.santiyelerText);
+        const defaultSantiye = String(data.bulunduguIl || "").trim();
+        const resolvedSantiyeler = santiyeler.length > 0
+            ? santiyeler
+            : (defaultSantiye ? [defaultSantiye.toLocaleUpperCase("tr-TR")] : []);
 
-        await prisma.sirket.create({
+        await (prisma as any).sirket.create({
             data: {
                 ad: data.ad,
                 bulunduguIl: data.bulunduguIl as string,
-                vergiNo: data.vergiNo || null
+                vergiNo: data.vergiNo || null,
+                santiyeler: resolvedSantiyeler,
             }
         });
         revalidatePath(PATH);
@@ -37,16 +44,22 @@ export async function createSirket(data: { ad: string; bulunduguIl: string; verg
     }
 }
 
-export async function updateSirket(id: string, data: { ad: string; bulunduguIl: string; vergiNo?: string }) {
+export async function updateSirket(id: string, data: { ad: string; bulunduguIl: string; vergiNo?: string; santiyelerText?: string }) {
     try {
         await assertCompanyManager();
+        const santiyeler = parseSantiyeTextInput(data.santiyelerText);
+        const defaultSantiye = String(data.bulunduguIl || "").trim();
+        const resolvedSantiyeler = santiyeler.length > 0
+            ? santiyeler
+            : (defaultSantiye ? [defaultSantiye.toLocaleUpperCase("tr-TR")] : []);
 
-        await prisma.sirket.update({
+        await (prisma as any).sirket.update({
             where: { id },
             data: {
                 ad: data.ad,
                 bulunduguIl: data.bulunduguIl as string,
-                vergiNo: data.vergiNo || null
+                vergiNo: data.vergiNo || null,
+                santiyeler: resolvedSantiyeler,
             }
         });
         revalidatePath(PATH);

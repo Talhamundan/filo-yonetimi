@@ -14,6 +14,7 @@ const SIRKETLER_PATH = "/dashboard/sirketler";
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
 const PERSONEL_ID_RETRY_LIMIT = 6;
 let hasCachedCalistigiKurumColumn: boolean | null = null;
+let hasCachedSantiyeColumn: boolean | null = null;
 
 type ActorUser = {
     id: string;
@@ -66,12 +67,34 @@ async function hasPersonelCalistigiKurumColumn() {
     return hasCachedCalistigiKurumColumn;
 }
 
-export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; tcNo?: string }) {
+async function hasPersonelSantiyeColumn() {
+    if (hasCachedSantiyeColumn !== null) {
+        return hasCachedSantiyeColumn;
+    }
+    try {
+        const rows = await prisma.$queryRaw<Array<{ exists: boolean }>>`
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.columns
+                WHERE table_schema = 'public'
+                  AND table_name = 'Personel'
+                  AND column_name = 'santiye'
+            ) AS "exists"
+        `;
+        hasCachedSantiyeColumn = Boolean(rows?.[0]?.exists);
+    } catch {
+        hasCachedSantiyeColumn = false;
+    }
+    return hasCachedSantiyeColumn;
+}
+
+export async function createPersonel(data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; santiye?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
         const disFirmaId = data.disFirmaId?.trim() || null;
         const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
+        const canWriteSantiye = await hasPersonelSantiyeColumn();
         const personelWriteSelect: any = {
             id: true,
             ad: true,
@@ -81,6 +104,9 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
         };
         if (canWriteCalistigiKurum) {
             personelWriteSelect.calistigiKurum = true;
+        }
+        if (canWriteSantiye) {
+            personelWriteSelect.santiye = true;
         }
 
         let created:
@@ -108,6 +134,7 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
                         ...(sirketId ? { sirket: { connect: { id: sirketId } } } : {}),
                         ...(disFirmaId ? { disFirma: { connect: { id: disFirmaId } } } : {}),
                         ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
+                        ...(canWriteSantiye ? { santiye: data.santiye?.trim() || null } : {}),
                         tcNo: data.tcNo || null,
                         onayDurumu: "ONAYLANDI",
                     },
@@ -144,6 +171,7 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
                 sirketId: sirketId || null,
                 disFirmaId,
                 calistigiKurum: canWriteCalistigiKurum ? ((created as any).calistigiKurum || null) : null,
+                santiye: canWriteSantiye ? ((created as any).santiye || null) : null,
             },
         });
 
@@ -162,12 +190,13 @@ export async function createPersonel(data: { ad: string; soyad: string; telefon?
     }
 }
 
-export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; tcNo?: string }) {
+export async function updatePersonel(id: string, data: { ad: string; soyad: string; telefon?: string; rol: Rol; sirketId?: string; disFirmaId?: string; calistigiKurum?: string; santiye?: string; tcNo?: string }) {
     try {
         const actor = await assertAuthorized();
         const sirketId = await resolveActionSirketId(data.sirketId);
         const disFirmaId = data.disFirmaId?.trim() || null;
         const canWriteCalistigiKurum = await hasPersonelCalistigiKurumColumn();
+        const canWriteSantiye = await hasPersonelSantiyeColumn();
         const personelWriteSelect: any = {
             id: true,
             ad: true,
@@ -177,6 +206,9 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
         };
         if (canWriteCalistigiKurum) {
             personelWriteSelect.calistigiKurum = true;
+        }
+        if (canWriteSantiye) {
+            personelWriteSelect.santiye = true;
         }
         const oncekiKayit = await prisma.kullanici.findUnique({
             where: { id },
@@ -197,6 +229,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                     ? { disFirma: { connect: { id: disFirmaId } } }
                     : { disFirma: { disconnect: true } }),
                 ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
+                ...(canWriteSantiye ? { santiye: data.santiye?.trim() || null } : {}),
                 tcNo: data.tcNo || null,
             },
             select: personelWriteSelect,
@@ -219,6 +252,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                 yeniSirketId: sirketId || null,
                 disFirmaId,
                 calistigiKurum: canWriteCalistigiKurum ? ((updated as any).calistigiKurum || null) : null,
+                santiye: canWriteSantiye ? ((updated as any).santiye || null) : null,
             },
         });
 
@@ -234,7 +268,9 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
             message.includes("Invalid `prisma.kullanici.update()` invocation") ||
             message.includes("Unknown argument `sirketId`") ||
             message.includes("Unknown argument `calistigiKurum`") ||
+            message.includes("Unknown argument `santiye`") ||
             message.includes("column \"calistigiKurum\" does not exist") ||
+            message.includes("column \"santiye\" does not exist") ||
             message.includes("column \"sehir\" does not exist")
         ) {
             return {

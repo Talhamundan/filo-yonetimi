@@ -18,6 +18,7 @@ export type PersonelRow = {
     disFirmaId?: string;
     disFirmaAdi?: string;
     calistigiKurum: string;
+    santiye?: string;
     zimmetliArac: string | null;
     zimmetliAracPlaka?: string | null;
     zimmetliAracMarkaModel?: string | null;
@@ -68,6 +69,7 @@ const baseColumns: ColumnDef<PersonelRow>[] = [
     },
     { accessorKey: "sirketAdi", header: "Çalıştığı Firma", cell: ({ row }) => <span className="font-medium text-slate-700">{row.getValue("sirketAdi")}</span> },
     { accessorKey: "calistigiKurum", header: "Çalıştığı Kurum", cell: ({ row }) => <span className="text-slate-500">{row.getValue("calistigiKurum")}</span> },
+    { accessorKey: "santiye", header: "Şantiye", cell: ({ row }) => <span className="text-slate-600">{row.original.santiye || "-"}</span> },
     {
         accessorFn: (row) => getRoleLabel(row.rol),
         id: "rol",

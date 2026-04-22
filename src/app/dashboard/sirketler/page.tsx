@@ -1,5 +1,4 @@
 import React from "react";
-import { Prisma } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import SirketlerClient from "./Client";
 import { canAccessAllCompanies, getCurrentUserRole, getModelFilter } from "@/lib/auth-utils";
@@ -40,8 +39,8 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
         companyCostReport.map((item) => [(item.sirketAd || "").toLocaleLowerCase("tr-TR").trim(), item])
     );
 
-    const sirketler = await prisma.sirket.findMany({
-        where: filter as Prisma.SirketWhereInput,
+    const sirketler = await (prisma as any).sirket.findMany({
+        where: filter as any,
         orderBy: { olusturmaTarihi: 'desc' },
         include: {
             _count: {
@@ -53,9 +52,9 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
         }
     });
 
-    const formattedData = sirketler
-        .filter((sirket) => !isKiralikSirketName(sirket.ad))
-        .map((s) => {
+    const formattedData = (sirketler as Array<any>)
+        .filter((sirket: any) => !isKiralikSirketName(sirket.ad))
+        .map((s: any) => {
             const costDetail = companyCostMap.get(s.id) || companyCostMapByName.get(s.ad.toLocaleLowerCase("tr-TR").trim());
             const maliyetKalemleri = costDetail
                 ? [
@@ -73,6 +72,7 @@ export default async function SirketlerPage(props: { searchParams?: Promise<Dash
                 id: s.id,
                 ad: s.ad,
                 bulunduguIl: s.bulunduguIl,
+                santiyeler: Array.isArray(s.santiyeler) ? s.santiyeler : [],
                 vergiNo: s.vergiNo || "Belirtilmedi",
                 aracSayisi: s._count.araclar,
                 personelSayisi: s._count.kullanicilar,

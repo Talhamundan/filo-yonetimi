@@ -12,6 +12,7 @@ model Sirket {
   vergiNo         String?
   olusturmaTarihi DateTime    @default(now())
   bulunduguIl     String      @default("BURSA")
+  santiyeler      String[]    @default([])
   araclar         Arac[]
   kullanicilar    Kullanici[]
 }
@@ -87,6 +88,7 @@ model Kullanici {
   telefon              String?
   tcNo                 String?            @unique
   calistigiKurum       String?
+  santiye              String?
   eposta               String?            @unique
   sifre                String?
   rol                  Rol                @default(PERSONEL)

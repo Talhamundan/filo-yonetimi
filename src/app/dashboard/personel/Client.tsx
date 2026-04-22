@@ -18,7 +18,7 @@ import { getRoleLabel } from "@/lib/role-label";
 import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 
-const EMPTY: PersonelFormData = { ad: "", soyad: "", telefon: "", rol: "PERSONEL", sirketId: "", disFirmaId: "", calistigiKurum: "", tcNo: "" };
+const EMPTY: PersonelFormData = { ad: "", soyad: "", telefon: "", rol: "PERSONEL", sirketId: "", disFirmaId: "", calistigiKurum: "", santiye: "", tcNo: "" };
 
 export default function PersonelClient({
     initialData,
@@ -29,7 +29,7 @@ export default function PersonelClient({
     externalMode = null,
 }: {
     initialData: PersonelRow[];
-    sirketler: { id: string, ad: string, bulunduguIl: string }[];
+    sirketler: { id: string, ad: string, bulunduguIl: string, santiyeler?: string[] }[];
     disFirmalar?: { id: string; ad: string; tur: string }[];
     isTeknik?: boolean;
     isExternalMode?: boolean;
@@ -119,6 +119,7 @@ export default function PersonelClient({
             sirketId: row.sirketId || "",
             disFirmaId: row.disFirmaId || "",
             calistigiKurum: row.calistigiKurum === "-" ? "" : row.calistigiKurum,
+            santiye: row.santiye === "-" ? "" : (row.santiye || ""),
             tcNo: row.tcNo === "-" ? "" : (row.tcNo || ""),
         });
         setEditRow(row);

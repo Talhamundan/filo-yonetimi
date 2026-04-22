@@ -470,7 +470,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         araclarPromise,
         (prisma as any).sirket.findMany({ 
             where: sirketListFilter as any,
-            select: { id: true, ad: true, bulunduguIl: true }, 
+            select: { id: true, ad: true, bulunduguIl: true, santiyeler: true }, 
             orderBy: { ad: 'asc' } 
         }).catch((error: any) => {
             console.warn("Sirket listesi getirilemedi, bos liste ile devam ediliyor.", error);

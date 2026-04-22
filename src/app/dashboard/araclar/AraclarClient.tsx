@@ -7,7 +7,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Plus, Car, Building2, User } from "lucide-react";
 import { Input } from "../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { CitySelect } from "@/components/ui/city-select";
 import { useRouter, useSearchParams } from "next/navigation";
 import { DataTable } from "../../../components/ui/data-table";
 import { getColumns, AracRow } from "./columns";
@@ -38,7 +37,7 @@ const EMPTY = {
     model: '',
     yil: new Date().getFullYear(),
     muayeneGecerlilikTarihi: '',
-    bulunduguIl: 'ISTANBUL',
+    bulunduguIl: 'MERKEZ',
     guncelKm: 0,
     bedel: '',
     aciklama: '',
@@ -66,7 +65,7 @@ const FormFields = ({
 }: {
     formData: any,
     setFormData: any,
-    sirketler: { id: string; ad: string; bulunduguIl?: string }[],
+    sirketler: { id: string; ad: string; bulunduguIl?: string; santiyeler?: string[] }[],
     disFirmalar: Array<{ id: string; ad: string; tur: string }>,
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     kullaniciFirmaOptions: string[],
@@ -86,6 +85,15 @@ const FormFields = ({
         () => getAracAltKategoriOptions(resolvedKategoriFields.kategori),
         [resolvedKategoriFields.kategori]
     );
+    const selectedSirket = React.useMemo(
+        () => sirketler.find((item) => item.id === formData.sirketId),
+        [formData.sirketId, sirketler]
+    );
+    const santiyeOptions = React.useMemo(
+        () => (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0),
+        [selectedSirket]
+    );
+    const santiyeListId = formData.sirketId ? `arac-santiye-${formData.sirketId}` : "arac-santiye-generic";
     const firmaOptions = React.useMemo(() => {
         const options = [...kullaniciFirmaOptions];
         const currentFirma = typeof formData.calistigiKurum === "string" ? formData.calistigiKurum.trim() : "";
@@ -151,10 +159,11 @@ const FormFields = ({
                 onChange={e => {
                     const nextSirketId = e.target.value;
                     const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                    const nextSantiyeler = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
                     setFormData({
                         ...formData,
                         sirketId: nextSirketId,
-                        bulunduguIl: selectedSirket?.bulunduguIl || formData.bulunduguIl
+                        bulunduguIl: nextSantiyeler[0] || selectedSirket?.bulunduguIl || formData.bulunduguIl
                     });
                 }}
                 className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -230,10 +239,18 @@ const FormFields = ({
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-            <CitySelect
+            <Input
                 value={formData.bulunduguIl}
-                onValueChange={value => setFormData({ ...formData, bulunduguIl: value })}
+                onChange={e => setFormData({ ...formData, bulunduguIl: forceUppercase(e.target.value) })}
+                list={santiyeListId}
+                placeholder={santiyeOptions.length > 0 ? "Şantiye seçin veya yazın" : "Şantiye adı yazın"}
+                className="h-9 uppercase"
             />
+            <datalist id={santiyeListId}>
+                {santiyeOptions.map((santiye) => (
+                    <option key={santiye} value={santiye} />
+                ))}
+            </datalist>
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Üst Kategori</label>
@@ -301,7 +318,7 @@ export default function AraclarClient({
     externalMode = null,
 }: { 
     initialAraclar: AracRow[], 
-    sirketler: { id: string, ad: string, bulunduguIl: string }[],
+    sirketler: { id: string, ad: string, bulunduguIl: string, santiyeler?: string[] }[],
     disFirmalar: Array<{ id: string; ad: string; tur: string }>,
     kullanicilar: Array<{ id: string; adSoyad: string; sirketId?: string | null; sirketAd?: string | null }>,
     role?: string | null,

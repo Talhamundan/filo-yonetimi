@@ -27,7 +27,7 @@ export default function SelectedAracInfo({ arac }: { arac?: SelectedAracInfoData
                     <span className="font-semibold text-slate-800 font-mono break-words">{(arac.plaka || "-").trim() || "-"}</span>
                 </div>
                 <div className="min-w-0">
-                    <span className="text-slate-500">Şehir:</span>{" "}
+                    <span className="text-slate-500">Şantiye:</span>{" "}
                     <span className="font-semibold text-slate-800 break-words">{formatIl(arac.bulunduguIl)}</span>
                 </div>
                 <div className="min-w-0">

@@ -18,6 +18,7 @@ const EMPTY: PersonelFormData = {
     rol: 'PERSONEL',
     sirketId: '',
     calistigiKurum: '',
+    santiye: '',
     tcNo: ''
 };
 

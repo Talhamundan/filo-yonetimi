@@ -10,7 +10,7 @@ export async function getSirketlerSelect() {
     const sirketler = await prisma.sirket.findMany({
         where: sirketFilter as any,
         orderBy: { ad: "asc" },
-        select: { id: true, ad: true, bulunduguIl: true },
+        select: { id: true, ad: true, bulunduguIl: true, santiyeler: true },
     });
     return sirketler;
 }

@@ -270,7 +270,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
     const [sirketler, atamayaUygunAraclar] = await Promise.all([
         (prisma as any).sirket.findMany({
             where: sirketListFilter as any,
-            select: { id: true, ad: true },
+            select: { id: true, ad: true, bulunduguIl: true, santiyeler: true },
             orderBy: { ad: 'asc' }
         }),
         (prisma as any).arac.findMany({

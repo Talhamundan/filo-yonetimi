@@ -8,7 +8,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../../../../components
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "../../../../components/ui/input";
 import { SearchableSelect } from "@/components/ui/searchable-select";
-import { CitySelect } from "@/components/ui/city-select";
 import {
     Car, Users, Wrench, Fuel, ArrowLeft, Activity, Gauge, ShieldCheck, ShieldAlert, AlertTriangle, MapPin, FileDigit, Settings, Receipt, FileArchive, FileText, Plus, Pencil, Trash2
 } from "lucide-react";
@@ -97,7 +96,7 @@ export default function AracDetailClient({
 }: {
     initialArac: AracDetaySaaS;
     kullanicilar: SoforOption[];
-    sirketler: Array<{ id: string; ad: string; bulunduguIl?: string | null }>;
+    sirketler: Array<{ id: string; ad: string; bulunduguIl?: string | null; santiyeler?: string[] }>;
     disFirmalar: Array<{ id: string; ad: string; tur: string }>;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
@@ -275,7 +274,7 @@ export default function AracDetailClient({
         model: forceUppercase(arac.model || ""),
         yil: Number(arac.yil || new Date().getFullYear()),
         muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
-        bulunduguIl: arac.bulunduguIl || "ISTANBUL",
+        bulunduguIl: arac.bulunduguIl || "MERKEZ",
         guncelKm: Number(arac.guncelKm || 0),
         bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
         kategori: initialAracKategoriFields.kategori,
@@ -371,6 +370,15 @@ export default function AracDetailClient({
         }
         return sortByTextValue(options, (item) => item);
     }, [aracEditForm.calistigiKurum, sirketler]);
+    const selectedSirketForEdit = React.useMemo(
+        () => sirketler.find((item) => item.id === aracEditForm.sirketId),
+        [aracEditForm.sirketId, sirketler]
+    );
+    const santiyeOptionsForEdit = React.useMemo(
+        () => (selectedSirketForEdit?.santiyeler || []).filter((item) => String(item || "").trim().length > 0),
+        [selectedSirketForEdit]
+    );
+    const santiyeListIdForEdit = aracEditForm.sirketId ? `arac-detail-santiye-${aracEditForm.sirketId}` : "arac-detail-santiye-generic";
     const arizaSoforOptions = React.useMemo(() => {
         if (!arac.kullanici?.id) {
             return sortedKullanicilar;
@@ -422,7 +430,7 @@ export default function AracDetailClient({
             model: forceUppercase(arac.model || ""),
             yil: Number(arac.yil || new Date().getFullYear()),
             muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
-            bulunduguIl: arac.bulunduguIl || "ISTANBUL",
+            bulunduguIl: arac.bulunduguIl || "MERKEZ",
             guncelKm: Number(arac.guncelKm || 0),
             bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
             kategori: initialAracKategoriFields.kategori,
@@ -1697,10 +1705,11 @@ export default function AracDetailClient({
                                         onChange={e => {
                                             const nextSirketId = e.target.value;
                                             const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                                            const nextSantiyeler = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
                                             setAracEditForm({
                                                 ...aracEditForm,
                                                 sirketId: nextSirketId,
-                                                bulunduguIl: selectedSirket?.bulunduguIl || aracEditForm.bulunduguIl,
+                                                bulunduguIl: nextSantiyeler[0] || selectedSirket?.bulunduguIl || aracEditForm.bulunduguIl,
                                             });
                                         }}
                                         className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
@@ -1775,10 +1784,18 @@ export default function AracDetailClient({
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Bulunduğu Şantiye</label>
-                                    <CitySelect
+                                    <Input
                                         value={aracEditForm.bulunduguIl}
-                                        onValueChange={value => setAracEditForm({ ...aracEditForm, bulunduguIl: value })}
+                                        onChange={e => setAracEditForm({ ...aracEditForm, bulunduguIl: forceUppercase(e.target.value) })}
+                                        list={santiyeListIdForEdit}
+                                        placeholder={santiyeOptionsForEdit.length > 0 ? "Şantiye seçin veya yazın" : "Şantiye adı yazın"}
+                                        className="h-9 uppercase"
                                     />
+                                    <datalist id={santiyeListIdForEdit}>
+                                        {santiyeOptionsForEdit.map((santiye) => (
+                                            <option key={santiye} value={santiye} />
+                                        ))}
+                                    </datalist>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Üst Kategori</label>
