@@ -15,6 +15,14 @@ import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/perso
 import { ARAC_UST_KATEGORI_OPTIONS, getAracAltKategoriOptions, resolveAracKategoriFields } from "@/lib/arac-kategori";
 
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
+const parseNumberInput = (value: string, fallback: number): number => {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+const safeNumberInputValue = (value: unknown, fallback = 0): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 const EMPTY = {
     plaka: '',
@@ -78,11 +86,33 @@ const FormFields = ({
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
-                        <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
+                        <Input
+                            type="number"
+                            value={safeNumberInputValue(formData.yil, new Date().getFullYear())}
+                            onChange={e => setFormData({
+                                ...formData,
+                                yil: parseNumberInput(
+                                    e.target.value,
+                                    safeNumberInputValue(formData.yil, new Date().getFullYear())
+                                )
+                            })}
+                            className="h-9"
+                        />
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
-                        <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
+                        <Input
+                            type="number"
+                            value={safeNumberInputValue(formData.guncelKm, 0)}
+                            onChange={e => setFormData({
+                                ...formData,
+                                guncelKm: parseNumberInput(
+                                    e.target.value,
+                                    safeNumberInputValue(formData.guncelKm, 0)
+                                )
+                            })}
+                            className="h-9"
+                        />
                     </div>
                     <div className="space-y-1.5">
                         <label className="text-sm font-medium">Muayene Geçerlilik</label>
@@ -259,8 +289,16 @@ export default function YeniAracShortcut({ className, asDropdownItem }: { classN
         if (!formData.plaka || !formData.marka) {
             return toast.warning("Plaka ve Marka alanlarını doldurun.");
         }
+        const yil = Number(formData.yil);
+        const guncelKm = Number(formData.guncelKm);
+        if (!Number.isFinite(yil) || yil < 1900) {
+            return toast.warning("Model yılı geçerli bir sayı olmalıdır.");
+        }
+        if (!Number.isFinite(guncelKm) || guncelKm < 0) {
+            return toast.warning("Güncel KM 0 veya daha büyük olmalıdır.");
+        }
         setLoading(true);
-        const res = await createArac(formData);
+        const res = await createArac({ ...formData, yil, guncelKm });
         if (res.success) {
             setOpen(false);
             setFormData({ ...EMPTY, sirketId: defaultCreateSirketId });

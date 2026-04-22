@@ -8,6 +8,7 @@ import {
     getSelectedKategori,
     getSelectedSirketId,
     getSelectedYil,
+    normalizeAracUstKategoriScope,
     type DashboardSearchParams,
 } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
@@ -433,7 +434,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     if (commonFilters.status) {
         filterParts.push({ durum: commonFilters.status });
     }
-    const effectiveUstKategori = selectedUstKategori || commonFilters.type || null;
+    const effectiveUstKategori = selectedUstKategori || normalizeAracUstKategoriScope(commonFilters.type) || null;
     if (effectiveUstKategori) {
         filterParts.push({ kategori: effectiveUstKategori });
     }

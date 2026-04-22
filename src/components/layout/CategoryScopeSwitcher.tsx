@@ -3,6 +3,8 @@
 import React, { startTransition, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronsUpDown } from "lucide-react";
+import { ARAC_UST_KATEGORI_LABELS } from "@/lib/arac-kategori";
+import { normalizeAracUstKategoriScope } from "@/lib/company-scope";
 
 export default function CategoryScopeSwitcher() {
     const router = useRouter();
@@ -11,12 +13,13 @@ export default function CategoryScopeSwitcher() {
     const [pending, setPending] = useState(false);
 
     const rawKategori = searchParams.get("kategori");
-    const activeValue = rawKategori === "BINEK" ? "BINEK" : rawKategori === "SANTIYE" ? "SANTIYE" : "__ALL__";
+    const normalizedKategori = normalizeAracUstKategoriScope(rawKategori);
+    const activeValue = normalizedKategori || "__ALL__";
 
     const labelMap: Record<string, string> = {
         "__ALL__": "Tüm Araçlar",
-        "BINEK": "Binek",
-        "SANTIYE": "Şantiye"
+        BINEK: ARAC_UST_KATEGORI_LABELS.BINEK,
+        SANTIYE: ARAC_UST_KATEGORI_LABELS.SANTIYE,
     };
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {

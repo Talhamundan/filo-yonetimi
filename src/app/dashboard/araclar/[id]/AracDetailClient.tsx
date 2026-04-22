@@ -66,6 +66,14 @@ const DOKUMAN_TURLERI = [
 ];
 
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
+const parseNumberInput = (value: string, fallback: number): number => {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+const safeNumberInputValue = (value: unknown, fallback = 0): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
 
 const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; description: string }> = {
     soforGecmisi: { button: "Zimmet Ekle", title: "Yeni Zimmet Kaydı", description: "Bu araca yeni şoför ataması yapın." },
@@ -1673,11 +1681,33 @@ export default function AracDetailClient({
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
-                                    <Input type="number" value={aracEditForm.yil} onChange={e => setAracEditForm({ ...aracEditForm, yil: Number(e.target.value) })} className="h-9" />
+                                    <Input
+                                        type="number"
+                                        value={safeNumberInputValue(aracEditForm.yil, new Date().getFullYear())}
+                                        onChange={e => setAracEditForm({
+                                            ...aracEditForm,
+                                            yil: parseNumberInput(
+                                                e.target.value,
+                                                safeNumberInputValue(aracEditForm.yil, new Date().getFullYear())
+                                            )
+                                        })}
+                                        className="h-9"
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
-                                    <Input type="number" value={aracEditForm.guncelKm} onChange={e => setAracEditForm({ ...aracEditForm, guncelKm: Number(e.target.value) })} className="h-9" />
+                                    <Input
+                                        type="number"
+                                        value={safeNumberInputValue(aracEditForm.guncelKm, 0)}
+                                        onChange={e => setAracEditForm({
+                                            ...aracEditForm,
+                                            guncelKm: parseNumberInput(
+                                                e.target.value,
+                                                safeNumberInputValue(aracEditForm.guncelKm, 0)
+                                            )
+                                        })}
+                                        className="h-9"
+                                    />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label className="text-sm font-medium">Muayene Geçerlilik</label>

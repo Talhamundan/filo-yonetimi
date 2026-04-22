@@ -3,7 +3,7 @@ export type AracAltKategori = "OTOMOBIL" | "MINIBUS" | "KAMYONET" | "KAMYON" | "
 
 export const ARAC_UST_KATEGORI_LABELS: Record<AracUstKategori, string> = {
     BINEK: "Binek",
-    SANTIYE: "Şantiye",
+    SANTIYE: "İş Makinesi",
 };
 
 export const ARAC_ALT_KATEGORI_LABELS: Record<AracAltKategori, string> = {

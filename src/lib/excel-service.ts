@@ -3018,6 +3018,11 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
     const requiredGroups = buildRequiredImportColumnGroups(fields, exportColumns, modelMeta.name)
         .filter((group) => !(config.prismaModel === "disFirma" && fixedDisFirmaTuru && group.fieldName === "tur"))
         .filter((group) => {
+            if (config.prismaModel === "arac") {
+                // Arac importunda teknik guncelleme (plaka + ruhsat/sase/motor) dosyalarini da kabul et.
+                // Zorunlu create alanlari satir bazinda, sadece yeni kayit olusurken dogrulanir.
+                return !["marka", "model", "yil"].includes(group.fieldName);
+            }
             if (entityKey !== "kiralikArac") return true;
             return !["marka", "model", "yil"].includes(group.fieldName);
         });
@@ -3243,8 +3248,6 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                 }
             }
 
-            validateRequiredFields(fields, parsedRow, modelMeta.name);
-
             const whereUnique = getWhereUnique(fields, parsedRow, config.prismaModel);
             let existingId: string | null = null;
             if (whereUnique) {
@@ -3254,6 +3257,43 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
 
             if (!existingId) {
                 existingId = await findExistingBusinessRecord(tx, config.prismaModel, parsedRow) as string | null;
+            }
+
+            if (!existingId && config.prismaModel === "arac") {
+                const plakaText = normalizeLookupString(parsedRow.plaka);
+                const hasPlaka = Boolean(plakaText);
+                const hasTechOnlyUpdateFields = [
+                    parsedRow.ruhsatSeriNo,
+                    parsedRow.saseNo,
+                    parsedRow.motorNo,
+                ].some((value) => Boolean(normalizeLookupString(value)));
+                const hasCreateCoreFields =
+                    Boolean(normalizeLookupString(parsedRow.marka)) &&
+                    Boolean(normalizeLookupString(parsedRow.model)) &&
+                    Number.isFinite(Number(parsedRow.yil));
+
+                // Teknik guncelleme satiriysa ama plakadan eslesme yoksa satiri atla.
+                if (hasPlaka && hasTechOnlyUpdateFields && !hasCreateCoreFields) {
+                    console.warn(
+                        `Satir ${index + 2}: Plaka ile eslesen arac bulunamadi, teknik guncelleme satiri atlandi (${plakaText})`
+                    );
+                    skipped++;
+                    continue;
+                }
+
+                // Yeni arac olusturulacaksa marka/model/yil zorunlu.
+                // Aksi halde plakasiz create yolunda DB not-null hatasi verir.
+                if (!hasCreateCoreFields) {
+                    console.warn(
+                        `Satir ${index + 2}: Marka/Model/Yil eksik oldugu icin arac kaydi olusturulamadi, satir atlandi (${plakaText || "-"})`
+                    );
+                    skipped++;
+                    continue;
+                }
+            }
+
+            if (!existingId) {
+                validateRequiredFields(fields, parsedRow, modelMeta.name);
             }
 
             if (config.prismaModel === "arac" && parsedRow.kullaniciId) {

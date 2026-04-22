@@ -17,12 +17,21 @@ import { RowActionButton } from "@/components/ui/row-action-button";
 import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 import {
+    ARAC_UST_KATEGORI_LABELS,
     ARAC_UST_KATEGORI_OPTIONS,
     getAracAltKategoriOptions,
     resolveAracKategoriFields,
 } from "@/lib/arac-kategori";
 
 const forceUppercase = (value: string) => value.toLocaleUpperCase("tr-TR");
+const parseNumberInput = (value: string, fallback: number): number => {
+    const trimmed = value.trim();
+    if (!trimmed) return fallback;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : fallback;
+};
+const safeNumberInputValue = (value: unknown, fallback = 0): number =>
+    typeof value === "number" && Number.isFinite(value) ? value : fallback;
 const toDateTimeLocalInput = (value?: Date | string | null) => {
     if (!value) return "";
     const date = new Date(value);
@@ -125,11 +134,33 @@ const FormFields = ({
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
-            <Input type="number" value={formData.yil} onChange={e => setFormData({...formData, yil: parseInt(e.target.value)})} className="h-9" />
+            <Input
+                type="number"
+                value={safeNumberInputValue(formData.yil, new Date().getFullYear())}
+                onChange={e => setFormData({
+                    ...formData,
+                    yil: parseNumberInput(
+                        e.target.value,
+                        safeNumberInputValue(formData.yil, new Date().getFullYear())
+                    )
+                })}
+                className="h-9"
+            />
         </div>
         <div className="space-y-1.5">
             <label className="text-sm font-medium">Güncel KM <span className="text-rose-500">*</span></label>
-            <Input type="number" value={formData.guncelKm} onChange={e => setFormData({...formData, guncelKm: parseInt(e.target.value)})} className="h-9" />
+            <Input
+                type="number"
+                value={safeNumberInputValue(formData.guncelKm, 0)}
+                onChange={e => setFormData({
+                    ...formData,
+                    guncelKm: parseNumberInput(
+                        e.target.value,
+                        safeNumberInputValue(formData.guncelKm, 0)
+                    )
+                })}
+                className="h-9"
+            />
         </div>
         {showInitialMuayeneField && (
             <div className="space-y-1.5">
@@ -399,11 +430,19 @@ export default function AraclarClient({
         if (!formData.plaka || !formData.marka) {
             return toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
         }
+        const yil = Number(formData.yil);
+        const guncelKm = Number(formData.guncelKm);
+        if (!Number.isFinite(yil) || yil < 1900) {
+            return toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
+        }
+        if (!Number.isFinite(guncelKm) || guncelKm < 0) {
+            return toast.warning("Geçersiz Değer", { description: "Güncel KM 0 veya daha büyük olmalıdır." });
+        }
         if (isExternalMode && !formData.disFirmaId) {
             return toast.warning("Eksik Bilgi", { description: "Lütfen dış firma seçin." });
         }
         setLoading(true);
-        const res = await createArac(formData);
+        const res = await createArac({ ...formData, yil, guncelKm });
         if (res.success) {
             setCreateOpen(false);
             setFormData({ ...EMPTY, sirketId: defaultCreateSirketId, disFirmaId: defaultCreateDisFirmaId });
@@ -424,6 +463,16 @@ export default function AraclarClient({
             toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
             return;
         }
+        const yil = Number(formData.yil);
+        const guncelKm = Number(formData.guncelKm);
+        if (!Number.isFinite(yil) || yil < 1900) {
+            toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
+            return;
+        }
+        if (!Number.isFinite(guncelKm) || guncelKm < 0) {
+            toast.warning("Geçersiz Değer", { description: "Güncel KM 0 veya daha büyük olmalıdır." });
+            return;
+        }
         if (isExternalMode && !formData.disFirmaId) {
             return toast.warning("Eksik Bilgi", { description: "Lütfen dış firma seçin." });
         }
@@ -431,7 +480,7 @@ export default function AraclarClient({
 
         setLoading(true);
         try {
-            const res = await updateArac(editRow.id, formData);
+            const res = await updateArac(editRow.id, { ...formData, yil, guncelKm });
             if (res?.success) {
                 setEditRow(null);
                 toast.success("Güncelleme Başarılı", { description: "Araç bilgileri başarıyla güncellendi." });
@@ -644,8 +693,8 @@ export default function AraclarClient({
                         { value: "ARIZALI", label: "Arızalı" },
                     ],
                     typeOptions: [
-                        { value: "BINEK", label: "Binek" },
-                        { value: "SANTIYE", label: "Şantiye" },
+                        { value: "BINEK", label: ARAC_UST_KATEGORI_LABELS.BINEK },
+                        { value: "SANTIYE", label: ARAC_UST_KATEGORI_LABELS.SANTIYE },
                     ],
                 }}
                 toolbarArrangement="report-right-scroll"

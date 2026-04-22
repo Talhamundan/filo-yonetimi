@@ -1,5 +1,33 @@
 export type DashboardSearchParams = Record<string, string | string[] | undefined>;
 
+function normalizeAracKategoriToken(value: string | null | undefined) {
+    return String(value || "")
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .replace(/İ/g, "I")
+        .replace(/İ/g, "I")
+        .replace(/Ş/g, "S")
+        .replace(/Ğ/g, "G")
+        .replace(/Ü/g, "U")
+        .replace(/Ö/g, "O")
+        .replace(/Ç/g, "C")
+        .replace(/\s+/g, "_")
+        .replace(/-/g, "_")
+        .replace(/[^A-Z0-9_]/g, "")
+        .replace(/_+/g, "_")
+        .replace(/^_+|_+$/g, "");
+}
+
+export function normalizeAracUstKategoriScope(value: string | null | undefined): "BINEK" | "SANTIYE" | null {
+    const normalized = normalizeAracKategoriToken(value);
+    if (!normalized) return null;
+
+    if (["BINEK", "OTOMOBIL", "BINEK_ARAC"].includes(normalized)) return "BINEK";
+    if (["SANTIYE", "IS_MAKINESI", "IS_MAKINASI", "IS_MAKINESI_ARACI", "SANTIYE_ARACI"].includes(normalized)) return "SANTIYE";
+
+    return null;
+}
+
 export async function getSelectedSirketId(
     searchParams?: Promise<DashboardSearchParams> | DashboardSearchParams
 ) {
@@ -28,11 +56,7 @@ export async function getSelectedKategori(
     const resolved = searchParams ? await searchParams : {};
     const rawValue = resolved?.kategori;
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
-    const normalized = value?.trim().toUpperCase();
-
-    if (normalized === "BINEK") return "BINEK";
-    if (normalized === "SANTIYE") return "SANTIYE";
-    return null;
+    return normalizeAracUstKategoriScope(value);
 }
 
 export async function getSelectedYil(
