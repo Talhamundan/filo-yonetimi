@@ -107,14 +107,14 @@ export default function MonthScopeSwitcher() {
     };
 
     return (
-        <div className="relative w-[64px] md:w-[84px]">
+        <div className="relative w-[74px] md:w-[84px]">
             <select
                 aria-label="Ay filtresi"
                 title={`Aktif ay: ${selectedLabel}`}
                 value={selectedValue}
                 onChange={handleChange}
                 disabled={pending}
-                className="h-9 md:h-10 w-full appearance-none rounded-lg md:rounded-xl border border-slate-200 bg-white pl-2.5 md:pl-2.5 pr-7 md:pr-7 text-left text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-10 md:h-10 w-full appearance-none rounded-xl border border-slate-200 bg-white pl-3 pr-7 text-left text-xs md:text-[11px] font-semibold text-slate-700 shadow-[0_1px_2px_rgba(15,23,42,0.04)] outline-none transition-colors hover:border-slate-300 hover:bg-slate-50 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:opacity-60"
             >
                 <option value="all">Tümü</option>
                 {visibleMonths.map((month) => (

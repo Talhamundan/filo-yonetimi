@@ -59,7 +59,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const desktopAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const mobileAdminMenuRef = React.useRef<HTMLDivElement>(null);
     const headerIconButtonClass =
-        "inline-flex h-9 w-9 md:h-10 md:w-10 items-center justify-center rounded-lg md:rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900";
+        "inline-flex h-10 w-10 md:h-10 md:w-10 items-center justify-center rounded-lg md:rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900";
     const sidebarToggleButtonClass =
         "inline-flex h-11 w-11 items-center justify-center rounded-md text-slate-500 transition-colors duration-200 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/30";
 
@@ -308,77 +308,61 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                             </div>
                         </div>
 
-                        <div className="px-2.5 py-2 md:hidden">
-                            <div className="relative z-20 flex items-center justify-between gap-1.5">
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={openMobileSidebar}
-                                        className={headerIconButtonClass}
-                                        aria-label="Menüyü aç"
-                                        title="Menüyü aç"
-                                    >
-                                        <PanelLeftOpen size={18} />
-                                    </button>
+                        <div className="px-3 py-2.5 md:hidden">
+                            <div className="relative z-20 flex items-center gap-2">
+                                <button
+                                    type="button"
+                                    onClick={openMobileSidebar}
+                                    className={headerIconButtonClass}
+                                    aria-label="Menüyü aç"
+                                    title="Menüyü aç"
+                                >
+                                    <PanelLeftOpen size={18} />
+                                </button>
 
-                                    <Link href={dashboardHref} className="flex min-w-0 items-center">
-                                        <h1 className="truncate text-[1.35rem] font-bold tracking-tight text-slate-900">
-                                            Bera <span className="text-[#6366F1]">Filo</span>
-                                        </h1>
-                                    </Link>
-                                </div>
+                                <Link href={dashboardHref} className="flex min-w-0 items-center gap-2">
+                                    <img src="/icon.png" alt="Bera Filo" className="h-7 w-7 rounded-md border border-slate-200 bg-white p-1 shadow-sm" />
+                                    <h1 className="truncate text-[1.05rem] font-bold tracking-tight text-slate-900">
+                                        Bera <span className="text-[#6366F1]">Filo</span>
+                                    </h1>
+                                </Link>
 
-                                <div className="flex min-w-0 shrink items-center gap-1.5">
-                                    <div className="inline-flex h-9 max-w-[124px] min-w-0 shrink flex-col justify-center rounded-lg border border-slate-200 bg-slate-50 px-2">
-                                        <span
-                                            className={cn(
-                                                "truncate font-semibold leading-tight text-slate-800 whitespace-nowrap",
-                                                shouldUseCompactIdentityText ? "text-[10px]" : "text-[11px]"
-                                            )}
-                                            title={identityName}
-                                        >
-                                            {identityName}
-                                        </span>
-                                        <span
-                                            className={cn(
-                                                "truncate font-medium leading-tight text-slate-600 whitespace-nowrap",
-                                                shouldUseCompactIdentityText ? "text-[9px]" : "text-[10px]"
-                                            )}
-                                            title={roleAndCompanyText}
-                                        >
-                                            {roleAndCompanyText}
-                                        </span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={toggleMobileHeaderTools}
-                                        className={headerIconButtonClass}
-                                        title={isMobileHeaderToolsOpen ? "Alt menüyü kapat" : "Alt menüyü aç"}
-                                        aria-label={isMobileHeaderToolsOpen ? "Alt menüyü kapat" : "Alt menüyü aç"}
-                                        aria-expanded={isMobileHeaderToolsOpen}
-                                    >
-                                        {isMobileHeaderToolsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                                    </button>
-                                </div>
+                                <button
+                                    type="button"
+                                    onClick={toggleMobileHeaderTools}
+                                    className={cn(headerIconButtonClass, "ml-auto shrink-0")}
+                                    title={isMobileHeaderToolsOpen ? "Filtreleri kapat" : "Filtreleri aç"}
+                                    aria-label={isMobileHeaderToolsOpen ? "Filtreleri kapat" : "Filtreleri aç"}
+                                    aria-expanded={isMobileHeaderToolsOpen}
+                                >
+                                    {isMobileHeaderToolsOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                                </button>
                             </div>
 
-                            <div
-                                className={cn(
-                                    "relative z-10 mt-2 flex items-center gap-1.5",
-                                    !isMobileHeaderToolsOpen && "hidden"
-                                )}
-                            >
-                                <CategoryScopeSwitcher />
-                                <YearScopeSwitcher />
-                                <MonthScopeSwitcher />
-                                {shouldShowCompanySwitcher ? (
-                                    <CompanyScopeSwitcher
-                                        sirketler={scopeOptions.sirketler}
-                                        allowAllOption={scopeOptions.canAccessAllCompanies}
-                                    />
-                                ) : null}
+                            <div className="relative z-20 mt-2 flex items-center gap-2">
+                                <div className="inline-flex h-10 min-w-0 flex-1 flex-col justify-center rounded-xl border border-slate-200 bg-slate-50 px-3">
+                                    <span
+                                        className={cn(
+                                            "truncate font-semibold leading-tight text-slate-800 whitespace-nowrap",
+                                            shouldUseCompactIdentityText ? "text-[10px]" : "text-[11px]"
+                                        )}
+                                        title={identityName}
+                                    >
+                                        {identityName}
+                                    </span>
+                                    <span
+                                        className={cn(
+                                            "truncate font-medium leading-tight text-slate-600 whitespace-nowrap",
+                                            shouldUseCompactIdentityText ? "text-[9px]" : "text-[10px]"
+                                        )}
+                                        title={roleAndCompanyText}
+                                    >
+                                        {roleAndCompanyText}
+                                    </span>
+                                </div>
+
                                 {scopeOptions.isAdmin ? (
-                                    <div ref={mobileAdminMenuRef} className="relative z-30 flex shrink-0 items-center gap-2">
+                                    <div ref={mobileAdminMenuRef} className="relative z-30 shrink-0">
                                         <button
                                             type="button"
                                             onClick={() => setIsAdminMenuOpen((current) => !current)}
@@ -441,13 +425,34 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                     <button
                                         type="button"
                                         onClick={() => signOut({ callbackUrl: "/auth/login" })}
-                                        className={cn(headerIconButtonClass, "shrink-0")}
+                                        className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-colors duration-200 hover:border-slate-300 hover:bg-slate-50 hover:text-slate-900"
                                         title="Çıkış Yap"
                                         aria-label="Çıkış Yap"
                                     >
                                         <LogOut size={16} className="text-rose-500" />
                                     </button>
                                 )}
+                            </div>
+
+                            <div
+                                className={cn(
+                                    "relative z-10 mt-2 transition-all",
+                                    !isMobileHeaderToolsOpen && "hidden"
+                                )}
+                            >
+                                <div className="overflow-x-auto pb-0.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                                    <div className="flex min-w-max items-center gap-2 pr-1">
+                                        <CategoryScopeSwitcher />
+                                        <YearScopeSwitcher />
+                                        <MonthScopeSwitcher />
+                                        {shouldShowCompanySwitcher ? (
+                                            <CompanyScopeSwitcher
+                                                sirketler={scopeOptions.sirketler}
+                                                allowAllOption={scopeOptions.canAccessAllCompanies}
+                                            />
+                                        ) : null}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </header>
