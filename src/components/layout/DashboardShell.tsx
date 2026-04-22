@@ -7,6 +7,7 @@ import { ChevronDown, ChevronUp, History, LogOut, Menu, PanelLeftClose, PanelLef
 import { signOut } from "next-auth/react";
 import { Toaster } from "sonner";
 import Sidebar from "@/components/layout/Sidebar";
+import VehicleCommandPalette from "@/components/layout/VehicleCommandPalette";
 import CompanyScopeSwitcher from "@/components/layout/CompanyScopeSwitcher";
 import YearScopeSwitcher from "@/components/layout/YearScopeSwitcher";
 import MonthScopeSwitcher from "@/components/layout/MonthScopeSwitcher";
@@ -30,6 +31,12 @@ type DashboardShellProps = {
         userName?: string;
         role?: string | null;
         userCompanyName?: string | null;
+        quickVehicleSearch: Array<{
+            id: string;
+            plaka: string;
+            marka?: string | null;
+            model?: string | null;
+        }>;
     };
 };
 
@@ -216,6 +223,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                             </Link>
 
                             <div className="flex items-center justify-end gap-3">
+                                <VehicleCommandPalette vehicles={scopeOptions.quickVehicleSearch} />
                                 <CategoryScopeSwitcher />
                                 <YearScopeSwitcher />
                                 <MonthScopeSwitcher />
