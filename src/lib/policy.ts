@@ -37,6 +37,7 @@ const LEGACY_ROLE_ALIASES: Record<string, Rol> = {
     MUDUR: "YETKILI",
     MUHASEBECI: "YETKILI",
 };
+const AGENCY_COMPANY_NAMES = ["HISAR SIGORTA", "ERÇAL SIGORTA"] as const;
 const SOFT_DELETE_MODELS = new Set<PolicyModelName>([
     "arac",
     "kullanici",
@@ -66,6 +67,40 @@ export function normalizeRole(role: string | null | undefined): Rol | null {
         return role as Rol;
     }
     return LEGACY_ROLE_ALIASES[role] ?? null;
+}
+
+function normalizeCompanyName(value: string | null | undefined) {
+    return String(value || "")
+        .trim()
+        .toLocaleUpperCase("tr-TR")
+        .replace(/Ç/g, "C")
+        .replace(/İ/g, "I")
+        .replace(/Ş/g, "S")
+        .replace(/Ğ/g, "G")
+        .replace(/Ü/g, "U")
+        .replace(/Ö/g, "O");
+}
+
+export function isAraciKurumRole(role: string | null | undefined) {
+    const normalized = String(role || "").trim().toLocaleUpperCase("tr-TR").replace(/\s+/g, "_");
+    return normalized === "ARACI_KURUM";
+}
+
+export function isAraciKurumCompany(companyName: string | null | undefined) {
+    const normalized = normalizeCompanyName(companyName);
+    if (!normalized) return false;
+    const companySet = new Set(AGENCY_COMPANY_NAMES.map((item) => normalizeCompanyName(item)));
+    return companySet.has(normalized);
+}
+
+export function isAraciKurumOperator(role: string | null | undefined, companyName: string | null | undefined) {
+    if (isAraciKurumRole(role)) return true;
+    return normalizeRole(role) === "YETKILI" && isAraciKurumCompany(companyName);
+}
+
+export function resolveEffectiveSessionRole(role: string | null | undefined, companyName: string | null | undefined) {
+    if (isAraciKurumOperator(role, companyName)) return "ARACI_KURUM";
+    return role || null;
 }
 
 export function canRoleAccessAllCompanies(
@@ -114,6 +149,16 @@ export function shouldForceWaitingPage(
 export function isDashboardPathRestrictedForRole(role: string | null | undefined, path: string) {
     if (!isDriverRole(role)) return false;
     return DRIVER_RESTRICTED_DASHBOARD_PATHS.some((restrictedPath) => path.startsWith(restrictedPath));
+}
+
+export function isDashboardPathRestrictedForAraciKurum(
+    role: string | null | undefined,
+    companyName: string | null | undefined,
+    path: string
+) {
+    if (!isAraciKurumOperator(role, companyName)) return false;
+    if (path === "/dashboard/bekleme") return false;
+    return !(path === "/dashboard/sigortaci" || path.startsWith("/dashboard/sigortaci/"));
 }
 
 function getBlockedFilter(modelName: PolicyModelName) {

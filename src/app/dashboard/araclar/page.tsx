@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
 import { getAracUsageFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
-import { getAyDateRange, getSelectedAy, getSelectedDisFirmaId, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
+import {
+    getAyDateRange,
+    getSelectedAy,
+    getSelectedDisFirmaId,
+    getSelectedKategori,
+    getSelectedSirketId,
+    getSelectedYil,
+    type DashboardSearchParams,
+} from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
@@ -25,6 +33,7 @@ const ARAC_FALLBACK_SELECT = {
     disFirmaId: true,
     calistigiKurum: true,
     kategori: true,
+    altKategori: true,
     saseNo: true,
     olusturmaTarihi: true,
     guncellemeTarihi: true,
@@ -113,6 +122,7 @@ async function getAraclarWithTakipBilgileri(
                     disFirmaId: true,
                     calistigiKurum: true,
                     kategori: true,
+                    altKategori: true,
                     olusturmaTarihi: true,
                     guncellemeTarihi: true,
                     deletedAt: true,
@@ -385,10 +395,11 @@ async function getAraclarWithTakipBilgileri(
 
 export default async function AraclarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const resolvedSearchParams = props.searchParams ? await props.searchParams : {};
-    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
+    const [selectedSirketId, selectedYil, selectedAy, selectedUstKategori, commonFilters] = await Promise.all([
         getSelectedSirketId(resolvedSearchParams),
         getSelectedYil(resolvedSearchParams),
         getSelectedAy(resolvedSearchParams),
+        getSelectedKategori(resolvedSearchParams),
         getCommonListFilters(resolvedSearchParams),
     ]);
     const selectedDisFirmaId = await getSelectedDisFirmaId(resolvedSearchParams);
@@ -422,8 +433,9 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
     if (commonFilters.status) {
         filterParts.push({ durum: commonFilters.status });
     }
-    if (commonFilters.type) {
-        filterParts.push({ kategori: commonFilters.type });
+    const effectiveUstKategori = selectedUstKategori || commonFilters.type || null;
+    if (effectiveUstKategori) {
+        filterParts.push({ kategori: effectiveUstKategori });
     }
     if (isExternalMode && selectedDisFirmaId) {
         filterParts.push({ disFirmaId: selectedDisFirmaId });

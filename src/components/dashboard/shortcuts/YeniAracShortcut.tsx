@@ -12,6 +12,7 @@ import { createArac } from "@/app/dashboard/araclar/actions";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useDashboardScope } from "@/components/layout/DashboardScopeContext";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
+import { ARAC_UST_KATEGORI_OPTIONS, getAracAltKategoriOptions, resolveAracKategoriFields } from "@/lib/arac-kategori";
 
 const ILLER = [
     { value: "ISTANBUL", label: "İSTANBUL" },
@@ -35,7 +36,8 @@ const EMPTY = {
     kullaniciId: '',
     ruhsatSeriNo: '',
     saseNo: '',
-    kategori: 'BINEK'
+    kategori: 'BINEK',
+    altKategori: 'OTOMOBIL',
 };
 
 const FormFields = ({
@@ -55,6 +57,11 @@ const FormFields = ({
 }) => (
     <div className="grid grid-cols-2 gap-4 py-2">
         {(() => {
+            const resolvedKategoriFields = resolveAracKategoriFields({
+                kategori: formData.kategori,
+                altKategori: formData.altKategori,
+            });
+            const altKategoriOptions = getAracAltKategoriOptions(resolvedKategoriFields.kategori);
             return (
                 <>
                     <div className="col-span-2">
@@ -148,14 +155,37 @@ const FormFields = ({
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Araç Kategorisi</label>
+                        <label className="text-sm font-medium">Üst Kategori</label>
                         <select 
-                            value={formData.kategori} 
-                            onChange={e => setFormData({...formData, kategori: e.target.value})}
+                            value={resolvedKategoriFields.kategori}
+                            onChange={e => {
+                                const next = resolveAracKategoriFields({
+                                    kategori: e.target.value,
+                                    altKategori: resolvedKategoriFields.altKategori,
+                                });
+                                setFormData({
+                                    ...formData,
+                                    kategori: next.kategori,
+                                    altKategori: next.altKategori,
+                                });
+                            }}
                             className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                         >
-                            <option value="BINEK">Binek Araç</option>
-                            <option value="SANTIYE">İş Makinesi</option>
+                            {ARAC_UST_KATEGORI_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="space-y-1.5">
+                        <label className="text-sm font-medium">Alt Kategori</label>
+                        <select
+                            value={resolvedKategoriFields.altKategori}
+                            onChange={e => setFormData({ ...formData, altKategori: e.target.value })}
+                            className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                        >
+                            {altKategoriOptions.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                            ))}
                         </select>
                     </div>
                     <div className="space-y-1.5 col-span-2">

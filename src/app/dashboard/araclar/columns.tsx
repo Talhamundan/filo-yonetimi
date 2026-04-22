@@ -5,6 +5,7 @@ import { Badge } from "../../../components/ui/badge"
 import VehicleIdentityCell from "@/components/vehicle/VehicleIdentityCell"
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status"
 import { PersonelLink, SirketLink } from "@/components/links/RecordLinks"
+import { ARAC_ALT_KATEGORI_LABELS, ARAC_UST_KATEGORI_LABELS, resolveAracKategoriFields } from "@/lib/arac-kategori";
 
 export type AracRow = {
     id: string;
@@ -18,6 +19,7 @@ export type AracRow = {
     aciklama?: string | null;
     durum: string;
     kategori: string;
+    altKategori?: string | null;
     ruhsatSeriNo?: string | null;
     saseNo?: string | null;
     motorNo?: string | null;
@@ -169,12 +171,33 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
         },
         {
             accessorKey: "kategori",
-            header: "Kategori",
+            header: "Üst Kategori",
             cell: ({ row }) => {
-                const cat = row.original.kategori;
-                const labels: Record<string, string> = { SANTIYE: "İş Makinesi", BINEK: "Binek" };
-                return <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">{labels[cat] || cat}</span>;
+                const kategori = resolveAracKategoriFields({
+                    kategori: row.original.kategori,
+                    altKategori: row.original.altKategori,
+                }).kategori;
+                return (
+                    <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-md">
+                        {ARAC_UST_KATEGORI_LABELS[kategori] || kategori}
+                    </span>
+                );
             }
+        },
+        {
+            accessorKey: "altKategori",
+            header: "Alt Kategori",
+            cell: ({ row }) => {
+                const altKategori = resolveAracKategoriFields({
+                    kategori: row.original.kategori,
+                    altKategori: row.original.altKategori,
+                }).altKategori;
+                return (
+                    <span className="text-xs font-semibold text-slate-600 bg-slate-50 px-2 py-1 rounded-md border border-slate-200">
+                        {ARAC_ALT_KATEGORI_LABELS[altKategori] || altKategori}
+                    </span>
+                );
+            },
         },
         {
             accessorKey: "bulunduguIl",

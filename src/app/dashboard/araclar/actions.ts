@@ -13,6 +13,7 @@ import { softDeleteEntity } from "@/lib/soft-delete";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE } from "@/lib/ruhsat-sahibi";
 import { canRoleAssignIndependentRecords } from "@/lib/policy";
 import { ILLER } from "@/lib/constants/iller";
+import { resolveAracKategoriFields } from "@/lib/arac-kategori";
 
 const PATH = "/dashboard/araclar";
 const toUpperTr = (value: string) => value.toLocaleUpperCase("tr-TR");
@@ -81,29 +82,6 @@ function normalizeIlEnum(value: unknown): string {
     if (!raw) return "BURSA";
 
     return ILLER_BY_NORMALIZED_LABEL.get(normalizeCitySearchValue(raw)) || normalizeCitySearchValue(raw);
-}
-
-function normalizeAracKategori(value: unknown): "BINEK" | "SANTIYE" {
-    const raw = String(value || "")
-        .trim()
-        .toLocaleUpperCase("tr-TR")
-        .replace(/\s+/g, "_");
-
-    if (raw === "BINEK" || raw === "BINEK_ARAC" || raw === "HAFIF_TICARI") {
-        return "BINEK";
-    }
-
-    if (
-        raw === "SANTIYE" ||
-        raw === "SANTIYE_ARACI" ||
-        raw === "IS_MAKINESI" ||
-        raw === "IS_MAKINASI" ||
-        raw === "İŞ_MAKİNESİ"
-    ) {
-        return "SANTIYE";
-    }
-
-    return "BINEK";
 }
 
 function isInvalidLocationError(error: unknown) {
@@ -181,10 +159,15 @@ export async function createArac(data: {
     saseNo?: string | null;
     motorNo?: string | null;
     kategori?: any;
+    altKategori?: any;
 }) {
     try {
         const actor = await assertAuthenticatedUser();
         const requestedSirketId = await resolveRuhsatSahibiSirketId(data.sirketId);
+        const { kategori, altKategori } = resolveAracKategoriFields({
+            kategori: data.kategori,
+            altKategori: data.altKategori,
+        });
         const normalizedPlaka = data.plaka.replace(/\s+/g, '').toUpperCase();
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true, calistigiKurum: true })
@@ -237,7 +220,8 @@ export async function createArac(data: {
                 saseNo: data.saseNo || null,
                 motorNo: data.motorNo || null,
                 durum: kullanici ? "AKTIF" : "BOSTA",
-                kategori: normalizeAracKategori(data.kategori)
+                kategori,
+                altKategori,
             }
         });
 
@@ -286,6 +270,7 @@ export async function createArac(data: {
                 model: arac.model,
                 yil: arac.yil,
                 kategori: arac.kategori,
+                altKategori: (arac as any).altKategori ?? null,
                 guncelKm: arac.guncelKm,
                 bedel: arac.bedel,
                 aciklama: arac.aciklama,
@@ -325,7 +310,7 @@ export async function updateArac(id: string, data: any) {
 
         const oldArac = await prisma.arac.findFirst({
             where: { id, ...(scopeFilter as any) },
-            select: { plaka: true, kullaniciId: true, guncelKm: true, sirketId: true }
+            select: { plaka: true, kullaniciId: true, guncelKm: true, sirketId: true, kategori: true, altKategori: true }
         });
 
         if (!oldArac) {
@@ -340,6 +325,13 @@ export async function updateArac(id: string, data: any) {
         const selectedKiralik = data.sirketId !== undefined && normalizeSirketSelection(data.sirketId) === KIRALIK_SIRKET_OPTION_VALUE;
         const nextSirketId = requestedSirketId || (selectedKiralik ? null : (kullanici?.sirketId || null));
         const resolvedCalistigiKurum = data.calistigiKurum !== undefined ? (data.calistigiKurum?.trim() || null) : undefined;
+        const resolvedKategoriFields =
+            data.kategori !== undefined || data.altKategori !== undefined
+                ? resolveAracKategoriFields({
+                    kategori: data.kategori ?? oldArac.kategori,
+                    altKategori: data.altKategori ?? (oldArac as any).altKategori,
+                })
+                : null;
         const requestedGuncelKm = normalizeKmInput(data.guncelKm);
         const previousGuncelKm = Number(oldArac.guncelKm || 0);
 
@@ -382,7 +374,8 @@ export async function updateArac(id: string, data: any) {
                 ruhsatSeriNo: data.ruhsatSeriNo || null,
                 saseNo: data.saseNo || null,
                 motorNo: data.motorNo || null,
-                kategori: data.kategori !== undefined ? normalizeAracKategori(data.kategori) : undefined
+                kategori: resolvedKategoriFields?.kategori,
+                altKategori: resolvedKategoriFields?.altKategori,
             }
         });
 
@@ -452,7 +445,8 @@ export async function updateArac(id: string, data: any) {
                 yeniKullaniciId: kullanici?.id || null,
                 guncelKm: resolvedGuncelKm,
                 bedel: data.bedel !== undefined ? normalizeBedelInput(data.bedel) : undefined,
-                kategori: data.kategori !== undefined ? normalizeAracKategori(data.kategori) : null,
+                kategori: resolvedKategoriFields?.kategori ?? null,
+                altKategori: resolvedKategoriFields?.altKategori ?? null,
                 aciklama: data.aciklama !== undefined ? (data.aciklama?.trim() || null) : undefined,
                 calistigiKurum: resolvedCalistigiKurum ?? null,
                 disFirmaId: data.disFirmaId !== undefined ? (data.disFirmaId?.trim() || null) : undefined,
@@ -632,20 +626,28 @@ export async function importAraclarFromExcel(formData: FormData) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const data: any[] = xlsx.utils.sheet_to_json(worksheet);
         
-        const formattedData = data.map(row => ({
-            plaka: String(row.Plaka || row.plaka || '').replace(/\s+/g, '').toUpperCase(),
-            marka: toUpperTr(String(row.Marka || row.marka || '')),
-            model: toUpperTr(String(row.Model || row.model || '')),
-            yil: parseInt(row.Yil || row.yil) || new Date().getFullYear(),
-            bulunduguIl: normalizeIlEnum(row.BulunduguIl || row.Il || row.il || "ISTANBUL"),
-            guncelKm: parseInt(row.GuncelKm || row.Km || row.km) || 0,
-            aciklama: row.Aciklama || row.aciklama || null,
-            sirketId,
-            durum: 'BOSTA' as const,
-            kategori: normalizeAracKategori(row.Kategori || row.kategori || "BINEK"),
-            saseNo: row.SaseNo || row.saseno || row.saseNo || null,
-            motorNo: row.MotorNo || row.motorno || row.motorNo || null,
-        })).filter(r => r.plaka && r.marka);
+        const formattedData = data.map((row) => {
+            const kategoriFields = resolveAracKategoriFields({
+                kategori: row.UstKategori || row["Üst Kategori"] || row.Kategori || row.kategori,
+                altKategori: row.AltKategori || row["Alt Kategori"] || row.altKategori || row["Araç Tipi"] || row["Arac Tipi"] || row.Tip,
+            });
+
+            return {
+                plaka: String(row.Plaka || row.plaka || '').replace(/\s+/g, '').toUpperCase(),
+                marka: toUpperTr(String(row.Marka || row.marka || '')),
+                model: toUpperTr(String(row.Model || row.model || '')),
+                yil: parseInt(row.Yil || row.yil) || new Date().getFullYear(),
+                bulunduguIl: normalizeIlEnum(row.BulunduguIl || row.Il || row.il || "ISTANBUL"),
+                guncelKm: parseInt(row.GuncelKm || row.Km || row.km) || 0,
+                aciklama: row.Aciklama || row.aciklama || null,
+                sirketId,
+                durum: 'BOSTA' as const,
+                kategori: kategoriFields.kategori,
+                altKategori: kategoriFields.altKategori,
+                saseNo: row.SaseNo || row.saseno || row.saseNo || null,
+                motorNo: row.MotorNo || row.motorno || row.motorNo || null,
+            };
+        }).filter(r => r.plaka && r.marka);
         
         if (formattedData.length === 0) {
             return { success: false, error: 'Geçerli veri bulunamadı. Lütfen Plaka ve Marka sütunlarını kontrol edin.' };

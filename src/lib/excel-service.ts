@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/excel-entities";
 import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 import { KIRALIK_SIRKET_ADI, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
+import { resolveAracKategoriFields } from "@/lib/arac-kategori";
+import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status";
 
 // --- Re-exports ---
 export { ensureBakimColumns, isBakimSchemaCompatibilityError } from "@/lib/bakim-schema-compat";
@@ -59,6 +62,7 @@ export type ImportEntityOptions = {
 
 export type ExportEntityOptions = {
     selectedColumns?: string[];
+    selectedColumnKeys?: string[];
 };
 
 // --- Config & Constants ---
@@ -80,6 +84,7 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "saseNo",
             "motorNo",
             "kategori",
+            "altKategori",
             "marka",
             "model",
             "yil",
@@ -89,6 +94,11 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             "kullanici",
             "ruhsatSeriNo",
             "aciklama",
+            "muayene",
+            "kasko",
+            "trafikSigortasi",
+            "ortalamaYakit100Km",
+            "toplamMaliyet",
         ],
         hiddenColumns: ["olusturmaTarihi", "guncellemeTarihi"],
         labels: {
@@ -99,7 +109,8 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             calistigiKurum: "Kullanıcı Firma",
             saseNo: "Şase No",
             motorNo: "Motor No",
-            kategori: "Kategori",
+            kategori: "Üst Kategori",
+            altKategori: "Alt Kategori",
             marka: "Marka",
             model: "Model",
             yil: "Model Yılı",
@@ -109,9 +120,15 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             kullanici: "Kullanıcı",
             ruhsatSeriNo: "Ruhsat Seri No",
             aciklama: "Açıklama",
+            muayene: "Muayene",
+            kasko: "Kasko",
+            trafikSigortasi: "Trafik Sigortası",
+            ortalamaYakit100Km: "Ortalama Yakıt",
+            toplamMaliyet: "Maliyet Özeti",
         },
         aliases: {
             ruhsatSahibi: [
+                "Ruhsat Sahibi",
                 "Ruhsat Sahibi Firma",
                 "operasyonFirma",
                 "operasyonFirmasi",
@@ -146,13 +163,21 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
                 "Calistigi Kurum",
             ],
             guncelKm: ["Güncel KM", "km", "Km"],
-            kullanici: ["Sofor", "Şoför", "sofor"],
+            kullanici: ["Sofor", "Şoför", "sofor", "sofor_ad", "Sürücü", "Surucu"],
             bulunduguIl: ["Bulunduğu İl", "Bulunduğu Şantiye", "Şantiye", "İl", "il"],
             yil: ["Yıl", "yil"],
+            kategori: ["Kategori", "Üst Kategori", "Ust Kategori"],
+            altKategori: ["Alt Kategori", "Arac Tipi", "Araç Tipi", "Tip"],
+            marka: ["Marka", "Marka / Model", "Marka/Model", "markaModel"],
             bedel: ["Bedel", "alış bedeli", "alis bedeli", "alış maliyeti", "alis maliyeti"],
             aciklama: ["Açiklama", "aciklama"],
             saseNo: ["Şase No", "Şase Numarası", "Sase No", "Sase Numarası"],
             motorNo: ["Motor No", "Motor Numarası", "Motor", "motor"],
+            muayene: ["Muayene", "muayene"],
+            kasko: ["Kasko", "kasko"],
+            trafikSigortasi: ["Trafik Sigortası", "Trafik Sigortasi", "trafikSigortasi"],
+            ortalamaYakit100Km: ["Ortalama Yakıt", "Ortalama Yakit", "ortalamaYakit100Km"],
+            toplamMaliyet: ["Maliyet Özeti", "Maliyet Ozeti", "toplamMaliyet", "maliyetOzeti"],
         },
     },
     kullanici: {
@@ -493,6 +518,8 @@ const ARAC_EXTERNAL_VISIBLE_COLUMNS = [
     "plaka",
     "ruhsatSahibi",
     "disFirma",
+    "kategori",
+    "altKategori",
     "kullanici",
 ];
 
@@ -505,6 +532,7 @@ const ARAC_TASERON_VISIBLE_COLUMNS = [
     "saseNo",
     "motorNo",
     "kategori",
+    "altKategori",
     "marka",
     "model",
     "yil",
@@ -647,6 +675,31 @@ const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {
         "IS_MAKINASI": "SANTIYE",
         "IS MAKINESI ARACI": "SANTIYE",
     },
+    AracAltKategori: {
+        OTOMOBIL: "OTOMOBIL",
+        "OTOMOBİL": "OTOMOBIL",
+        MINIBUS: "MINIBUS",
+        "MINIBÜS": "MINIBUS",
+        KAMYONET: "KAMYONET",
+        KAMYON: "KAMYON",
+        CEKICI: "CEKICI",
+        CEKİCİ: "CEKICI",
+        "ÇEKICI": "CEKICI",
+        "ÇEKİCİ": "CEKICI",
+        TIR: "CEKICI",
+        ROMORK: "ROMORK",
+        "ROMORK/TIR": "ROMORK",
+        "RÖMORK": "ROMORK",
+        TRAKTOR: "TRAKTOR",
+        "TRAKTÖR": "TRAKTOR",
+        "IS MAKINESI": "IS_MAKINESI",
+        "IS MAKINASI": "IS_MAKINESI",
+        "IS_MAKINESI": "IS_MAKINESI",
+        "IS_MAKINASI": "IS_MAKINESI",
+        "İŞ MAKİNESİ": "IS_MAKINESI",
+        "İŞ MAKİNASI": "IS_MAKINESI",
+        "İŞ MAKINASI": "IS_MAKINESI",
+    },
     AracDurumu: {
         AKTIFTE: "AKTIF",
         BOS: "BOSTA",
@@ -686,11 +739,14 @@ const ARAC_IMPORT_ALLOWED_COLUMNS = new Set([
     "disFirmaId",
     "calistigiKurum",
     "kategori",
+    "altKategori",
     "saseNo",
     "motorNo",
     "deletedAt",
     "deletedBy",
 ]);
+
+const ARAC_EXPORT_MASRAF_EXCLUDED_TURLER = ["YAKIT"] as const;
 
 type EntityImportScope = {
     forceInternal: boolean;
@@ -901,17 +957,7 @@ export function applyExportProfile(modelName: string, columnKeys: string[]) {
     return next;
 }
 
-function selectExportColumnsByRequestedTokens(modelName: string, availableColumns: string[], requestedTokens: string[]) {
-    const normalizedRequestedTokens = [...new Set(
-        (requestedTokens || [])
-            .map((token) => normalizeHeaderToken(token))
-            .filter((token) => token.length > 0)
-    )];
-
-    if (normalizedRequestedTokens.length === 0) {
-        return availableColumns;
-    }
-
+function buildExportCandidateKeyMap(modelName: string, availableColumns: string[]) {
     const candidateKeyByNormalizedToken = new Map<string, string>();
     for (const key of availableColumns) {
         const candidates = getHeaderCandidates(modelName, key);
@@ -921,8 +967,52 @@ function selectExportColumnsByRequestedTokens(modelName: string, availableColumn
             candidateKeyByNormalizedToken.set(normalized, key);
         }
     }
+    return candidateKeyByNormalizedToken;
+}
 
+function selectExportColumnsByRequestedTokens(
+    modelName: string,
+    availableColumns: string[],
+    requestedColumnLabels: string[],
+    requestedColumnKeys: string[] = []
+) {
+    const labelTokens = requestedColumnLabels || [];
+    const keyTokens = requestedColumnKeys || [];
+    const hasExplicitSelection = labelTokens.length > 0 || keyTokens.length > 0;
+    if (!hasExplicitSelection) {
+        return availableColumns;
+    }
+
+    const candidateKeyByNormalizedToken = buildExportCandidateKeyMap(modelName, availableColumns);
     const selectedColumns: string[] = [];
+    const pairCount = Math.max(labelTokens.length, keyTokens.length);
+
+    for (let index = 0; index < pairCount; index += 1) {
+        const pairTokens = [labelTokens[index], keyTokens[index]];
+        let matchedKey: string | null = null;
+        for (const token of pairTokens) {
+            if (typeof token !== "string" || token.trim().length === 0) continue;
+            const normalizedToken = normalizeHeaderToken(token);
+            if (!normalizedToken) continue;
+            const candidateKey = candidateKeyByNormalizedToken.get(normalizedToken);
+            if (!candidateKey) continue;
+            matchedKey = candidateKey;
+            break;
+        }
+        if (!matchedKey || selectedColumns.includes(matchedKey)) continue;
+        selectedColumns.push(matchedKey);
+    }
+
+    if (selectedColumns.length > 0) {
+        return selectedColumns;
+    }
+
+    const normalizedRequestedTokens = [...new Set(
+        [...labelTokens, ...keyTokens]
+            .map((token) => normalizeHeaderToken(token || ""))
+            .filter((token) => token.length > 0)
+    )];
+
     for (const token of normalizedRequestedTokens) {
         const matchedKey = candidateKeyByNormalizedToken.get(token);
         if (!matchedKey || selectedColumns.includes(matchedKey)) continue;
@@ -2201,7 +2291,7 @@ export async function findExistingBusinessRecord(tx: unknown, modelName: string,
 }
 
 export function sanitizeAracImportRow(parsedRow: Record<string, unknown>) {
-    const nullableToUndefined: Array<keyof typeof parsedRow> = ["guncelKm", "durum", "kategori", "bulunduguIl"];
+    const nullableToUndefined: Array<keyof typeof parsedRow> = ["guncelKm", "durum", "kategori", "altKategori", "bulunduguIl"];
     for (const key of nullableToUndefined) {
         if (parsedRow[key] === null || parsedRow[key] === "") {
             parsedRow[key] = undefined;
@@ -2416,6 +2506,232 @@ export async function resolveRelationValueToForeignKey(params: {
 
 // --- Orchestration Functions ---
 
+function toSafeNumeric(value: unknown) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function buildAggregateSumMap(rows: Array<{ aracId: string; _sum?: { tutar?: number | null } }>) {
+    const map = new Map<string, number>();
+    for (const row of rows) {
+        if (!row?.aracId) continue;
+        map.set(row.aracId, toSafeNumeric(row._sum?.tutar));
+    }
+    return map;
+}
+
+function buildAggregateLitreMap(rows: Array<{ aracId: string; _sum?: { litre?: number | null } }>) {
+    const map = new Map<string, number>();
+    for (const row of rows) {
+        if (!row?.aracId) continue;
+        map.set(row.aracId, toSafeNumeric(row._sum?.litre));
+    }
+    return map;
+}
+
+function formatDeadlineExportValue(targetDate: unknown) {
+    if (!targetDate) return null;
+    const date = new Date(targetDate as string | Date);
+    if (Number.isNaN(date.getTime())) return null;
+    const daysLeft = getDaysLeft(date);
+    if (daysLeft === null) return null;
+    const badge = getDeadlineBadgeConfig(daysLeft);
+    const isoDate = date.toISOString().slice(0, 10);
+    return `${badge.label} (${isoDate})`;
+}
+
+function formatFuelAverageExportValue(litrePer100Km: number | null | undefined, intervalCount: number, totalLitre: number) {
+    if (litrePer100Km == null || !Number.isFinite(litrePer100Km) || intervalCount <= 0) {
+        return totalLitre > 0 ? "Yetersiz veri" : null;
+    }
+    const formatted = litrePer100Km.toLocaleString("tr-TR", {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    });
+    return `${formatted} L/100 km (${intervalCount} dolum aralığı)`;
+}
+
+async function buildAracExportDerivedData(aracIds: string[]) {
+    const empty = {
+        latestMuayeneByAracId: new Map<string, Date>(),
+        latestKaskoByAracId: new Map<string, Date>(),
+        latestTrafikByAracId: new Map<string, Date>(),
+        fuelLitreByAracId: new Map<string, number>(),
+        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number }>(),
+        maliyetByAracId: new Map<string, {
+            yakit: number;
+            bakim: number;
+            muayene: number;
+            ceza: number;
+            kasko: number;
+            trafik: number;
+            diger: number;
+            toplam: number;
+        }>(),
+    };
+
+    if (aracIds.length === 0) return empty;
+
+    const [
+        muayeneler,
+        kaskolar,
+        trafikler,
+        yakitGroupBy,
+        bakimGroupBy,
+        muayeneGroupBy,
+        cezaGroupBy,
+        kaskoGroupBy,
+        trafikGroupBy,
+        masrafGroupBy,
+        yakitKayitlari,
+    ] = await Promise.all([
+        prisma.muayene.findMany({
+            where: { aracId: { in: aracIds } },
+            select: { aracId: true, gecerlilikTarihi: true, muayeneTarihi: true },
+            orderBy: [{ aracId: "asc" }, { muayeneTarihi: "desc" }],
+        }).catch(() => []),
+        prisma.kasko.findMany({
+            where: { aracId: { in: aracIds }, aktifMi: true },
+            select: { aracId: true, bitisTarihi: true },
+            orderBy: [{ aracId: "asc" }, { bitisTarihi: "desc" }],
+        }).catch(() => []),
+        prisma.trafikSigortasi.findMany({
+            where: { aracId: { in: aracIds }, aktifMi: true },
+            select: { aracId: true, bitisTarihi: true },
+            orderBy: [{ aracId: "asc" }, { bitisTarihi: "desc" }],
+        }).catch(() => []),
+        prisma.yakit.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true, litre: true },
+        }).catch(() => []),
+        prisma.bakim.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.muayene.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.ceza.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.kasko.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.trafikSigortasi.groupBy({
+            where: { aracId: { in: aracIds } },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.masraf.groupBy({
+            where: {
+                aracId: { in: aracIds },
+                tur: { notIn: [...ARAC_EXPORT_MASRAF_EXCLUDED_TURLER] },
+            },
+            by: ["aracId"],
+            _sum: { tutar: true },
+        }).catch(() => []),
+        prisma.yakit.findMany({
+            where: { aracId: { in: aracIds } },
+            select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true },
+            orderBy: [{ aracId: "asc" }, { tarih: "asc" }, { km: "asc" }],
+        }).catch(() => []),
+    ]);
+
+    const latestMuayeneByAracId = new Map<string, Date>();
+    for (const row of muayeneler) {
+        if (!row?.aracId || latestMuayeneByAracId.has(row.aracId)) continue;
+        latestMuayeneByAracId.set(row.aracId, row.gecerlilikTarihi);
+    }
+
+    const latestKaskoByAracId = new Map<string, Date>();
+    for (const row of kaskolar) {
+        if (!row?.aracId || latestKaskoByAracId.has(row.aracId)) continue;
+        latestKaskoByAracId.set(row.aracId, row.bitisTarihi);
+    }
+
+    const latestTrafikByAracId = new Map<string, Date>();
+    for (const row of trafikler) {
+        if (!row?.aracId || latestTrafikByAracId.has(row.aracId)) continue;
+        latestTrafikByAracId.set(row.aracId, row.bitisTarihi);
+    }
+
+    const fuelLitreByAracId = buildAggregateLitreMap(yakitGroupBy as Array<{ aracId: string; _sum?: { litre?: number | null } }>);
+    const yakitTutarByAracId = buildAggregateSumMap(yakitGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const bakimTutarByAracId = buildAggregateSumMap(bakimGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const muayeneTutarByAracId = buildAggregateSumMap(muayeneGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const cezaTutarByAracId = buildAggregateSumMap(cezaGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const kaskoTutarByAracId = buildAggregateSumMap(kaskoGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const trafikTutarByAracId = buildAggregateSumMap(trafikGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const digerTutarByAracId = buildAggregateSumMap(masrafGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+
+    const fuelMetricByAracId = buildFuelIntervalMetrics(
+        (yakitKayitlari as Array<{ id: string; aracId: string; tarih: Date; km: number | null; litre: number; tutar: number }>).map((row) => ({
+            id: row.id,
+            aracId: row.aracId,
+            tarih: row.tarih,
+            km: row.km,
+            litre: row.litre,
+            tutar: row.tutar,
+            soforId: null,
+        }))
+    ).byVehicleId;
+
+    const fuelAverageByAracId = new Map<string, { averageLitresPer100Km: number; intervalCount: number }>();
+    for (const [aracId, metric] of fuelMetricByAracId.entries()) {
+        fuelAverageByAracId.set(aracId, {
+            averageLitresPer100Km: metric.averageLitresPer100Km,
+            intervalCount: metric.intervalCount,
+        });
+    }
+
+    const maliyetByAracId = new Map<string, {
+        yakit: number;
+        bakim: number;
+        muayene: number;
+        ceza: number;
+        kasko: number;
+        trafik: number;
+        diger: number;
+        toplam: number;
+    }>();
+    for (const aracId of aracIds) {
+        const yakit = toSafeNumeric(yakitTutarByAracId.get(aracId));
+        const bakim = toSafeNumeric(bakimTutarByAracId.get(aracId));
+        const muayene = toSafeNumeric(muayeneTutarByAracId.get(aracId));
+        const ceza = toSafeNumeric(cezaTutarByAracId.get(aracId));
+        const kasko = toSafeNumeric(kaskoTutarByAracId.get(aracId));
+        const trafik = toSafeNumeric(trafikTutarByAracId.get(aracId));
+        const diger = toSafeNumeric(digerTutarByAracId.get(aracId));
+        maliyetByAracId.set(aracId, {
+            yakit,
+            bakim,
+            muayene,
+            ceza,
+            kasko,
+            trafik,
+            diger,
+            toplam: yakit + bakim + muayene + ceza + kasko + trafik + diger,
+        });
+    }
+
+    return {
+        latestMuayeneByAracId,
+        latestKaskoByAracId,
+        latestTrafikByAracId,
+        fuelLitreByAracId,
+        fuelAverageByAracId,
+        maliyetByAracId,
+    };
+}
+
 export async function exportEntity(entityKey: string, where?: WhereData, options?: ExportEntityOptions) {
     const config = getEntityOrNull(entityKey);
     if (!config) throw new Error("Desteklenmeyen export modeli.");
@@ -2450,6 +2766,23 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
     });
 
     const aktifZimmetByAracId = new Map<string, { adSoyad: string | null; sirketAd: string | null }>();
+    let aracDerivedData = {
+        latestMuayeneByAracId: new Map<string, Date>(),
+        latestKaskoByAracId: new Map<string, Date>(),
+        latestTrafikByAracId: new Map<string, Date>(),
+        fuelLitreByAracId: new Map<string, number>(),
+        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number }>(),
+        maliyetByAracId: new Map<string, {
+            yakit: number;
+            bakim: number;
+            muayene: number;
+            ceza: number;
+            kasko: number;
+            trafik: number;
+            diger: number;
+            toplam: number;
+        }>(),
+    };
     if (config.prismaModel === "arac") {
         const aracIds = rows.map((row) => (row.id as string)).filter(Boolean);
         if (aracIds.length > 0) {
@@ -2475,6 +2808,7 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
                     sirketAd: row.kullanici?.sirket?.ad || null
                 });
             }
+            aracDerivedData = await buildAracExportDerivedData(aracIds);
         }
     }
 
@@ -2502,8 +2836,30 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
             const kullaniciObj = row.kullanici as any;
             const kullaniciSirketAd = kullaniciObj?.sirket?.ad;
             const adSoyad = relationDisplayValue(kullaniciObj);
+            const kategoriFields = resolveAracKategoriFields({
+                kategori: row.kategori,
+                altKategori: (row as Record<string, unknown>).altKategori,
+            });
+            output.kategori = toExportCell(kategoriFields.kategori);
+            output.altKategori = toExportCell(kategoriFields.altKategori);
+            output.marka = toExportCell(row.marka);
+            output.model = toExportCell(row.model);
+            output.yil = toExportCell(row.yil);
             output.kullanici = toExportCell(adSoyad || zimmet?.adSoyad || null);
             output.calistigiKurum = toExportCell(row.calistigiKurum || kullaniciSirketAd || zimmet?.sirketAd || null);
+            output.muayene = toExportCell(formatDeadlineExportValue(aracDerivedData.latestMuayeneByAracId.get(rowId)));
+            output.kasko = toExportCell(formatDeadlineExportValue(aracDerivedData.latestKaskoByAracId.get(rowId)));
+            output.trafikSigortasi = toExportCell(formatDeadlineExportValue(aracDerivedData.latestTrafikByAracId.get(rowId)));
+            const fuelMetric = aracDerivedData.fuelAverageByAracId.get(rowId);
+            const totalFuelLitre = toSafeNumeric(aracDerivedData.fuelLitreByAracId.get(rowId));
+            output.ortalamaYakit100Km = toExportCell(
+                formatFuelAverageExportValue(
+                    fuelMetric?.averageLitresPer100Km ?? null,
+                    fuelMetric?.intervalCount ?? 0,
+                    totalFuelLitre
+                )
+            );
+            output.toplamMaliyet = toExportCell(toSafeNumeric(aracDerivedData.maliyetByAracId.get(rowId)?.toplam));
         }
         if (config.prismaModel === "yakit" || config.prismaModel === "kasko" || config.prismaModel === "trafikSigortasi") {
             const aracObj = row.arac as any;
@@ -2526,13 +2882,78 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
     });
 
     const internalColumns = config.prismaModel === "arac"
-        ? [...columns, "calistigiKurum", "aciklama", "bedel"].filter((v, i, a) => a.indexOf(v) === i)
+        ? [
+            ...columns,
+            "kategori",
+            "altKategori",
+            "marka",
+            "model",
+            "yil",
+            "calistigiKurum",
+            "aciklama",
+            "bedel",
+            "muayene",
+            "kasko",
+            "trafikSigortasi",
+            "ortalamaYakit100Km",
+            "toplamMaliyet",
+        ].filter((v, i, a) => a.indexOf(v) === i)
         : (config.prismaModel === "yakit" || config.prismaModel === "kasko" || config.prismaModel === "trafikSigortasi")
             ? [...columns, "bagliSirket", "calistigiKurum"].filter((v, i, a) => a.indexOf(v) === i)
             : columns;
     
     const profiledColumns = applyExportProfile(profileKey, internalColumns);
-    const finalColumns = selectExportColumnsByRequestedTokens(profileKey, profiledColumns, options?.selectedColumns || []);
+    let finalColumns = selectExportColumnsByRequestedTokens(
+        profileKey,
+        profiledColumns,
+        options?.selectedColumns || [],
+        options?.selectedColumnKeys || []
+    );
+    if (config.prismaModel === "arac" && profiledColumns.includes("altKategori")) {
+        const normalizedRequestedTokens = new Set(
+            [...(options?.selectedColumns || []), ...(options?.selectedColumnKeys || [])]
+                .map((token) => normalizeHeaderToken(token))
+                .filter((token) => token.length > 0)
+        );
+        const hasExplicitColumnSelection = normalizedRequestedTokens.size > 0;
+        const altKategoriRequested = getHeaderCandidates(profileKey, "altKategori")
+            .map((candidate) => normalizeHeaderToken(candidate))
+            .some((normalized) => normalizedRequestedTokens.has(normalized));
+        const markaRequested = getHeaderCandidates(profileKey, "marka")
+            .map((candidate) => normalizeHeaderToken(candidate))
+            .some((normalized) => normalizedRequestedTokens.has(normalized));
+
+        if (hasExplicitColumnSelection) {
+            if (markaRequested) {
+                if (!finalColumns.includes("marka")) {
+                    finalColumns.push("marka");
+                }
+                const markaIndex = finalColumns.indexOf("marka");
+                if (markaIndex >= 0) {
+                    if (!finalColumns.includes("model")) {
+                        finalColumns.splice(markaIndex + 1, 0, "model");
+                    }
+                    const refreshedMarkaIndex = finalColumns.indexOf("marka");
+                    const modelIndex = finalColumns.indexOf("model");
+                    if (!finalColumns.includes("yil")) {
+                        const insertIndex = modelIndex >= 0 ? modelIndex + 1 : refreshedMarkaIndex + 1;
+                        finalColumns.splice(insertIndex, 0, "yil");
+                    }
+                }
+            }
+            if (altKategoriRequested && !finalColumns.includes("altKategori")) {
+                const ustKategoriIndex = finalColumns.indexOf("kategori");
+                if (ustKategoriIndex >= 0) {
+                    finalColumns.splice(ustKategoriIndex + 1, 0, "altKategori");
+                } else {
+                    finalColumns.push("altKategori");
+                }
+            }
+            if (!altKategoriRequested && finalColumns.includes("altKategori")) {
+                finalColumns = finalColumns.filter((columnKey) => columnKey !== "altKategori");
+            }
+        }
+    }
     const exportRows = normalizedRows.map((row) => {
         const output: Record<string, unknown> = {};
         for (const key of finalColumns) {
@@ -2764,6 +3185,12 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                 parsedRow.saseNo = normalizeAracSaseNo(parsedRow.saseNo);
                 parsedRow.motorNo = normalizeAracMotorNo(parsedRow.motorNo);
                 sanitizeAracImportRow(parsedRow);
+                const kategoriFields = resolveAracKategoriFields({
+                    kategori: parsedRow.kategori,
+                    altKategori: parsedRow.altKategori,
+                });
+                parsedRow.kategori = kategoriFields.kategori;
+                parsedRow.altKategori = kategoriFields.altKategori;
             }
 
             if (config.prismaModel === "kullanici") {

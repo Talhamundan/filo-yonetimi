@@ -121,6 +121,7 @@ export async function GET(
         const selectedDisFirmaId = parseSelectedDisFirmaId(req.nextUrl.searchParams.get("disFirmaId"));
         const selectedExternalMode = parseExternalVendorMode(req.nextUrl.searchParams.get("externalMode"));
         const selectedColumns = parseSelectedColumns(req.nextUrl.searchParams.getAll("column"));
+        const selectedColumnKeys = parseSelectedColumns(req.nextUrl.searchParams.getAll("columnKey"));
         const scopedFilter = config.prismaModel === "disFirma"
             ? {}
             : await getModelFilter(config.filterModel, selectedSirketId);
@@ -143,7 +144,10 @@ export async function GET(
                 ? withAyDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil, selectedAy)
                 : baseFilter;
 
-        const { data, sheetName, headers } = await exportEntity(entity, where as any, { selectedColumns });
+        const { data, sheetName, headers } = await exportEntity(entity, where as any, {
+            selectedColumns,
+            selectedColumnKeys,
+        });
 
         const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
         applyExcelWorksheetFormats(worksheet, { entityKey: entity, headers });

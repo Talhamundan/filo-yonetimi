@@ -15,8 +15,8 @@ export default function CategoryScopeSwitcher() {
 
     const labelMap: Record<string, string> = {
         "__ALL__": "Tüm Araçlar",
-        "BINEK": "Binek Araç",
-        "SANTIYE": "İş Makinesi"
+        "BINEK": "Binek",
+        "SANTIYE": "Şantiye"
     };
 
     const handleChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
@@ -41,8 +41,8 @@ export default function CategoryScopeSwitcher() {
     return (
         <div className="relative w-[110px] md:w-[130px]">
             <select
-                aria-label="Araç Kategori Filtresi"
-                title={`Aktif Kategori: ${labelMap[activeValue]}`}
+                aria-label="Üst Kategori Filtresi"
+                title={`Aktif Üst Kategori: ${labelMap[activeValue]}`}
                 value={activeValue}
                 onChange={handleChange}
                 disabled={pending}

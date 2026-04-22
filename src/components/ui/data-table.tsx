@@ -412,8 +412,11 @@ export function DataTable<TData, TValue>({
         () =>
             visibleLeafColumns
                 .filter((column) => !isNonDataColumnId(column.id))
-                .map((column) => getColumnDisplayName(column).trim())
-                .filter((value) => value.length > 0),
+                .map((column) => ({
+                    label: getColumnDisplayName(column).trim(),
+                    key: column.id.trim(),
+                }))
+                .filter((column) => column.label.length > 0 || column.key.length > 0),
         [visibleLeafColumns]
     )
     const visibleColumnCount = visibleLeafColumns.length
@@ -779,7 +782,10 @@ export function DataTable<TData, TValue>({
             if (selectedAy) params.set("ay", selectedAy)
             if (selectedDisFirmaId) params.set("disFirmaId", selectedDisFirmaId)
             if (selectedExternalMode) params.set("externalMode", selectedExternalMode)
-            selectedExportColumns.forEach((column) => params.append("column", column))
+            selectedExportColumns.forEach((column) => {
+                if (column.label) params.append("column", column.label)
+                if (column.key) params.append("columnKey", column.key)
+            })
 
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
             const response = await fetch(endpoint, { method: "GET" })

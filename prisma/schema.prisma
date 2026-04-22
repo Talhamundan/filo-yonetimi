@@ -48,6 +48,7 @@ model Arac {
   olusturmaTarihi      DateTime           @default(now())
   guncellemeTarihi     DateTime           @default(now()) @updatedAt
   kategori             AracKategori       @default(BINEK)
+  altKategori          AracAltKategori    @default(OTOMOBIL)
   saseNo               String?
   deletedAt            DateTime?
   deletedBy            String?
@@ -443,6 +444,17 @@ enum AracDurumu {
 enum AracKategori {
   BINEK
   SANTIYE
+}
+
+enum AracAltKategori {
+  OTOMOBIL
+  MINIBUS
+  KAMYONET
+  KAMYON
+  CEKICI
+  ROMORK
+  TRAKTOR
+  IS_MAKINESI
 }
 
 enum DisFirmaTuru {

@@ -38,6 +38,7 @@ import { useDashboardScopedHref } from "@/lib/use-dashboard-scoped-href";
 import { getPersonelOptionLabel, getPersonelOptionSearchText } from "@/lib/personel-display";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 import { formatCurrency, formatKm, formatLitres, getFuelKmDelta, getZimmetKmDelta, sumBy } from "@/lib/detail-table-totals";
+import { ARAC_UST_KATEGORI_OPTIONS, getAracAltKategoriOptions, resolveAracKategoriFields } from "@/lib/arac-kategori";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type AracDetaySaaS = any;
@@ -264,6 +265,10 @@ export default function AracDetailClient({
 
     const [editAracOpen, setEditAracOpen] = React.useState(false);
     const [updatingArac, setUpdatingArac] = React.useState(false);
+    const initialAracKategoriFields = React.useMemo(
+        () => resolveAracKategoriFields({ kategori: arac.kategori, altKategori: arac.altKategori }),
+        [arac.altKategori, arac.kategori]
+    );
     const [aracEditForm, setAracEditForm] = React.useState({
         plaka: forceUppercase(arac.plaka || ""),
         marka: forceUppercase(arac.marka || ""),
@@ -273,7 +278,8 @@ export default function AracDetailClient({
         bulunduguIl: arac.bulunduguIl || "ISTANBUL",
         guncelKm: Number(arac.guncelKm || 0),
         bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
-        kategori: arac.kategori || "BINEK",
+        kategori: initialAracKategoriFields.kategori,
+        altKategori: initialAracKategoriFields.altKategori,
         calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
         sirketId: arac.sirket?.id || "",
         disFirmaId: arac.disFirma?.id || arac.disFirmaId || "",
@@ -283,6 +289,18 @@ export default function AracDetailClient({
         motorNo: arac.motorNo || "",
         kullaniciId: arac.kullanici?.id || "",
     });
+    const resolvedAracEditKategoriFields = React.useMemo(
+        () =>
+            resolveAracKategoriFields({
+                kategori: aracEditForm.kategori,
+                altKategori: aracEditForm.altKategori,
+            }),
+        [aracEditForm.altKategori, aracEditForm.kategori]
+    );
+    const aracEditAltKategoriOptions = React.useMemo(
+        () => getAracAltKategoriOptions(resolvedAracEditKategoriFields.kategori),
+        [resolvedAracEditKategoriFields.kategori]
+    );
     const sortedKullanicilar = React.useMemo(
         () => sortByTextValue(kullanicilar, (k) => k.adSoyad),
         [kullanicilar]
@@ -407,7 +425,8 @@ export default function AracDetailClient({
             bulunduguIl: arac.bulunduguIl || "ISTANBUL",
             guncelKm: Number(arac.guncelKm || 0),
             bedel: arac.bedel === null || arac.bedel === undefined ? "" : String(arac.bedel),
-            kategori: arac.kategori || "BINEK",
+            kategori: initialAracKategoriFields.kategori,
+            altKategori: initialAracKategoriFields.altKategori,
             calistigiKurum: arac.calistigiKurum || arac.kullanici?.sirket?.ad || "",
             sirketId: arac.sirket?.id || "",
             disFirmaId: arac.disFirma?.id || arac.disFirmaId || "",
@@ -417,7 +436,7 @@ export default function AracDetailClient({
             motorNo: arac.motorNo || "",
             kullaniciId: arac.kullanici?.id || "",
         });
-    }, [arac]);
+    }, [arac, initialAracKategoriFields.altKategori, initialAracKategoriFields.kategori]);
 
     const handleUpdateAracBilgileri = async () => {
         if (!aracEditForm.plaka.trim() || !aracEditForm.marka.trim() || !aracEditForm.model.trim()) {
@@ -446,7 +465,8 @@ export default function AracDetailClient({
             bulunduguIl: aracEditForm.bulunduguIl,
             guncelKm,
             bedel: aracEditForm.bedel,
-            kategori: aracEditForm.kategori,
+            kategori: resolvedAracEditKategoriFields.kategori,
+            altKategori: resolvedAracEditKategoriFields.altKategori,
             calistigiKurum: aracEditForm.calistigiKurum || null,
             sirketId: aracEditForm.sirketId || null,
             ruhsatSeriNo: aracEditForm.ruhsatSeriNo || null,
@@ -1761,14 +1781,47 @@ export default function AracDetailClient({
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Araç Kategorisi</label>
+                                    <label className="text-sm font-medium">Üst Kategori</label>
                                     <select
-                                        value={aracEditForm.kategori}
-                                        onChange={e => setAracEditForm({ ...aracEditForm, kategori: e.target.value })}
+                                        value={resolvedAracEditKategoriFields.kategori}
+                                        onChange={e => {
+                                            const next = resolveAracKategoriFields({
+                                                kategori: e.target.value,
+                                                altKategori: resolvedAracEditKategoriFields.altKategori,
+                                            });
+                                            setAracEditForm({
+                                                ...aracEditForm,
+                                                kategori: next.kategori,
+                                                altKategori: next.altKategori,
+                                            });
+                                        }}
                                         className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                                     >
-                                        <option value="BINEK">Binek Araç</option>
-                                        <option value="SANTIYE">İş Makinesi</option>
+                                        {ARAC_UST_KATEGORI_OPTIONS.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Alt Kategori</label>
+                                    <select
+                                        value={resolvedAracEditKategoriFields.altKategori}
+                                        onChange={e => {
+                                            const next = resolveAracKategoriFields({
+                                                kategori: resolvedAracEditKategoriFields.kategori,
+                                                altKategori: e.target.value,
+                                            });
+                                            setAracEditForm({
+                                                ...aracEditForm,
+                                                kategori: next.kategori,
+                                                altKategori: next.altKategori,
+                                            });
+                                        }}
+                                        className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                                    >
+                                        {aracEditAltKategoriOptions.map((option) => (
+                                            <option key={option.value} value={option.value}>{option.label}</option>
+                                        ))}
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
