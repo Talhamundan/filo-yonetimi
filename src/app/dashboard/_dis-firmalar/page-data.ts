@@ -14,6 +14,10 @@ function toNumber(value: unknown) {
     return typeof value === "number" && Number.isFinite(value) ? value : 0;
 }
 
+function roundOneDecimal(value: number) {
+    return Math.round((value || 0) * 10) / 10;
+}
+
 function uniqueSirketler(rows: Array<{ sirket?: { id: string; ad: string } | null }>) {
     const map = new Map<string, { id: string; ad: string }>();
     for (const row of rows) {
@@ -100,44 +104,32 @@ export async function getDisFirmaPageData({ tur, searchParams }: PageConfig) {
         if (vehicle.id && vehicle.disFirmaId) vehicleToVendorId.set(vehicle.id, vehicle.disFirmaId);
     }
 
-    const [yakitRows, servisRows] = vehicleIds.length
-        ? await Promise.all([
-            (prisma as any).yakit.groupBy({
-                by: ["aracId"],
-                where: { aracId: { in: vehicleIds }, tarih: { gte: start, lte: end } },
-                _sum: { tutar: true },
-            }).catch(() => []),
-            (prisma as any).bakim.groupBy({
-                by: ["aracId"],
-                where: { aracId: { in: vehicleIds }, bakimTarihi: { gte: start, lte: end }, deletedAt: null },
-                _sum: { tutar: true },
-            }).catch(() => []),
-        ])
-        : [[], []];
+    const yakitRows = vehicleIds.length
+        ? await (prisma as any).yakit.groupBy({
+            by: ["aracId"],
+            where: { aracId: { in: vehicleIds }, tarih: { gte: start, lte: end } },
+            _sum: { litre: true },
+            _count: { _all: true },
+        }).catch(() => [])
+        : [];
 
-    const costByVendor = new Map<string, { yakit: number; servis: number }>();
-    const addCost = (aracId: string | null | undefined, key: "yakit" | "servis", amount: number) => {
-        if (!aracId || amount <= 0) return;
+    const fuelByVendor = new Map<string, { litre: number; kayitSayisi: number }>();
+    const addFuel = (aracId: string | null | undefined, litre: number, kayitSayisi: number) => {
+        if (!aracId) return;
         const vendorId = vehicleToVendorId.get(aracId);
         if (!vendorId) return;
-        const current = costByVendor.get(vendorId) || { yakit: 0, servis: 0 };
-        current[key] += amount;
-        costByVendor.set(vendorId, current);
+        const current = fuelByVendor.get(vendorId) || { litre: 0, kayitSayisi: 0 };
+        current.litre += Math.max(0, litre);
+        current.kayitSayisi += kayitSayisi;
+        fuelByVendor.set(vendorId, current);
     };
 
-    for (const row of yakitRows as Array<{ aracId: string; _sum: { tutar: number | null } }>) {
-        addCost(row.aracId, "yakit", toNumber(row._sum?.tutar));
-    }
-    for (const row of servisRows as Array<{ aracId: string; _sum: { tutar: number | null } }>) {
-        addCost(row.aracId, "servis", toNumber(row._sum?.tutar));
+    for (const row of yakitRows as Array<{ aracId: string; _sum: { litre: number | null }; _count: { _all: number } }>) {
+        addFuel(row.aracId, toNumber(row._sum?.litre), toNumber(row._count?._all));
     }
 
     const rows: DisFirmaRow[] = (disFirmalar as any[]).map((firma) => {
-        const costs = costByVendor.get(firma.id) || { yakit: 0, servis: 0 };
-        const maliyetKalemleri = [
-            { key: "yakit", label: "Yakıt", tutar: Math.round(costs.yakit) },
-            { key: "servis", label: "Servis", tutar: Math.round(costs.servis) },
-        ].filter((item) => item.tutar > 0);
+        const fuel = fuelByVendor.get(firma.id) || { litre: 0, kayitSayisi: 0 };
 
         return {
             id: firma.id,
@@ -150,8 +142,8 @@ export async function getDisFirmaPageData({ tur, searchParams }: PageConfig) {
             calistigiKurum: firma.calistigiKurum || "",
             aracSayisi: firma.araclar?.length || 0,
             personelSayisi: firma.kullanicilar?.length || 0,
-            toplamMaliyet: Math.round(costs.yakit + costs.servis),
-            maliyetKalemleri,
+            toplamYakitLitre: roundOneDecimal(fuel.litre),
+            yakitKayitSayisi: fuel.kayitSayisi,
             calistigiSirketler: uniqueSirketler([...(firma.araclar || []), ...(firma.kullanicilar || [])]),
         };
     });

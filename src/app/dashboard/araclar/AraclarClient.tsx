@@ -427,8 +427,8 @@ export default function AraclarClient({
     const createButtonLabel = isExternalMode ? `Yeni ${vendorLabel} Araç Ekle` : "Yeni Araç Ekle";
 
     const handleCreate = async () => {
-        if (!formData.plaka || !formData.marka) {
-            return toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
+        if (!formData.marka) {
+            return toast.warning("Eksik Bilgi", { description: "Lütfen Marka alanını doldurun." });
         }
         const yil = Number(formData.yil);
         const guncelKm = Number(formData.guncelKm);
@@ -459,8 +459,8 @@ export default function AraclarClient({
             toast.warning("Güncelleme başlatılamadı", { description: "Düzenlenecek araç bilgisi bulunamadı." });
             return;
         }
-        if (!formData.plaka || !formData.marka) {
-            toast.warning("Eksik Bilgi", { description: "Lütfen Plaka ve Marka alanlarını doldurun." });
+        if (!formData.marka) {
+            toast.warning("Eksik Bilgi", { description: "Lütfen Marka alanını doldurun." });
             return;
         }
         const yil = Number(formData.yil);

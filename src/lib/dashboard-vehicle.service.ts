@@ -135,6 +135,13 @@ export async function getFleetStatusData(scope: GenericWhere, vehicleScopeOverri
                     OR: [
                         { disFirma: { tur: "KIRALIK" } },
                         { sirket: { ad: { equals: KIRALIK_SIRKET_ADI, mode: "insensitive" } } },
+                        {
+                            AND: [
+                                { disFirmaId: { not: null } },
+                                { marka: { equals: "KIRALIK", mode: "insensitive" } },
+                                { model: { equals: "ARAC", mode: "insensitive" } },
+                            ],
+                        },
                     ],
                 },
             },

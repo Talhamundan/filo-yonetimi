@@ -1,7 +1,14 @@
 import DashboardClient from "../../components/dashboard/DashboardClient";
 import { getAracUsageFilter, getSirketFilter, getCurrentUserRole, getCurrentUserId } from "@/lib/auth-utils";
 import { getDashboardData } from "@/lib/dashboard-data";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, getSelectedKategori, type DashboardSearchParams } from "@/lib/company-scope";
+import {
+    getSelectedAy,
+    getSelectedSirketId,
+    getSelectedYil,
+    getSelectedKategori,
+    getAracUstKategoriWhere,
+    type DashboardSearchParams,
+} from "@/lib/company-scope";
 import { prisma } from "@/lib/prisma";
 
 export default async function DashboardOverview(props: { searchParams?: Promise<DashboardSearchParams> }) {
@@ -25,7 +32,7 @@ export default async function DashboardOverview(props: { searchParams?: Promise<
     const rawAracFilter = (baseAracFilter as Record<string, unknown>) || {};
     const initialAracFilterArgs = Object.keys(rawAracFilter).length > 0 ? [rawAracFilter] : [];
     const finalAracFilterArgs = selectedKategori 
-        ? [...initialAracFilterArgs, { kategori: selectedKategori }]
+        ? [...initialAracFilterArgs, getAracUstKategoriWhere(selectedKategori)]
         : initialAracFilterArgs;
         
     const aracFilter = finalAracFilterArgs.length > 1 

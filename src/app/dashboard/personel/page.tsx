@@ -5,7 +5,7 @@ import PersonelClient from "./Client";
 import { getCurrentUserRole, getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedDisFirmaId, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters } from "@/lib/list-filters";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { parseExternalVendorModeFromSearchParams } from "@/lib/external-vendor-mode";
 
@@ -237,7 +237,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
                 litre: true,
                 km: true,
                 soforId: true,
-                arac: { select: { kullaniciId: true, kategori: true } },
+                arac: { select: { kullaniciId: true, kategori: true, altKategori: true } },
             },
         }).catch(async () => {
             const fallbackRows = await (prisma as any).yakit.findMany({
@@ -249,7 +249,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
                     tutar: true,
                     litre: true,
                     km: true,
-                    arac: { select: { kullaniciId: true, kategori: true } },
+                    arac: { select: { kullaniciId: true, kategori: true, altKategori: true } },
                 },
             }).catch(() => []);
             return (fallbackRows || []).map((row: any) => ({ ...row, soforId: null }));
@@ -343,7 +343,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         litre: number;
         km: number | null;
         soforId: string | null;
-        arac?: { kullaniciId?: string | null; kategori?: string | null } | null;
+        arac?: { kullaniciId?: string | null; kategori?: string | null; altKategori?: string | null } | null;
     }>);
 
     const fuelMetricsByDriverId = buildFuelIntervalMetrics(
@@ -359,20 +359,31 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
                 findDriverAtDate(zimmetByAracId, yakit.aracId, yakit.tarih) ||
                 yakit.arac?.kullaniciId ||
                 null,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(yakit.arac?.altKategori),
         }))
     ).byDriverId;
-    const driverAverageValues = [...fuelMetricsByDriverId.values()]
-        .filter((metric) => metric.intervalCount > 0 && Number(metric.averageLitresPer100Km || 0) > 0)
-        .map((metric) => Number(metric.averageLitresPer100Km || 0));
-    const driverFleetAverage100Km =
-        driverAverageValues.length > 0
-            ? driverAverageValues.reduce((sum, value) => sum + value, 0) / driverAverageValues.length
-            : 0;
+    const driverAverageValuesByUnit = new Map<string, number[]>();
+    for (const metric of fuelMetricsByDriverId.values()) {
+        if (metric.intervalCount <= 0) continue;
+        const average = Number(metric.averageLitresPer100Km || 0);
+        if (!Number.isFinite(average) || average <= 0) continue;
+        const unit = metric.consumptionUnit || "LITRE_PER_100_KM";
+        const list = driverAverageValuesByUnit.get(unit) || [];
+        list.push(average);
+        driverAverageValuesByUnit.set(unit, list);
+    }
+    const driverFleetAverageByUnit = new Map<string, number>();
+    for (const [unit, values] of driverAverageValuesByUnit.entries()) {
+        const average = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+        driverFleetAverageByUnit.set(unit, average);
+    }
 
     const formattedData = personeller.map((p: any) => {
         const zimmetliArac = p.arac || aktifAracByKullaniciId.get(p.id) || null;
         const maliyet = costByPersonelId.get(p.id) || { ceza: 0, yakit: 0, toplam: 0 };
         const yakitOrtalama = fuelMetricsByDriverId.get(p.id);
+        const yakitTuketimBirimi = yakitOrtalama?.consumptionUnit || "LITRE_PER_100_KM";
+        const driverFleetAverage100Km = Number(driverFleetAverageByUnit.get(yakitTuketimBirimi) || 0);
         const ortalamaYakit100Km = yakitOrtalama?.averageLitresPer100Km ?? null;
         const ortalamaYakitIntervalSayisi = yakitOrtalama?.intervalCount ?? 0;
         const ortalamaUstuYakit =
@@ -405,6 +416,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
             ortalamaYakit100Km,
             ortalamaYakitKmBasiMaliyet: yakitOrtalama?.averageCostPerKm ?? null,
             ortalamaYakitIntervalSayisi,
+            yakitTuketimBirimi,
             yakitKarsilastirmaReferans100Km: driverFleetAverage100Km > 0 ? driverFleetAverage100Km : null,
             ortalamaUstuYakit,
         };

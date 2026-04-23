@@ -6,7 +6,7 @@ import { EXCEL_ENTITY_CONFIG, isExcelEntityKey, ExcelEntityKey } from "@/lib/exc
 import type { ExternalVendorMode } from "@/lib/external-vendor-mode";
 import { KIRALIK_SIRKET_ADI, isKiralikSirketName } from "@/lib/ruhsat-sahibi";
 import { resolveAracKategoriFields } from "@/lib/arac-kategori";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori, type FuelConsumptionUnit } from "@/lib/fuel-metrics";
 import { getDeadlineBadgeConfig, getDaysLeft } from "@/lib/deadline-status";
 
 // --- Re-exports ---
@@ -2565,7 +2565,12 @@ function formatDeadlineExportValue(targetDate: unknown) {
     return `${badge.label} (${isoDate})`;
 }
 
-function formatFuelAverageExportValue(litrePer100Km: number | null | undefined, intervalCount: number, totalLitre: number) {
+function formatFuelAverageExportValue(
+    litrePer100Km: number | null | undefined,
+    intervalCount: number,
+    totalLitre: number,
+    consumptionUnit: FuelConsumptionUnit = "LITRE_PER_100_KM"
+) {
     if (litrePer100Km == null || !Number.isFinite(litrePer100Km) || intervalCount <= 0) {
         return totalLitre > 0 ? "Yetersiz veri" : null;
     }
@@ -2573,7 +2578,8 @@ function formatFuelAverageExportValue(litrePer100Km: number | null | undefined, 
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     });
-    return `${formatted} L/100 km (${intervalCount} dolum aralığı)`;
+    const unitLabel = consumptionUnit === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km";
+    return `${formatted} ${unitLabel} (${intervalCount} dolum aralığı)`;
 }
 
 async function buildAracExportDerivedData(aracIds: string[]) {
@@ -2582,7 +2588,7 @@ async function buildAracExportDerivedData(aracIds: string[]) {
         latestKaskoByAracId: new Map<string, Date>(),
         latestTrafikByAracId: new Map<string, Date>(),
         fuelLitreByAracId: new Map<string, number>(),
-        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number }>(),
+        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number; consumptionUnit: FuelConsumptionUnit }>(),
         maliyetByAracId: new Map<string, {
             yakit: number;
             bakim: number;
@@ -2598,6 +2604,7 @@ async function buildAracExportDerivedData(aracIds: string[]) {
     if (aracIds.length === 0) return empty;
 
     const [
+        aracKategoriRows,
         muayeneler,
         kaskolar,
         trafikler,
@@ -2610,6 +2617,10 @@ async function buildAracExportDerivedData(aracIds: string[]) {
         masrafGroupBy,
         yakitKayitlari,
     ] = await Promise.all([
+        prisma.arac.findMany({
+            where: { id: { in: aracIds } },
+            select: { id: true, altKategori: true },
+        }).catch(() => []),
         prisma.muayene.findMany({
             where: { aracId: { in: aracIds } },
             select: { aracId: true, gecerlilikTarihi: true, muayeneTarihi: true },
@@ -2696,6 +2707,11 @@ async function buildAracExportDerivedData(aracIds: string[]) {
     const kaskoTutarByAracId = buildAggregateSumMap(kaskoGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
     const trafikTutarByAracId = buildAggregateSumMap(trafikGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
     const digerTutarByAracId = buildAggregateSumMap(masrafGroupBy as Array<{ aracId: string; _sum?: { tutar?: number | null } }>);
+    const fuelConsumptionUnitByAracId = new Map<string, FuelConsumptionUnit>();
+    for (const row of aracKategoriRows as Array<{ id: string; altKategori?: string | null }>) {
+        if (!row?.id) continue;
+        fuelConsumptionUnitByAracId.set(row.id, getFuelConsumptionUnitByAltKategori(row.altKategori));
+    }
 
     const fuelMetricByAracId = buildFuelIntervalMetrics(
         (yakitKayitlari as Array<{ id: string; aracId: string; tarih: Date; km: number | null; litre: number; tutar: number }>).map((row) => ({
@@ -2706,14 +2722,19 @@ async function buildAracExportDerivedData(aracIds: string[]) {
             litre: row.litre,
             tutar: row.tutar,
             soforId: null,
+            consumptionUnit: fuelConsumptionUnitByAracId.get(row.aracId) || "LITRE_PER_100_KM",
         }))
     ).byVehicleId;
 
-    const fuelAverageByAracId = new Map<string, { averageLitresPer100Km: number; intervalCount: number }>();
+    const fuelAverageByAracId = new Map<
+        string,
+        { averageLitresPer100Km: number; intervalCount: number; consumptionUnit: FuelConsumptionUnit }
+    >();
     for (const [aracId, metric] of fuelMetricByAracId.entries()) {
         fuelAverageByAracId.set(aracId, {
             averageLitresPer100Km: metric.averageLitresPer100Km,
             intervalCount: metric.intervalCount,
+            consumptionUnit: metric.consumptionUnit,
         });
     }
 
@@ -2796,7 +2817,7 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
         latestKaskoByAracId: new Map<string, Date>(),
         latestTrafikByAracId: new Map<string, Date>(),
         fuelLitreByAracId: new Map<string, number>(),
-        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number }>(),
+        fuelAverageByAracId: new Map<string, { averageLitresPer100Km: number; intervalCount: number; consumptionUnit: FuelConsumptionUnit }>(),
         maliyetByAracId: new Map<string, {
             yakit: number;
             bakim: number;
@@ -2881,7 +2902,8 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
                 formatFuelAverageExportValue(
                     fuelMetric?.averageLitresPer100Km ?? null,
                     fuelMetric?.intervalCount ?? 0,
-                    totalFuelLitre
+                    totalFuelLitre,
+                    fuelMetric?.consumptionUnit || "LITRE_PER_100_KM"
                 )
             );
             output.toplamMaliyet = toExportCell(toSafeNumeric(aracDerivedData.maliyetByAracId.get(rowId)?.toplam));

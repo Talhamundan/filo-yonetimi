@@ -74,6 +74,21 @@ const parseNumberInput = (value: string, fallback: number): number => {
 };
 const safeNumberInputValue = (value: unknown, fallback = 0): number =>
     typeof value === "number" && Number.isFinite(value) ? value : fallback;
+const getLatestFuelKmValue = (rows: Array<{ km?: number | null; tarih?: Date | string | null }> | null | undefined) => {
+    if (!Array.isArray(rows) || rows.length === 0) return null;
+    let latestKm: number | null = null;
+    let latestTime = Number.NEGATIVE_INFINITY;
+    for (const row of rows) {
+        const km = Number(row?.km);
+        if (!Number.isFinite(km) || km <= 0) continue;
+        const timestamp = row?.tarih ? new Date(row.tarih).getTime() : Number.NEGATIVE_INFINITY;
+        if (timestamp >= latestTime) {
+            latestTime = timestamp;
+            latestKm = Math.trunc(km);
+        }
+    }
+    return latestKm;
+};
 
 const QUICK_ADD_CONFIG: Record<string, { button: string; title: string; description: string }> = {
     soforGecmisi: { button: "Zimmet Ekle", title: "Yeni Zimmet Kaydı", description: "Bu araca yeni şoför ataması yapın." },
@@ -115,6 +130,8 @@ export default function AracDetailClient({
     const [activeTab, setActiveTab] = React.useState("ozet");
     const [quickAddOpen, setQuickAddOpen] = React.useState(false);
     const [submittingQuickAdd, setSubmittingQuickAdd] = React.useState(false);
+    const latestFuelKm = getLatestFuelKmValue(arac.yakitlar);
+    const defaultSoforIadeKm = latestFuelKm !== null ? String(latestFuelKm) : String(arac.guncelKm || 0);
 
     const [zimmetForm, setZimmetForm] = React.useState({
         kullaniciId: "",
@@ -187,7 +204,7 @@ export default function AracDetailClient({
     const [soforIadeOpen, setSoforIadeOpen] = React.useState(false);
     const [soforIadeForm, setSoforIadeForm] = React.useState({
         bitis: nowDateTimeLocal(),
-        bitisKm: String(arac.guncelKm || 0),
+        bitisKm: defaultSoforIadeKm,
         notlar: "",
     });
     const [editArizaRow, setEditArizaRow] = React.useState<AracDetaySaaS | null>(null);
@@ -321,6 +338,14 @@ export default function AracDetailClient({
         if (!Number.isFinite(raw) || raw <= 0) return null;
         return raw;
     }, [arac.ortalamaYakit100Km]);
+    const aracYakitTuketimBirimiEtiketi = React.useMemo(
+        () => (arac.yakitTuketimBirimi === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km"),
+        [arac.yakitTuketimBirimi]
+    );
+    const aracMesafeBirimiEtiketi = React.useMemo(
+        () => (initialAracKategoriFields.altKategori === "IS_MAKINESI" ? "saat" : "km"),
+        [initialAracKategoriFields.altKategori]
+    );
     const aracYakitAralikSayisi = Number(arac.ortalamaYakitIntervalSayisi || 0);
     const ruhsatSahibiFirmaAdi = arac.sirket?.ad || "Bağımsız";
     const kullaniciFirmaAdi = arac.kullanici?.sirket?.ad || arac.calistigiKurum || "-";
@@ -430,6 +455,13 @@ export default function AracDetailClient({
         const gecmis = Array.isArray(arac.kullaniciGecmisi) ? arac.kullaniciGecmisi : [];
         return gecmis.find((z: any) => !z.bitis) || null;
     }, [arac.kullaniciGecmisi]);
+    const resetSoforIadeForm = React.useCallback(() => {
+        setSoforIadeForm({
+            bitis: nowDateTimeLocal(),
+            bitisKm: defaultSoforIadeKm,
+            notlar: activeZimmet?.notlar || "",
+        });
+    }, [activeZimmet?.notlar, defaultSoforIadeKm]);
 
     const resetAracEditForm = React.useCallback(() => {
         setAracEditForm({
@@ -455,8 +487,8 @@ export default function AracDetailClient({
     }, [arac, initialAracKategoriFields.altKategori, initialAracKategoriFields.kategori]);
 
     const handleUpdateAracBilgileri = async () => {
-        if (!aracEditForm.plaka.trim() || !aracEditForm.marka.trim() || !aracEditForm.model.trim()) {
-            toast.warning("Eksik Bilgi", { description: "Plaka, marka ve model alanları zorunludur." });
+        if (!aracEditForm.marka.trim() || !aracEditForm.model.trim()) {
+            toast.warning("Eksik Bilgi", { description: "Marka ve model alanları zorunludur." });
             return;
         }
 
@@ -554,11 +586,7 @@ export default function AracDetailClient({
         if (res.success) {
             toast.success("Şoför başarıyla ayrıldı.");
             setSoforIadeOpen(false);
-            setSoforIadeForm({
-                bitis: nowDateTimeLocal(),
-                bitisKm: String(arac.guncelKm || 0),
-                notlar: "",
-            });
+            resetSoforIadeForm();
             router.refresh();
         } else {
             toast.error(res.error || "İşlem başarısız.");
@@ -1930,12 +1958,12 @@ export default function AracDetailClient({
                             <div className="flex flex-wrap items-center gap-4 mt-4 text-sm font-medium text-slate-500">
                                 <div className="flex items-center gap-1.5"><MapPin size={16} /> {arac.bulunduguIl}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
-                                <div className="flex items-center gap-1.5"><Gauge size={16} /> {arac.guncelKm.toLocaleString('tr-TR')} km</div>
+                                <div className="flex items-center gap-1.5"><Gauge size={16} /> {arac.guncelKm.toLocaleString('tr-TR')} {aracMesafeBirimiEtiketi}</div>
                                 <div className="w-1 h-1 rounded-full bg-slate-300" />
                                 <div className="flex items-center gap-1.5">
                                     <Fuel size={16} />
                                     {aracYakitOrtalamasi !== null
-                                        ? `${aracYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km`
+                                        ? `${aracYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${aracYakitTuketimBirimiEtiketi}`
                                         : "Yakıt ortalaması yok"}
                                     {aracYakitOrtalamasi !== null && aracYakitAralikSayisi > 0 ? (
                                         <span className="text-[11px] text-slate-400">({aracYakitAralikSayisi} aralık)</span>
@@ -1959,7 +1987,12 @@ export default function AracDetailClient({
                             {arac.kullanici && (
                                 <Dialog
                                     open={soforIadeOpen}
-                                    onOpenChange={setSoforIadeOpen}
+                                    onOpenChange={(open) => {
+                                        setSoforIadeOpen(open);
+                                        if (open) {
+                                            resetSoforIadeForm();
+                                        }
+                                    }}
                                 >
                                     <DialogTrigger asChild>
                                         <button className="flex-1 rounded-md border border-slate-200 py-2.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors">Teslim Al (Ayrıl)</button>
@@ -2848,7 +2881,7 @@ export default function AracDetailClient({
                                             <TableHead className="font-semibold text-slate-500">Tarih</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Personel</TableHead>
                                             <TableHead className="font-semibold text-slate-500">İstasyon</TableHead>
-                                            <TableHead className="font-semibold text-slate-500">Araç KM</TableHead>
+                                            <TableHead className="font-semibold text-slate-500">Araç KM/Saat</TableHead>
                                             <TableHead className="font-semibold text-slate-500">Litre (L)</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">Tutar (₺)</TableHead>
                                             <TableHead className="font-semibold text-slate-500 text-right">İşlemler</TableHead>
@@ -2881,7 +2914,7 @@ export default function AracDetailClient({
                                                     </TableCell>
                                                     <TableCell className="text-slate-900">{y.istasyon || '-'}</TableCell>
                                                     <TableCell className="text-slate-700">
-                                                        {y.km != null ? `${Number(y.km).toLocaleString("tr-TR")} km` : "-"}
+                                                        {y.km != null ? `${Number(y.km).toLocaleString("tr-TR")} ${aracMesafeBirimiEtiketi}` : "-"}
                                                     </TableCell>
                                                     <TableCell className="text-slate-700">{y.litre} L</TableCell>
                                                     <TableCell className="font-bold text-slate-900 text-right">₺{y.tutar.toLocaleString()}</TableCell>
@@ -2901,7 +2934,9 @@ export default function AracDetailClient({
                                         <TableFooter className="bg-slate-50/90">
                                             <TableRow>
                                                 <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
-                                                <TableCell className="font-bold text-slate-900">{formatKm(aracTabloToplamlari.yakitKm)}</TableCell>
+                                                <TableCell className="font-bold text-slate-900">
+                                                    {`${aracTabloToplamlari.yakitKm.toLocaleString("tr-TR")} ${aracMesafeBirimiEtiketi}`}
+                                                </TableCell>
                                                 <TableCell className="font-bold text-slate-900">{formatLitres(aracTabloToplamlari.yakitLitre)}</TableCell>
                                                 <TableCell className="text-right font-bold text-slate-900">{formatCurrency(aracTabloToplamlari.yakitTutar)}</TableCell>
                                                 <TableCell />

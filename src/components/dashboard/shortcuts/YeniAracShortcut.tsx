@@ -286,8 +286,8 @@ export default function YeniAracShortcut({ className, asDropdownItem }: { classN
     };
 
     const handleCreate = async () => {
-        if (!formData.plaka || !formData.marka) {
-            return toast.warning("Plaka ve Marka alanlarını doldurun.");
+        if (!formData.marka) {
+            return toast.warning("Marka alanını doldurun.");
         }
         const yil = Number(formData.yil);
         const guncelKm = Number(formData.guncelKm);

@@ -62,6 +62,15 @@ function normalizeSantiyeValue(value: unknown): string {
     return toUpperTr(raw).replace(/\s+/g, " ");
 }
 
+function normalizeAracPlakaInput(value: unknown): string | null {
+    if (value === undefined || value === null) return null;
+    const raw = String(value).trim();
+    if (!raw) return null;
+    const normalized = toUpperTr(raw).replace(/\s+/g, "");
+    if (!normalized || /^-+$/.test(normalized)) return null;
+    return normalized;
+}
+
 function getPrismaKnownErrorCode(error: unknown) {
     return typeof error === "object" && error !== null && "code" in error
         ? String((error as { code?: unknown }).code || "")
@@ -137,7 +146,7 @@ export async function createArac(data: {
             kategori: data.kategori,
             altKategori: data.altKategori,
         });
-        const normalizedPlaka = data.plaka.replace(/\s+/g, '').toUpperCase();
+        const normalizedPlaka = normalizeAracPlakaInput(data.plaka);
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true, calistigiKurum: true })
             : null;
@@ -147,15 +156,17 @@ export async function createArac(data: {
         const bedel = normalizeBedelInput(data.bedel);
         const resolvedCalistigiKurum = data.calistigiKurum?.trim() || null;
 
-        const existingByPlaka = await prisma.arac.findUnique({
-            where: { plaka: normalizedPlaka },
-            select: { id: true, deletedAt: true },
-        });
-        if (existingByPlaka) {
-            if (existingByPlaka.deletedAt) {
-                return { success: false, error: "Bu plaka çöp kutusunda kayıtlı. Önce çöp kutusundan geri yükleyin." };
+        if (normalizedPlaka) {
+            const existingByPlaka = await prisma.arac.findUnique({
+                where: { plaka: normalizedPlaka },
+                select: { id: true, deletedAt: true },
+            });
+            if (existingByPlaka) {
+                if (existingByPlaka.deletedAt) {
+                    return { success: false, error: "Bu plaka çöp kutusunda kayıtlı. Önce çöp kutusundan geri yükleyin." };
+                }
+                return { success: false, error: "Bu plaka zaten kayıtlı!" };
             }
-            return { success: false, error: "Bu plaka zaten kayıtlı!" };
         }
 
         if (kullanici) {
@@ -230,7 +241,7 @@ export async function createArac(data: {
             actionType: ActivityActionType.CREATE,
             entityType: ActivityEntityType.ARAC,
             entityId: arac.id,
-            summary: `${arac.plaka} plakalı araç eklendi.`,
+            summary: `${arac.plaka || "-"} plakalı araç eklendi.`,
             actor,
             companyId: arac.sirketId || sirketId,
             metadata: {
@@ -285,6 +296,7 @@ export async function updateArac(id: string, data: any) {
         const requestedSirketId = data.sirketId !== undefined
             ? await resolveRuhsatSahibiSirketId(data.sirketId)
             : oldArac.sirketId;
+        const normalizedPlaka = data.plaka !== undefined ? normalizeAracPlakaInput(data.plaka) : undefined;
         const kullanici = data.kullaniciId
             ? await getScopedKullaniciOrThrow(data.kullaniciId, { id: true, sirketId: true, calistigiKurum: true })
             : null;
@@ -325,7 +337,7 @@ export async function updateArac(id: string, data: any) {
         await prisma.arac.update({
             where: { id },
             data: {
-                plaka: data.plaka?.replace(/\s+/g, '').toUpperCase(),
+                plaka: normalizedPlaka,
                 marka: data.marka ? toUpperTr(data.marka) : undefined,
                 model: data.model ? toUpperTr(data.model) : undefined,
                 yil: data.yil ? Number(data.yil) : undefined,
@@ -397,7 +409,7 @@ export async function updateArac(id: string, data: any) {
         await syncAracGuncelKm(id);
         await syncAracDurumu(id);
 
-        const nextPlaka = data.plaka?.replace(/\s+/g, "").toUpperCase() || oldArac.plaka;
+        const nextPlaka = normalizedPlaka ?? oldArac.plaka ?? "-";
         await logEntityActivity({
             actionType: ActivityActionType.UPDATE,
             entityType: ActivityEntityType.ARAC,

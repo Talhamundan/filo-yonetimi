@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getAracUsageFilter, getSirketFilter } from "@/lib/auth-utils"
 import { getDashboardData } from "@/lib/dashboard-data"
-import { getSelectedAy, getSelectedYil, getSelectedKategori } from "@/lib/company-scope"
+import { getSelectedAy, getSelectedYil, getSelectedKategori, getAracUstKategoriWhere } from "@/lib/company-scope"
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   const rawAracFilter = (baseAracFilter as Record<string, unknown>) || {};
   const initialAracFilterArgs = Object.keys(rawAracFilter).length > 0 ? [rawAracFilter] : [];
   const finalAracFilterArgs = selectedKategori 
-    ? [...initialAracFilterArgs, { kategori: selectedKategori }]
+    ? [...initialAracFilterArgs, getAracUstKategoriWhere(selectedKategori)]
     : initialAracFilterArgs;
     
   const aracFilter = finalAracFilterArgs.length > 1 

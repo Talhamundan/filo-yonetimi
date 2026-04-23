@@ -2,7 +2,7 @@ import { MasrafKategorisi, Prisma } from "@prisma/client";
 import { eachDayOfInterval, endOfMonth, endOfWeek, format, startOfMonth, startOfWeek } from "date-fns";
 import { tr } from "date-fns/locale";
 import { prisma } from "@/lib/prisma";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import type {
     DashboardComparisonGranularity,
     CostBreakdown,
@@ -47,7 +47,7 @@ async function getPeriodAverageLitresPer100Km(
 ) {
     const periodRows = await prisma.yakit.findMany({
         where: { ...where, tarih: { gte: start, lte: end } },
-        select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true },
+        select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true, arac: { select: { altKategori: true } } },
     });
 
     if (periodRows.length === 0) {
@@ -67,7 +67,7 @@ async function getPeriodAverageLitresPer100Km(
               },
               distinct: ["aracId"],
               orderBy: [{ aracId: "asc" }, { tarih: "desc" }, { id: "desc" }],
-              select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true },
+              select: { id: true, aracId: true, tarih: true, km: true, litre: true, tutar: true, arac: { select: { altKategori: true } } },
           })
         : [];
 
@@ -76,8 +76,14 @@ async function getPeriodAverageLitresPer100Km(
         return 0;
     }
 
-    const metrics = buildFuelIntervalMetrics(rows);
+    const metrics = buildFuelIntervalMetrics(
+        rows.map((row) => ({
+            ...row,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(row.arac?.altKategori),
+        }))
+    );
     const vehicleAverages = [...metrics.byVehicleId.values()]
+        .filter((row) => row.consumptionUnit === "LITRE_PER_100_KM")
         .map((row) => toNumber(row.averageLitresPer100Km))
         .filter((value) => value > 0);
 

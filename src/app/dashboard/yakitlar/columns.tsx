@@ -33,6 +33,7 @@ export type YakitRow = {
         plaka: string; 
         marka: string; 
         model: string;
+        altKategori?: string | null;
         calistigiKurum?: string | null;
         sirket?: { ad: string } | null;
         kullanici?: { id: string; ad: string; soyad: string; deletedAt?: string | Date | null } | null;
@@ -40,6 +41,8 @@ export type YakitRow = {
     ortalamaYakit100Km?: number | null;
     ortalamaKmBasiMaliyet?: number | null;
     ortalamaYakitDistanceKm?: number | null;
+    ortalamaYakitDistanceBirimi?: "KM" | "HOUR" | null;
+    yakitTuketimBirimi?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
     isStokHareketi?: boolean;
 }
 
@@ -126,11 +129,12 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
         },
         {
             accessorKey: "km",
-            header: "KM",
+            header: "KM/Saat",
             cell: ({ row }) => {
                 if (row.original.isStokHareketi) return <div className="text-slate-300 italic">-</div>;
                 if (row.original.km == null) return <div className="text-slate-400 italic">Belirtilmedi</div>;
-                return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} km</div>
+                const distanceUnit = row.original.arac?.altKategori === "IS_MAKINESI" ? "saat" : "km";
+                return <div className="text-slate-600 font-medium">{row.original.km.toLocaleString('tr-TR')} {distanceUnit}</div>
             },
         },
         {

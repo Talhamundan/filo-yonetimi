@@ -30,6 +30,7 @@ export type PersonelRow = {
     toplamMaliyet?: number;
     ortalamaYakit100Km?: number | null;
     ortalamaYakitIntervalSayisi?: number;
+    yakitTuketimBirimi?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
     yakitKarsilastirmaReferans100Km?: number | null;
     ortalamaUstuYakit?: boolean;
 }
@@ -40,6 +41,10 @@ function formatCurrency(value: number) {
 
 function formatDecimal(value: number, fractionDigits = 2) {
     return value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
+}
+
+function getFuelAverageUnitLabel(unit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" | null) {
+    return unit === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km";
 }
 
 const RoleIcon = ({ rol }: { rol: string }) => {
@@ -150,6 +155,7 @@ const yakitOrtalamaColumn: ColumnDef<PersonelRow> = {
         const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
         const referans = Number(row.original.yakitKarsilastirmaReferans100Km || 0);
         const ortalamaUstuYakit = Boolean(row.original.ortalamaUstuYakit);
+        const unitLabel = getFuelAverageUnitLabel(row.original.yakitTuketimBirimi);
 
         if (litre100 == null || intervalSayisi <= 0) {
             return <span className="text-slate-400 italic text-xs">Yetersiz veri</span>;
@@ -157,10 +163,10 @@ const yakitOrtalamaColumn: ColumnDef<PersonelRow> = {
 
         return (
             <div className="min-w-[170px]">
-                <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} L/100 km</div>
+                <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} {unitLabel}</div>
                 <div className="text-[11px] text-slate-400">{intervalSayisi} dolum aralığı</div>
                 {referans > 0 ? (
-                    <div className="text-[11px] text-slate-500">İş makinesi ort: {formatDecimal(referans)} L/100 km</div>
+                    <div className="text-[11px] text-slate-500">Filo ort: {formatDecimal(referans)} {unitLabel}</div>
                 ) : null}
                 {ortalamaUstuYakit ? (
                     <span className="mt-1 inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700">

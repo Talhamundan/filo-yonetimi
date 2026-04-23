@@ -144,8 +144,19 @@ function formatLitreValue(value: number) {
     return `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`;
 }
 
-function formatFuelAverageValue(value: number) {
-    return `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} L/100 km`;
+function normalizeFuelConsumptionUnit(unit: unknown): "LITRE_PER_100_KM" | "LITRE_PER_HOUR" {
+    return unit === "LITRE_PER_HOUR" ? "LITRE_PER_HOUR" : "LITRE_PER_100_KM";
+}
+
+function getFuelAverageUnitLabel(unit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" | null) {
+    return unit === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km";
+}
+
+function formatFuelAverageValue(
+    value: number,
+    unit: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" = "LITRE_PER_100_KM"
+) {
+    return `${Number(value || 0).toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 2 })} ${getFuelAverageUnitLabel(unit)}`;
 }
 
 function formatCategoryValue(categoryKey: string, value: number) {
@@ -642,29 +653,41 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 .slice(0, 10),
         [vehicleFuelAverageReport]
     );
-    const driverFuelAverageBenchmark = useMemo(() => {
-        const values = [...driverFuelAverageReport]
-            .map((row: any) => Number(row.averageLitresPer100Km || 0))
-            .filter((value: number) => Number.isFinite(value) && value > 0);
-        if (values.length === 0) return 0;
-        return values.reduce((sum: number, value: number) => sum + value, 0) / values.length;
+    const driverFuelAverageBenchmarkByUnit = useMemo(() => {
+        const valuesByUnit = new Map<string, number[]>();
+        for (const row of [...driverFuelAverageReport] as any[]) {
+            const unit = normalizeFuelConsumptionUnit(row?.consumptionUnit);
+            const value = Number(row?.averageLitresPer100Km || 0);
+            if (!Number.isFinite(value) || value <= 0) continue;
+            const list = valuesByUnit.get(unit) || [];
+            list.push(value);
+            valuesByUnit.set(unit, list);
+        }
+        const averagesByUnit = new Map<string, number>();
+        for (const [unit, values] of valuesByUnit.entries()) {
+            const average = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+            averagesByUnit.set(unit, average);
+        }
+        return averagesByUnit;
     }, [driverFuelAverageReport]);
     const driverFuelAverageReportWithBenchmark = useMemo(
         () =>
             [...driverFuelAverageReport].map((row: any) => {
+                const unit = normalizeFuelConsumptionUnit(row?.consumptionUnit);
                 const ownAverage = Number(row.averageLitresPer100Km || 0);
-                const benchmark = Number(row.fleetAverageLitresPer100Km || driverFuelAverageBenchmark || 0);
+                const benchmark = Number(row.fleetAverageLitresPer100Km || driverFuelAverageBenchmarkByUnit.get(unit) || 0);
                 const isAbove =
                     typeof row.isAboveFleetAverage === "boolean"
                         ? row.isAboveFleetAverage
                         : benchmark > 0 && ownAverage > benchmark;
                 return {
                     ...row,
+                    consumptionUnit: unit,
                     fleetAverageLitresPer100Km: benchmark,
                     isAboveFleetAverage: isAbove,
                 };
             }),
-        [driverFuelAverageBenchmark, driverFuelAverageReport]
+        [driverFuelAverageBenchmarkByUnit, driverFuelAverageReport]
     );
     const selectedFuelAverageRows = useMemo(
         () =>
@@ -684,7 +707,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         [driverFuelAverageReportWithBenchmark]
     );
     const driverAverageStatusById = useMemo(() => {
-        const map = new Map<string, { isAbove: boolean; benchmark: number; average: number }>();
+        const map = new Map<string, { isAbove: boolean; benchmark: number; average: number; consumptionUnit: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" }>();
         for (const row of driverFuelAverageReportWithBenchmark as any[]) {
             const id = String(row?.soforId || "").trim();
             if (!id) continue;
@@ -692,6 +715,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 isAbove: Boolean(row.isAboveFleetAverage),
                 benchmark: Number(row.fleetAverageLitresPer100Km || 0),
                 average: Number(row.averageLitresPer100Km || 0),
+                consumptionUnit: normalizeFuelConsumptionUnit(row?.consumptionUnit),
             });
         }
         return map;
@@ -705,6 +729,26 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         );
         return { count, average: total / count };
     }, [selectedFuelAverageRows]);
+    const selectedFuelAverageUnit = useMemo(() => {
+        const units = Array.from(
+            new Set(
+                selectedFuelAverageRows
+                    .map((row: any) => normalizeFuelConsumptionUnit(row?.consumptionUnit))
+                    .filter(Boolean)
+            )
+        );
+        return units.length === 1 ? normalizeFuelConsumptionUnit(units[0]) : null;
+    }, [selectedFuelAverageRows]);
+    const selectedFuelAverageSummaryText = useMemo(() => {
+        if (selectedFuelAverageSummary.count <= 0) return "";
+        if (!selectedFuelAverageUnit) {
+            return `${Number(selectedFuelAverageSummary.average || 0).toLocaleString("tr-TR", {
+                minimumFractionDigits: 1,
+                maximumFractionDigits: 2,
+            })} (karışık birim)`;
+        }
+        return formatFuelAverageValue(selectedFuelAverageSummary.average, selectedFuelAverageUnit);
+    }, [selectedFuelAverageSummary.average, selectedFuelAverageSummary.count, selectedFuelAverageUnit]);
     const fuelAverageChartData = useMemo(() => {
         if (fuelAverageMode === "ARAC") {
             return selectedFuelAverageRows.map((item: any) => ({
@@ -714,6 +758,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 detail: item.markaModel || "-",
                 averageLitresPer100Km: Number(item.averageLitresPer100Km || 0),
                 intervalCount: Number(item.intervalCount || 0),
+                consumptionUnit: normalizeFuelConsumptionUnit(item?.consumptionUnit),
             }));
         }
 
@@ -724,10 +769,17 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
             detail: "Personel",
             averageLitresPer100Km: Number(item.averageLitresPer100Km || 0),
             intervalCount: Number(item.intervalCount || 0),
-            benchmarkAverageLitresPer100Km: Number(item.fleetAverageLitresPer100Km || driverFuelAverageBenchmark || 0),
+            consumptionUnit: normalizeFuelConsumptionUnit(item?.consumptionUnit),
+            benchmarkAverageLitresPer100Km:
+                Number(
+                    item.fleetAverageLitresPer100Km ||
+                        driverFuelAverageBenchmarkByUnit.get(normalizeFuelConsumptionUnit(item?.consumptionUnit)) ||
+                        0
+                ),
+            benchmarkConsumptionUnit: normalizeFuelConsumptionUnit(item?.consumptionUnit),
             isAboveAverage: Boolean(item.isAboveFleetAverage),
         }));
-    }, [driverFuelAverageBenchmark, fuelAverageMode, selectedFuelAverageRows]);
+    }, [driverFuelAverageBenchmarkByUnit, fuelAverageMode, selectedFuelAverageRows]);
 
     const urgentOperationArizalar = useMemo(
         () => operationArizalar.filter((row: any) => row.oncelik === "KRITIK" || row.oncelik === "YUKSEK").slice(0, 8),
@@ -1750,7 +1802,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                             ? `Araç bazlı tüketim ortalaması • ${selectedFuelAverageSummary.count} araç`
                                             : `Personel bazlı tüketim ortalaması • ${selectedFuelAverageSummary.count} personel`}
                                         {selectedFuelAverageSummary.count > 0
-                                            ? ` • Toplam ortalama: ${formatFuelAverageValue(selectedFuelAverageSummary.average)}`
+                                            ? ` • Toplam ortalama: ${selectedFuelAverageSummaryText}`
                                             : ""}
                                         {fuelAverageMode === "PERSONEL" && driverAboveAverageRows.length > 0
                                             ? ` • Ortalama üstü: ${driverAboveAverageRows.length} şoför`
@@ -1813,7 +1865,9 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                           detail?: string;
                                                           averageLitresPer100Km?: number;
                                                           intervalCount?: number;
+                                                          consumptionUnit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
                                                           benchmarkAverageLitresPer100Km?: number;
+                                                          benchmarkConsumptionUnit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
                                                           isAboveAverage?: boolean;
                                                       }
                                                     | undefined;
@@ -1821,20 +1875,24 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                 const intervalCount = Number(raw?.intervalCount || 0);
                                                 const benchmark = Number(raw?.benchmarkAverageLitresPer100Km || 0);
                                                 const isAboveAverage = Boolean(raw?.isAboveAverage);
+                                                const consumptionUnit = normalizeFuelConsumptionUnit(raw?.consumptionUnit);
+                                                const benchmarkConsumptionUnit = normalizeFuelConsumptionUnit(
+                                                    raw?.benchmarkConsumptionUnit || raw?.consumptionUnit
+                                                );
 
                                                 return (
                                                     <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 shadow-sm">
                                                         <p className="text-xs font-semibold text-slate-900">{raw?.fullLabel || "-"}</p>
                                                         <p className="text-[11px] text-slate-500 mt-0.5">{raw?.detail || "-"}</p>
                                                         <p className="text-xs font-bold text-slate-900 mt-2">
-                                                            {formatFuelAverageValue(avg)}
+                                                            {formatFuelAverageValue(avg, consumptionUnit)}
                                                         </p>
                                                         <p className="text-[11px] text-slate-500">
                                                             {intervalCount} dolum aralığı
                                                         </p>
                                                         {benchmark > 0 ? (
                                                             <p className="text-[11px] text-slate-500">
-                                                                İş makinesi ort: {formatFuelAverageValue(benchmark)}
+                                                                Filo ort: {formatFuelAverageValue(benchmark, benchmarkConsumptionUnit)}
                                                             </p>
                                                         ) : null}
                                                         {isAboveAverage ? (
@@ -1882,7 +1940,10 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                                     href={buildScopedHref(`/dashboard/personel/${row.soforId}`)}
                                                     className="inline-flex items-center rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[10px] font-semibold text-rose-700 hover:bg-rose-100"
                                                 >
-                                                    {row.adSoyad}: {formatFuelAverageValue(Number(row.averageLitresPer100Km || 0))}
+                                                    {row.adSoyad}: {formatFuelAverageValue(
+                                                        Number(row.averageLitresPer100Km || 0),
+                                                        normalizeFuelConsumptionUnit(row?.consumptionUnit)
+                                                    )}
                                                 </Link>
                                             ))}
                                         </div>

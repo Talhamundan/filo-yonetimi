@@ -173,10 +173,18 @@ export default function ZimmetlerClient({
 
     const openFinalize = (row: SoforZimmetRow) => {
         setFinalizeRow(row);
+        const latestFuelKm = typeof row.latestYakitKm === "number" && Number.isFinite(row.latestYakitKm)
+            ? Math.trunc(row.latestYakitKm)
+            : undefined;
         const defaultKm = aracKmById.get(row.arac.id);
         setFinalizeFormData({
             bitis: nowDateTimeLocal(),
-            bitisKm: defaultKm !== undefined ? String(defaultKm) : (row.baslangicKm ? String(row.baslangicKm) : ""),
+            bitisKm:
+                latestFuelKm !== undefined
+                    ? String(latestFuelKm)
+                    : defaultKm !== undefined
+                        ? String(defaultKm)
+                        : (row.baslangicKm ? String(row.baslangicKm) : ""),
             notlar: row.notlar || "",
         });
     };

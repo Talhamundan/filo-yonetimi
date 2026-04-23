@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { getVehicleUsageScopeWhere } from "@/lib/dashboard-helpers";
 import type {
     DashboardDateContext,
@@ -23,7 +23,7 @@ type FuelRow = {
     litre: number;
     tutar: number;
     soforId: string | null;
-    arac?: { kullaniciId: string | null } | null;
+    arac?: { kullaniciId: string | null; altKategori?: string | null } | null;
 };
 
 function roundTwo(value: number) {
@@ -94,21 +94,17 @@ export async function getDashboardFuelAverageData(params: {
     vehicleFuelAverageReport: DashboardVehicleFuelAverageItem[];
     driverFuelAverageReport: DashboardDriverFuelAverageItem[];
 }> {
-    const MACHINE_CATEGORY = "SANTIYE";
     const { scope, dateContext, vehicleScope } = params;
     const { seciliAyBasi, seciliAySonu } = dateContext;
     const usageScopedVehicleWhere = {
         ...((vehicleScope || getVehicleUsageScopeWhere(scope)) as Prisma.AracWhereInput),
         deletedAt: null,
     } as Prisma.AracWhereInput;
-    const machineVehicleWhere = {
-        AND: [usageScopedVehicleWhere, { kategori: MACHINE_CATEGORY }],
-    } as Prisma.AracWhereInput;
-    const expenseScope = getExpenseScopedWhere(scope, machineVehicleWhere);
+    const expenseScope = getExpenseScopedWhere(scope, usageScopedVehicleWhere);
 
     const [araclar, personeller, zimmetler, periodFuelRows] = await Promise.all([
         prisma.arac.findMany({
-            where: machineVehicleWhere,
+            where: usageScopedVehicleWhere,
             select: { id: true, plaka: true, marka: true, model: true },
         }),
         prisma.kullanici.findMany({
@@ -118,7 +114,7 @@ export async function getDashboardFuelAverageData(params: {
             select: { id: true, ad: true, soyad: true },
         }),
         prisma.kullaniciZimmet.findMany({
-            where: { arac: machineVehicleWhere },
+            where: { arac: usageScopedVehicleWhere },
             select: { aracId: true, kullaniciId: true, baslangic: true, bitis: true },
         }),
         prisma.yakit.findMany({
@@ -131,7 +127,7 @@ export async function getDashboardFuelAverageData(params: {
                 litre: true,
                 tutar: true,
                 soforId: true,
-                arac: { select: { kullaniciId: true } },
+                arac: { select: { kullaniciId: true, altKategori: true } },
             },
             orderBy: [{ aracId: "asc" }, { tarih: "asc" }, { km: "asc" }],
         }),
@@ -159,7 +155,7 @@ export async function getDashboardFuelAverageData(params: {
                   litre: true,
                   tutar: true,
                   soforId: true,
-                  arac: { select: { kullaniciId: true } },
+                  arac: { select: { kullaniciId: true, altKategori: true } },
               },
           })
         : [];
@@ -188,6 +184,7 @@ export async function getDashboardFuelAverageData(params: {
             soforId:
                 row.soforId ||
                 findDriverAtDate(zimmetByAracId, row.aracId, row.tarih),
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(row.arac?.altKategori),
         }))
     );
 
@@ -214,6 +211,7 @@ export async function getDashboardFuelAverageData(params: {
                 markaModel: arac?.markaModel || "",
                 averageLitresPer100Km: roundTwo(metric.averageLitresPer100Km),
                 intervalCount: metric.intervalCount,
+                consumptionUnit: metric.consumptionUnit,
             };
         })
         .sort(
@@ -230,6 +228,7 @@ export async function getDashboardFuelAverageData(params: {
             adSoyad: personelMap.get(metric.driverId) || "Bilinmeyen Personel",
             averageLitresPer100Km: roundTwo(metric.averageLitresPer100Km),
             intervalCount: metric.intervalCount,
+            consumptionUnit: metric.consumptionUnit,
         }))
         .sort(
             (a, b) =>
@@ -237,17 +236,29 @@ export async function getDashboardFuelAverageData(params: {
                 b.intervalCount - a.intervalCount ||
                 a.adSoyad.localeCompare(b.adSoyad, "tr")
         );
-    const driverAverageValues = driverFuelAverageReport
-        .map((row) => Number(row.averageLitresPer100Km || 0))
-        .filter((value) => Number.isFinite(value) && value > 0);
-    const fleetAverage =
-        driverAverageValues.length > 0
-            ? roundTwo(driverAverageValues.reduce((sum, value) => sum + value, 0) / driverAverageValues.length)
-            : 0;
+    const driverAverageValuesByUnit = new Map<string, number[]>();
+    for (const row of driverFuelAverageReport) {
+        const unit = row.consumptionUnit || "LITRE_PER_100_KM";
+        const value = Number(row.averageLitresPer100Km || 0);
+        if (!Number.isFinite(value) || value <= 0) continue;
+        const list = driverAverageValuesByUnit.get(unit) || [];
+        list.push(value);
+        driverAverageValuesByUnit.set(unit, list);
+    }
+    const fleetAverageByUnit = new Map<string, number>();
+    for (const [unit, values] of driverAverageValuesByUnit.entries()) {
+        const fleetAverage =
+            values.length > 0 ? roundTwo(values.reduce((sum, value) => sum + value, 0) / values.length) : 0;
+        fleetAverageByUnit.set(unit, fleetAverage);
+    }
     const withBenchmark: DashboardDriverFuelAverageItem[] = driverFuelAverageReport.map((row) => ({
         ...row,
-        fleetAverageLitresPer100Km: fleetAverage,
-        isAboveFleetAverage: fleetAverage > 0 ? Number(row.averageLitresPer100Km || 0) > fleetAverage : false,
+        fleetAverageLitresPer100Km: fleetAverageByUnit.get(row.consumptionUnit || "LITRE_PER_100_KM") || 0,
+        isAboveFleetAverage:
+            (fleetAverageByUnit.get(row.consumptionUnit || "LITRE_PER_100_KM") || 0) > 0
+                ? Number(row.averageLitresPer100Km || 0) >
+                  Number(fleetAverageByUnit.get(row.consumptionUnit || "LITRE_PER_100_KM") || 0)
+                : false,
     }));
 
     return { vehicleFuelAverageReport, driverFuelAverageReport: withBenchmark };

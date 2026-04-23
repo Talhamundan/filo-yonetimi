@@ -15,6 +15,7 @@ export type SoforZimmetRow = {
     baslangicKm: number;
     bitisKm: number | null;
     notlar: string | null;
+    latestYakitKm?: number | null;
     arac: { id: string; plaka: string; marka: string; model: string; sirket?: { ad: string } | null };
     kullanici: { id: string; ad: string; soyad: string; tcNo: string | null; deletedAt?: Date | string | null } | null;
     maliyetKalemleri?: {

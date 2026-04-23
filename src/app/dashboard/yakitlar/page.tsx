@@ -5,7 +5,7 @@ import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { auth } from "@/auth";
 import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
@@ -235,6 +235,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             litre: row.litre,
             tutar: row.tutar,
             soforId: row.soforId ?? null,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(row.arac?.altKategori),
         }))
     );
     const yakitlarWithMetrics: YakitRow[] = rawYakitlar.map((row) => {
@@ -253,6 +254,8 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             ortalamaYakit100Km: metric?.averageLitresPer100Km ?? null,
             ortalamaKmBasiMaliyet: metric?.averageCostPerKm ?? null,
             ortalamaYakitDistanceKm: metric?.distanceKm ?? null,
+            ortalamaYakitDistanceBirimi: metric?.distanceUnit ?? null,
+            yakitTuketimBirimi: metric?.consumptionUnit ?? getFuelConsumptionUnitByAltKategori(row.arac?.altKategori),
         };
     });
 

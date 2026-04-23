@@ -1,5 +1,14 @@
 export type DashboardSearchParams = Record<string, string | string[] | undefined>;
 
+const SANTIYE_ALT_KATEGORI_VALUES = [
+    "KAMYONET",
+    "KAMYON",
+    "CEKICI",
+    "ROMORK",
+    "TRAKTOR",
+    "IS_MAKINESI",
+] as const;
+
 function normalizeAracKategoriToken(value: string | null | undefined) {
     return String(value || "")
         .trim()
@@ -57,6 +66,24 @@ export async function getSelectedKategori(
     const rawValue = resolved?.kategori;
     const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
     return normalizeAracUstKategoriScope(value);
+}
+
+export function getAracUstKategoriWhere(kategori: "BINEK" | "SANTIYE") {
+    if (kategori === "SANTIYE") {
+        return {
+            OR: [
+                { kategori: "SANTIYE" },
+                { altKategori: { in: [...SANTIYE_ALT_KATEGORI_VALUES] } },
+            ],
+        } as Record<string, unknown>;
+    }
+
+    return {
+        OR: [
+            { kategori: "BINEK" },
+            { altKategori: "OTOMOBIL" },
+        ],
+    } as Record<string, unknown>;
 }
 
 export async function getSelectedYil(

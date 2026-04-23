@@ -16,18 +16,16 @@ export type DisFirmaRow = {
     calistigiKurum: string;
     aracSayisi: number;
     personelSayisi: number;
-    toplamMaliyet: number;
-    maliyetKalemleri: { key: string; label: string; tutar: number }[];
+    toplamYakitLitre: number;
+    yakitKayitSayisi: number;
     calistigiSirketler: { id: string; ad: string }[];
 };
 
-const KALEM_RENKLERI: Record<string, string> = {
-    yakit: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    servis: "bg-amber-50 text-amber-700 border-amber-200",
-};
-
-function formatCurrency(value: number) {
-    return `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
+function formatLitres(value: number) {
+    return `${(value || 0).toLocaleString("tr-TR", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+    })} L`;
 }
 
 function getVendorScopedHref(basePath: string, row: DisFirmaRow) {
@@ -109,24 +107,17 @@ export const columns: ColumnDef<DisFirmaRow>[] = [
         ),
     },
     {
-        accessorKey: "toplamMaliyet",
-        header: () => <div className="text-right">Toplam Maliyet</div>,
+        accessorKey: "toplamYakitLitre",
+        header: () => <div className="text-right">Toplam Yakıt</div>,
         cell: ({ row }) => {
-            const kalemler = row.original.maliyetKalemleri || [];
+            const toplamLitre = row.original.toplamYakitLitre || 0;
+            const kayitSayisi = row.original.yakitKayitSayisi || 0;
             return (
                 <div className="text-right">
-                    <div className="font-black text-rose-600">{formatCurrency(row.original.toplamMaliyet)}</div>
-                    {kalemler.length ? (
-                        <div className="mt-1.5 flex flex-wrap justify-end gap-1.5">
-                            {kalemler.map((kalem) => (
-                                <span key={`${row.original.id}-${kalem.key}`} className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-semibold ${KALEM_RENKLERI[kalem.key] || KALEM_RENKLERI.servis}`}>
-                                    {kalem.label}: {formatCurrency(kalem.tutar)}
-                                </span>
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="mt-1 text-[11px] italic text-slate-400">Kayıt yok</div>
-                    )}
+                    <div className="font-black text-emerald-600">{formatLitres(toplamLitre)}</div>
+                    <div className="mt-1 text-[11px] italic text-slate-400">
+                        {kayitSayisi > 0 ? `${kayitSayisi} dolum kaydı` : "Kayıt yok"}
+                    </div>
                 </div>
             );
         },

@@ -5,7 +5,7 @@ import { getModelFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirket
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import { ensureMuayeneColumns } from "@/lib/muayene-schema-compat";
 import { syncAracGuncelKm } from "@/lib/km-consistency";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 
 async function getSafeAracDetail(queryFilter: Record<string, unknown>) {
     const baseArac = await (prisma as any).arac.findFirst({
@@ -296,6 +296,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
             litre: Number(yakit.litre || 0),
             tutar: Number(yakit.tutar || 0),
             soforId: yakit.soforId || yakit.sofor?.id || null,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori((aracRaw as any).altKategori),
         }))
     ).byVehicleId.get((aracRaw as any).id);
     const arac = {
@@ -316,6 +317,9 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
         dokumanlar: (aracRaw as any).dokumanlar || [],
         ortalamaYakit100Km: yakitMetric?.averageLitresPer100Km ?? null,
         ortalamaYakitIntervalSayisi: yakitMetric?.intervalCount ?? 0,
+        yakitTuketimBirimi:
+            yakitMetric?.consumptionUnit ||
+            getFuelConsumptionUnitByAltKategori((aracRaw as any).altKategori),
     };
 
     return (

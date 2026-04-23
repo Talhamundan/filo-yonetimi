@@ -3,9 +3,7 @@ import PersonelDetailClient from "./PersonelDetailClient";
 import { notFound } from "next/navigation";
 import { getModelFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
-
-const MACHINE_CATEGORY = "SANTIYE";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 
 export default async function PersonelDetailPage(props: { params: Promise<{ id: string }>; searchParams?: Promise<DashboardSearchParams> }) {
     const params = await props.params;
@@ -201,7 +199,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                           litre: true,
                           tutar: true,
                           soforId: true,
-                          arac: { select: { kullaniciId: true, kategori: true } },
+                          arac: { select: { kullaniciId: true, kategori: true, altKategori: true } },
                       },
                       orderBy: [{ aracId: "asc" }, { tarih: "asc" }],
                   })
@@ -221,16 +219,27 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             litre: Number(kayit.litre || 0),
             tutar: Number(kayit.tutar || 0),
             soforId: kayit.soforId || null,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(kayit.arac?.altKategori),
         }))
     ).byDriverId;
     const personelYakitMetrigi = personelYakitMetrikleriBySofor.get(personel.id);
-    const driverAverageValues = [...personelYakitMetrikleriBySofor.values()]
-        .filter((metric) => metric.intervalCount > 0 && Number(metric.averageLitresPer100Km || 0) > 0)
-        .map((metric) => Number(metric.averageLitresPer100Km || 0));
-    const driverFleetAverage100Km =
-        driverAverageValues.length > 0
-            ? driverAverageValues.reduce((sum, value) => sum + value, 0) / driverAverageValues.length
-            : 0;
+    const driverAverageValuesByUnit = new Map<string, number[]>();
+    for (const metric of personelYakitMetrikleriBySofor.values()) {
+        if (metric.intervalCount <= 0) continue;
+        const average = Number(metric.averageLitresPer100Km || 0);
+        if (!Number.isFinite(average) || average <= 0) continue;
+        const unit = metric.consumptionUnit || "LITRE_PER_100_KM";
+        const list = driverAverageValuesByUnit.get(unit) || [];
+        list.push(average);
+        driverAverageValuesByUnit.set(unit, list);
+    }
+    const driverFleetAverageByUnit = new Map<string, number>();
+    for (const [unit, values] of driverAverageValuesByUnit.entries()) {
+        const average = values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
+        driverFleetAverageByUnit.set(unit, average);
+    }
+    const personelYakitTuketimBirimi = personelYakitMetrigi?.consumptionUnit || "LITRE_PER_100_KM";
+    const driverFleetAverage100Km = Number(driverFleetAverageByUnit.get(personelYakitTuketimBirimi) || 0);
     const personelOrtalamaYakit100Km = personelYakitMetrigi?.averageLitresPer100Km ?? null;
     const personelYakitIntervalSayisi = personelYakitMetrigi?.intervalCount ?? 0;
     const personelOrtalamaUstuYakit =
@@ -263,6 +272,7 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
             }),
         ortalamaYakit100Km: personelOrtalamaYakit100Km,
         ortalamaYakitIntervalSayisi: personelYakitIntervalSayisi,
+        yakitTuketimBirimi: personelYakitTuketimBirimi,
         yakitKarsilastirmaReferans100Km: driverFleetAverage100Km > 0 ? driverFleetAverage100Km : null,
         ortalamaUstuYakit: personelOrtalamaUstuYakit,
     };

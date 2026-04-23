@@ -14,7 +14,7 @@ import {
 import { getCommonListFilters } from "@/lib/list-filters";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 import { sortByTextValue } from "@/lib/sort-utils";
-import { buildFuelIntervalMetrics } from "@/lib/fuel-metrics";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { parseExternalVendorModeFromSearchParams } from "@/lib/external-vendor-mode";
 
 const EXCLUDED_MASRAF_TURLERI = ["YAKIT"] as const;
@@ -316,6 +316,11 @@ async function getAraclarWithTakipBilgileri(
         if (!row?.aracId) continue;
         yakitSonKayitKmMap.set(row.aracId, toNumber(row?.km));
     }
+    const consumptionUnitByAracId = new Map<string, "LITRE_PER_100_KM" | "LITRE_PER_HOUR">();
+    for (const arac of araclar as any[]) {
+        if (!arac?.id) continue;
+        consumptionUnitByAracId.set(arac.id, getFuelConsumptionUnitByAltKategori(arac.altKategori));
+    }
     const fuelMetricsByVehicleId = buildFuelIntervalMetrics(
         (yakitKayitlari as any[]).map((row) => ({
             id: row.id,
@@ -325,6 +330,7 @@ async function getAraclarWithTakipBilgileri(
             litre: row.litre,
             tutar: row.tutar,
             soforId: null,
+            consumptionUnit: consumptionUnitByAracId.get(row.aracId) || "LITRE_PER_100_KM",
         }))
     ).byVehicleId;
 
@@ -380,6 +386,7 @@ async function getAraclarWithTakipBilgileri(
         ortalamaYakit100Km: yakitMetrigi?.averageLitresPer100Km ?? null,
         ortalamaYakitKmBasiMaliyet: yakitMetrigi?.averageCostPerKm ?? null,
         ortalamaYakitIntervalSayisi: yakitMetrigi?.intervalCount ?? 0,
+        yakitTuketimBirimi: yakitMetrigi?.consumptionUnit || consumptionUnitByAracId.get(arac.id) || "LITRE_PER_100_KM",
         toplamMaliyet:
             (yakitMap.get(arac.id) || 0) +
             (bakimMap.get(arac.id) || 0) +

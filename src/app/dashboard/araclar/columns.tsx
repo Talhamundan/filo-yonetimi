@@ -44,6 +44,7 @@ export type AracRow = {
     yakitToplamLitre?: number;
     ortalamaYakit100Km?: number | null;
     ortalamaYakitIntervalSayisi?: number;
+    yakitTuketimBirimi?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
     toplamMaliyet?: number;
 }
 
@@ -53,6 +54,10 @@ function formatCurrency(value: number) {
 
 function formatDecimal(value: number, fractionDigits = 2) {
     return value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
+}
+
+function getFuelAverageUnitLabel(unit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" | null) {
+    return unit === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km";
 }
 
 function renderGecerlilikDurumu(tarih: Date) {
@@ -255,7 +260,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
             : []),
         {
             accessorKey: "guncelKm",
-            header: "KM",
+            header: "KM/Saat",
             cell: ({ row }) => {
                 const km = parseFloat(row.getValue("guncelKm") || "0")
                 return <div className="font-medium text-slate-700">{km.toLocaleString('tr-TR')}</div>
@@ -318,6 +323,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
                 const litre100 = row.original.ortalamaYakit100Km;
                 const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
                 const toplamLitre = row.original.yakitToplamLitre || 0;
+                const unitLabel = getFuelAverageUnitLabel(row.original.yakitTuketimBirimi);
 
                 if (litre100 == null || intervalSayisi <= 0) {
                     return toplamLitre > 0
@@ -327,7 +333,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
 
                 return (
                     <div className="min-w-[140px]">
-                        <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} L/100 km</div>
+                        <div className="text-sm font-semibold text-slate-800">{formatDecimal(litre100)} {unitLabel}</div>
                         <div className="text-[11px] text-slate-400">{intervalSayisi} dolum aralığı</div>
                     </div>
                 );

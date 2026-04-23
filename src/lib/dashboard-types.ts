@@ -242,6 +242,7 @@ export type DashboardVehicleFuelAverageItem = {
     markaModel: string;
     averageLitresPer100Km: number;
     intervalCount: number;
+    consumptionUnit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
 };
 
 export type DashboardDriverFuelAverageItem = {
@@ -249,6 +250,7 @@ export type DashboardDriverFuelAverageItem = {
     adSoyad: string;
     averageLitresPer100Km: number;
     intervalCount: number;
+    consumptionUnit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
     fleetAverageLitresPer100Km?: number;
     isAboveFleetAverage?: boolean;
 };

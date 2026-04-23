@@ -48,6 +48,33 @@ export default function PersonelDetailClient({
     const { canAccessAllCompanies } = useDashboardScope();
     const router = useRouter();
     const scopedHref = useDashboardScopedHref();
+    const resolveLatestFuelKmForArac = React.useCallback((aracId: string | null | undefined) => {
+        if (!aracId) return null;
+        const kayitlar = [
+            ...(Array.isArray(p?.arac?.yakitlar) ? p.arac.yakitlar : []),
+            ...(Array.isArray(p?.yakitKayitlari) ? p.yakitKayitlari : []),
+        ];
+        let latestKm: number | null = null;
+        let latestTime = Number.NEGATIVE_INFINITY;
+        for (const kayit of kayitlar) {
+            const kayitAracId = kayit?.aracId || kayit?.arac?.id || null;
+            if (kayitAracId !== aracId) continue;
+            const km = Number(kayit?.km);
+            if (!Number.isFinite(km) || km <= 0) continue;
+            const timestamp = kayit?.tarih ? new Date(kayit.tarih).getTime() : Number.NEGATIVE_INFINITY;
+            if (timestamp >= latestTime) {
+                latestTime = timestamp;
+                latestKm = Math.trunc(km);
+            }
+        }
+        return latestKm;
+    }, [p?.arac?.yakitlar, p?.yakitKayitlari]);
+    const getDefaultIadeKm = React.useCallback(() => {
+        const latestFuelKm = resolveLatestFuelKmForArac(p?.arac?.id);
+        if (latestFuelKm !== null) return String(latestFuelKm);
+        const guncelKm = Number(p?.arac?.guncelKm);
+        return Number.isFinite(guncelKm) && guncelKm > 0 ? String(Math.trunc(guncelKm)) : "";
+    }, [p?.arac?.guncelKm, p?.arac?.id, resolveLatestFuelKmForArac]);
     const [editOpen, setEditOpen] = useState(false);
     const [formData, setFormData] = useState<PersonelFormData>({
         ad: p.ad,
@@ -70,7 +97,7 @@ export default function PersonelDetailClient({
     const [iadeOpen, setIadeOpen] = useState(false);
     const [iadeData, setIadeData] = useState({
         bitis: nowDateTimeLocal(),
-        bitisKm: p.arac?.guncelKm ? String(p.arac.guncelKm) : "",
+        bitisKm: getDefaultIadeKm(),
         notlar: "",
     });
     const [actionLoading, setActionLoading] = useState(false);
@@ -146,6 +173,10 @@ export default function PersonelDetailClient({
         if (!Number.isFinite(raw) || raw <= 0) return null;
         return raw;
     }, [p.ortalamaYakit100Km]);
+    const personelYakitTuketimBirimiEtiketi = React.useMemo(
+        () => (p.yakitTuketimBirimi === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km"),
+        [p.yakitTuketimBirimi]
+    );
     const personelYakitAralikSayisi = Number(p.ortalamaYakitIntervalSayisi || 0);
     const personelYakitReferansOrtalamasi = React.useMemo(() => {
         const raw = Number(p.yakitKarsilastirmaReferans100Km);
@@ -194,7 +225,7 @@ export default function PersonelDetailClient({
     const resetIadeData = () => {
         setIadeData({
             bitis: nowDateTimeLocal(),
-            bitisKm: p.arac?.guncelKm ? String(p.arac.guncelKm) : "",
+            bitisKm: getDefaultIadeKm(),
             notlar: activeZimmet?.notlar || "",
         });
     };
@@ -514,14 +545,14 @@ export default function PersonelDetailClient({
                                 <div className="flex items-center gap-1.5">
                                     <Fuel size={16} />
                                     {personelYakitOrtalamasi !== null
-                                        ? `${personelYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km`
+                                        ? `${personelYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${personelYakitTuketimBirimiEtiketi}`
                                         : "Yakıt ortalaması yok"}
                                     {personelYakitOrtalamasi !== null && personelYakitAralikSayisi > 0 ? (
                                         <span className="text-[11px] text-slate-400">({personelYakitAralikSayisi} aralık)</span>
                                     ) : null}
                                     {personelYakitReferansOrtalamasi !== null ? (
                                         <span className="text-[11px] text-slate-500">
-                                            İş makinesi ort: {personelYakitReferansOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L/100 km
+                                            Filo ort: {personelYakitReferansOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {personelYakitTuketimBirimiEtiketi}
                                         </span>
                                     ) : null}
                                     {personelOrtalamaUstuYakit ? (

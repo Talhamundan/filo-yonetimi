@@ -6,6 +6,7 @@ import { getDashboardVehicleData, getFleetStatusData } from "@/lib/dashboard-veh
 import { getDashboardDriverData } from "@/lib/dashboard-driver.service";
 import { getDashboardFuelAverageData } from "@/lib/dashboard-fuel-average.service";
 import { prisma } from "@/lib/prisma";
+import { KIRALIK_SIRKET_ADI } from "@/lib/ruhsat-sahibi";
 
 export type {
     DashboardCalendarEvent,
@@ -76,6 +77,29 @@ function getEmptyDashboardData(): DashboardData {
     };
 }
 
+function getDashboardVehicleScopeWithKiralikExcluded(vehicleScope: GenericWhere): GenericWhere {
+    const scopeParts: GenericWhere[] = [];
+    if (Object.keys((vehicleScope || {}) as Record<string, unknown>).length > 0) {
+        scopeParts.push(vehicleScope);
+    }
+    scopeParts.push({
+        NOT: {
+            OR: [
+                { disFirma: { tur: "KIRALIK" } },
+                { sirket: { ad: { equals: KIRALIK_SIRKET_ADI, mode: "insensitive" } } },
+                {
+                    AND: [
+                        { disFirmaId: { not: null } },
+                        { marka: { equals: "KIRALIK", mode: "insensitive" } },
+                        { model: { equals: "ARAC", mode: "insensitive" } },
+                    ],
+                },
+            ],
+        },
+    });
+    return scopeParts.length === 1 ? scopeParts[0] : { AND: scopeParts };
+}
+
 async function getDashboardDataUnsafe(
     sirketFilter: GenericWhere | null,
     vehicleScopeFilter: GenericWhere | null = null,
@@ -84,7 +108,8 @@ async function getDashboardDataUnsafe(
     comparisonGranularity: DashboardComparisonGranularity = "AY"
 ): Promise<DashboardData> {
     const scope = sirketFilter || {};
-    const vehicleScope = vehicleScopeFilter || getVehicleUsageScopeWhere(scope);
+    const baseVehicleScope = vehicleScopeFilter || getVehicleUsageScopeWhere(scope);
+    const vehicleScope = getDashboardVehicleScopeWithKiralikExcluded(baseVehicleScope);
     const cezaScope = getCezaScopeWhere(scope);
     const dateContext = buildDateContext(selectedYil, selectedAy, comparisonGranularity);
 

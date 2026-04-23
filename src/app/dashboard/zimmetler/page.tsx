@@ -49,6 +49,7 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
         getCommonListFilters(props.searchParams),
         getCurrentUserRole(),
     ]);
+    const yakitFilter = await getModelFilter("yakit", selectedSirketId);
     const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
     const personelFilter = await getPersonnelSelectFilter();
@@ -128,6 +129,24 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
         baslangic: Date;
         bitis: Date | null;
     }>;
+    const zimmetAracIds = Array.from(new Set(zimmetler.map((z) => z.aracId).filter(Boolean)));
+    const latestFuelKmRows = zimmetAracIds.length > 0
+        ? await (prisma as any).yakit.groupBy({
+            by: ["aracId"],
+            where: {
+                ...(yakitFilter as any),
+                aracId: { in: zimmetAracIds },
+                km: { not: null },
+            },
+            _max: { km: true },
+        }).catch(() => [])
+        : [];
+    const latestFuelKmByAracId = new Map<string, number>();
+    for (const row of latestFuelKmRows as Array<{ aracId: string; _max: { km: number | null } }>) {
+        const km = toNumber(row._max?.km);
+        if (!row.aracId || km <= 0) continue;
+        latestFuelKmByAracId.set(row.aracId, km);
+    }
 
     const costsByZimmetId = new Map<string, ZimmetCost>();
     const upsertCost = (zimmetId: string | null, patch: Partial<ZimmetCost>) => {
@@ -233,6 +252,7 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
         const maliyet = costsByZimmetId.get(z.id) || { ceza: 0, yakit: 0, ariza: 0, toplam: 0 };
         return {
             ...z,
+            latestYakitKm: latestFuelKmByAracId.get(z.aracId) || null,
             maliyetKalemleri: {
                 ceza: maliyet.ceza,
                 yakit: maliyet.yakit,
