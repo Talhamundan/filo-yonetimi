@@ -697,6 +697,28 @@ export default function AraclarClient({
                         { value: "SANTIYE", label: ARAC_UST_KATEGORI_LABELS.SANTIYE },
                     ],
                 }}
+                columnViewPresets={[
+                    {
+                        id: "operasyon",
+                        label: "Operasyon Özeti",
+                        columnIds: ["durum", "plaka", "marka", "bulunduguIl", "kategori", "altKategori", "guncelKm", "sofor_ad"],
+                    },
+                    {
+                        id: "sigorta",
+                        label: "Sigorta Takibi",
+                        columnIds: ["durum", "plaka", "marka", "muayene", "kasko", "trafikSigortasi", "sofor_ad", "guncelKm"],
+                    },
+                    {
+                        id: "maliyet",
+                        label: "Maliyet Takibi",
+                        columnIds: ["durum", "plaka", "marka", "guncelKm", "ortalamaYakit100Km", "toplamMaliyet", "kasko", "trafikSigortasi"],
+                    },
+                    {
+                        id: "kimlik",
+                        label: "Kimlik & Evrak",
+                        columnIds: ["durum", "plaka", "marka", "ruhsatSeriNo", "saseNo", "motorNo", "muayene", "kasko", "trafikSigortasi"],
+                    },
+                ]}
                 toolbarArrangement="report-right-scroll"
                 tableClassName="min-w-[1960px]"
                 onRowClick={(row) => router.push(scopedHref(`/dashboard/araclar/${row.id}`))}

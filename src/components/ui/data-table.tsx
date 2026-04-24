@@ -64,6 +64,14 @@ interface DataTableProps<TData, TValue> {
         typeOptions?: Array<{ value: string; label: string }>
         showDateRange?: boolean
     }
+    columnViewPresets?: Array<{ id: string; label: string; columnIds: string[] }>
+}
+
+type SavedColumnView = {
+    id: string
+    name: string
+    columnIds: string[]
+    createdAt: string
 }
 
 async function getResponseErrorMessage(response: Response, fallback: string) {
@@ -247,6 +255,7 @@ export function DataTable<TData, TValue>({
     excelEntity,
     toolbarLayout = "compact",
     toolbarArrangement = "default",
+    columnViewPresets = [],
 }: DataTableProps<TData, TValue>) {
     const { isAdmin } = useDashboardScope()
     const pathname = usePathname()
@@ -275,8 +284,11 @@ export function DataTable<TData, TValue>({
     const [isDesktop, setIsDesktop] = React.useState(false)
     const loadedVisibilityKeyRef = React.useRef<string | null>(null)
     const loadedPinningKeyRef = React.useRef<string | null>(null)
+    const loadedViewKeyRef = React.useRef<string | null>(null)
     const [hydratedVisibilityKey, setHydratedVisibilityKey] = React.useState<string | null>(null)
     const [hydratedPinningKey, setHydratedPinningKey] = React.useState<string | null>(null)
+    const [hydratedViewKey, setHydratedViewKey] = React.useState<string | null>(null)
+    const [savedColumnViews, setSavedColumnViews] = React.useState<SavedColumnView[]>([])
     const headerCellRefs = React.useRef(new Map<string, HTMLTableCellElement>())
     const [leftPinnedOffsets, setLeftPinnedOffsets] = React.useState<Record<string, number>>({})
     const canBulkDelete = Boolean(excelEntity) && isAdmin
@@ -287,6 +299,10 @@ export function DataTable<TData, TValue>({
     )
     const pinningStorageKey = React.useMemo(
         () => `datatable:pinned:${excelEntity || "default"}:${pathname}`,
+        [excelEntity, pathname]
+    )
+    const viewStorageKey = React.useMemo(
+        () => `datatable:views:${excelEntity || "default"}:${pathname}`,
         [excelEntity, pathname]
     )
     const tableColumns = React.useMemo(() => {
@@ -404,6 +420,14 @@ export function DataTable<TData, TValue>({
     )
     const hasAnyHideableColumn = hideableColumns.length > 0
     const visibleHideableColumnCount = hideableColumns.filter((column) => column.getIsVisible()).length
+    const hideableColumnIds = React.useMemo(
+        () => hideableColumns.map((column) => column.id),
+        [hideableColumns]
+    )
+    const hideableColumnIdSet = React.useMemo(
+        () => new Set(hideableColumnIds),
+        [hideableColumnIds]
+    )
     const hasToolbar = Boolean(toolbarRight || excelEntity || hasAnyFilterableColumn || hasAnyHideableColumn)
     const isCompactToolbar = toolbarLayout === "compact"
     const isReportRightScroll = isCompactToolbar && toolbarArrangement === "report-right-scroll"
@@ -455,6 +479,46 @@ export function DataTable<TData, TValue>({
             return typeof original?.id === "string" ? original.id : null
         })
         .filter((id): id is string => Boolean(id))
+
+    const sanitizeColumnViewIds = React.useCallback(
+        (input: string[]) => {
+            const uniqueIds = Array.from(new Set(input))
+            return uniqueIds.filter((columnId) => hideableColumnIdSet.has(columnId) && !isNonDataColumnId(columnId))
+        },
+        [hideableColumnIdSet]
+    )
+
+    const applyColumnView = React.useCallback(
+        (columnIds: string[]) => {
+            const sanitizedIds = sanitizeColumnViewIds(columnIds)
+            if (sanitizedIds.length === 0) {
+                toast.warning("Bu görünümde gösterilecek geçerli sütun bulunamadı.")
+                return
+            }
+
+            const visibleSet = new Set(sanitizedIds)
+            setColumnVisibility((prev) => {
+                const next: VisibilityState = { ...prev }
+                hideableColumnIds.forEach((columnId) => {
+                    next[columnId] = visibleSet.has(columnId)
+                })
+                if (statusColumnId) next[statusColumnId] = true
+                return next
+            })
+        },
+        [hideableColumnIds, sanitizeColumnViewIds, statusColumnId]
+    )
+
+    const normalizedColumnViewPresets = React.useMemo(
+        () =>
+            columnViewPresets
+                .map((preset) => ({
+                    ...preset,
+                    columnIds: sanitizeColumnViewIds(preset.columnIds || []),
+                }))
+                .filter((preset) => preset.label.trim().length > 0 && preset.columnIds.length > 0),
+        [columnViewPresets, sanitizeColumnViewIds]
+    )
 
     React.useEffect(() => {
         setPagination((prev) => {
@@ -591,6 +655,59 @@ export function DataTable<TData, TValue>({
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
+        if (loadedViewKeyRef.current === viewStorageKey) return
+        loadedViewKeyRef.current = viewStorageKey
+
+        const raw = window.localStorage.getItem(viewStorageKey)
+        if (!raw) {
+            setSavedColumnViews([])
+            setHydratedViewKey(viewStorageKey)
+            return
+        }
+
+        try {
+            const parsed = JSON.parse(raw) as unknown
+            if (!Array.isArray(parsed)) {
+                setSavedColumnViews([])
+                setHydratedViewKey(viewStorageKey)
+                return
+            }
+
+            const normalized = parsed
+                .filter((item): item is SavedColumnView => {
+                    if (!item || typeof item !== "object") return false
+                    const candidate = item as Partial<SavedColumnView>
+                    return (
+                        typeof candidate.id === "string" &&
+                        typeof candidate.name === "string" &&
+                        Array.isArray(candidate.columnIds) &&
+                        typeof candidate.createdAt === "string"
+                    )
+                })
+                .map((item) => ({
+                    id: item.id,
+                    name: item.name,
+                    columnIds: sanitizeColumnViewIds(item.columnIds),
+                    createdAt: item.createdAt,
+                }))
+                .filter((item) => item.columnIds.length > 0)
+
+            setSavedColumnViews(normalized)
+        } catch {
+            setSavedColumnViews([])
+        } finally {
+            setHydratedViewKey(viewStorageKey)
+        }
+    }, [sanitizeColumnViewIds, viewStorageKey])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
+        if (hydratedViewKey !== viewStorageKey) return
+        window.localStorage.setItem(viewStorageKey, JSON.stringify(savedColumnViews))
+    }, [hydratedViewKey, savedColumnViews, viewStorageKey])
+
+    React.useEffect(() => {
+        if (typeof window === "undefined") return
 
         const media = window.matchMedia("(min-width: 768px)")
         const update = () => setIsDesktop(media.matches)
@@ -674,6 +791,66 @@ export function DataTable<TData, TValue>({
             return [...prev, columnId]
         })
     }, [statusColumnId])
+
+    const handleSaveCurrentColumnView = React.useCallback(() => {
+        const selectedIds = sanitizeColumnViewIds(
+            hideableColumns
+                .filter((column) => column.getIsVisible())
+                .map((column) => column.id)
+        )
+        if (selectedIds.length === 0) {
+            toast.warning("Kaydetmek için en az bir sütun görünür olmalı.")
+            return
+        }
+
+        const rawName = window.prompt("Görünüm adı girin:", "Yeni Görünüm")
+        const viewName = rawName?.trim()
+        if (!viewName) return
+
+        const existing = savedColumnViews.find(
+            (item) => item.name.trim().toLocaleLowerCase("tr-TR") === viewName.toLocaleLowerCase("tr-TR")
+        )
+        const nextId = existing?.id || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+
+        setSavedColumnViews((prev) => {
+            const nextItem: SavedColumnView = {
+                id: nextId,
+                name: viewName,
+                columnIds: selectedIds,
+                createdAt: new Date().toISOString(),
+            }
+            if (!existing) return [nextItem, ...prev]
+            return [nextItem, ...prev.filter((item) => item.id !== existing.id)]
+        })
+
+        toast.success(existing ? "Sütun görünümü güncellendi." : "Sütun görünümü kaydedildi.")
+    }, [hideableColumns, sanitizeColumnViewIds, savedColumnViews])
+
+    const handleDeleteSavedColumnView = React.useCallback(() => {
+        if (savedColumnViews.length === 0) {
+            toast.warning("Silinecek kayıtlı görünüm bulunamadı.")
+            return
+        }
+
+        const suggestion = savedColumnViews[0]?.name || ""
+        const rawName = window.prompt("Silmek istediğiniz görünüm adını yazın:", suggestion)
+        const targetName = rawName?.trim()
+        if (!targetName) return
+
+        const target = savedColumnViews.find(
+            (item) => item.name.trim().toLocaleLowerCase("tr-TR") === targetName.toLocaleLowerCase("tr-TR")
+        )
+        if (!target) {
+            toast.warning("Bu adla kayıtlı görünüm bulunamadı.")
+            return
+        }
+
+        const confirmed = window.confirm(`"${target.name}" görünümünü silmek istiyor musunuz?`)
+        if (!confirmed) return
+
+        setSavedColumnViews((prev) => prev.filter((item) => item.id !== target.id))
+        toast.success("Kayıtlı görünüm silindi.")
+    }, [savedColumnViews])
 
     const getStickyStyle = React.useCallback(
         (columnIndex: number, columnId: string): React.CSSProperties | undefined => {
@@ -1002,6 +1179,54 @@ export function DataTable<TData, TValue>({
                                         }}
                                     >
                                         Varsayılan Sütunlar
+                                    </DropdownMenuItem>
+                                    {normalizedColumnViewPresets.length > 0 ? (
+                                        <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuLabel>Hazır Görünümler</DropdownMenuLabel>
+                                            {normalizedColumnViewPresets.map((preset) => (
+                                                <DropdownMenuItem
+                                                    key={`preset-${preset.id}`}
+                                                    onSelect={(event) => {
+                                                        event.preventDefault()
+                                                        applyColumnView(preset.columnIds)
+                                                        toast.success(`"${preset.label}" görünümü uygulandı.`)
+                                                    }}
+                                                >
+                                                    {preset.label}
+                                                </DropdownMenuItem>
+                                            ))}
+                                        </>
+                                    ) : null}
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuLabel>Özel Görünümler</DropdownMenuLabel>
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault()
+                                            handleSaveCurrentColumnView()
+                                        }}
+                                    >
+                                        Mevcut görünümü kaydet
+                                    </DropdownMenuItem>
+                                    {savedColumnViews.map((view) => (
+                                        <DropdownMenuItem
+                                            key={`saved-${view.id}`}
+                                            onSelect={(event) => {
+                                                event.preventDefault()
+                                                applyColumnView(view.columnIds)
+                                                toast.success(`"${view.name}" görünümü uygulandı.`)
+                                            }}
+                                        >
+                                            {view.name}
+                                        </DropdownMenuItem>
+                                    ))}
+                                    <DropdownMenuItem
+                                        onSelect={(event) => {
+                                            event.preventDefault()
+                                            handleDeleteSavedColumnView()
+                                        }}
+                                    >
+                                        Kayıtlı görünüm sil
                                     </DropdownMenuItem>
                                 </DropdownMenuContent>
                             </DropdownMenu>

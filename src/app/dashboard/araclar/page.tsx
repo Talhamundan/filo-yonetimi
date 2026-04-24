@@ -1,6 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import AraclarClient from "./AraclarClient";
-import { getAracUsageFilter, getCurrentUserRole, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
+import {
+    getAracUsageFilter,
+    getCurrentUserRole,
+    getPersonnelSelectFilter,
+    getSirketListFilter,
+} from "@/lib/auth-utils";
 import {
     getAyDateRange,
     getSelectedAy,
@@ -419,7 +424,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
         getAracUsageFilter(selectedSirketId),
         getPersonnelSelectFilter(),
         getSirketListFilter(),
-        getCurrentUserRole()
+        getCurrentUserRole(),
     ]);
     const filterParts: Record<string, unknown>[] = [];
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
@@ -543,7 +548,6 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
             calistigiKurumSirketId: mappedSirketId,
         };
     });
-
     return (
         <AraclarClient 
             initialAraclar={araclarWithUsageCompany as any} 
