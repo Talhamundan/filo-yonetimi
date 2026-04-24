@@ -490,7 +490,7 @@ export default function OnayMerkeziClient({
                     data={registeredTableData}
                     searchKey="adSoyad"
                     searchPlaceholder="Giriş yetkili personel ara..."
-                    tableClassName="min-w-[980px]"
+                    tableClassName="w-full min-w-0"
                 />
             </section>
 
@@ -519,7 +519,7 @@ export default function OnayMerkeziClient({
                         data={yakitTanklar}
                         searchKey="ad"
                         searchPlaceholder="Tank ara..."
-                        tableClassName="min-w-[800px]"
+                        tableClassName="w-full min-w-0"
                     />
                 ) : (
                     <div className="py-12 flex flex-col items-center justify-center text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">

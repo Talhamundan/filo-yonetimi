@@ -106,7 +106,7 @@ export default function TrafikSigortasiClient({ initialData }: { initialData: Si
                 </div>
 
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[1000px]">
+                    <Table className="w-full min-w-0">
                         <TableHeader className="bg-[#F1F5F9] border-b border-[#E2E8F0]">
                             <TableRow className="hover:bg-transparent">
                                 <TableHead className="w-[140px] font-bold text-slate-600 py-3 px-4 text-[11px] uppercase tracking-wider">Durum</TableHead>

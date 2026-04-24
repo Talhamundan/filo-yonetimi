@@ -1,30 +1,12 @@
 import { prisma } from "../../../lib/prisma";
 import YakitlarClient from "./client";
 import { YakitRow } from "./columns";
-import { getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
+import { getAracUsageFilter, getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display";
 import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
-import { auth } from "@/auth";
-import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
-
-function getVehicleUsageCompanyFilter(sirketId: string) {
-    return {
-        OR: [
-            { kullanici: { sirketId, deletedAt: null } },
-            {
-                kullaniciGecmisi: {
-                    some: {
-                        bitis: null,
-                        kullanici: { sirketId, deletedAt: null },
-                    },
-                },
-            },
-        ],
-    };
-}
 
 export default async function YakitlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
@@ -35,31 +17,11 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
     ]);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
-    const session = await auth();
-    const role = session?.user?.rol || null;
-    const rawCurrentSirketId = session?.user?.sirketId;
-    const currentSirketId = typeof rawCurrentSirketId === "string" ? rawCurrentSirketId.trim() || null : null;
-    const isSofor = isDriverRole(role);
-    const hasGlobalCompanyAccess = canRoleAccessAllCompanies(role, currentSirketId);
-    const selectedScopeSirketId = selectedSirketId?.trim() || null;
-    const usageScopeSirketId = hasGlobalCompanyAccess ? selectedScopeSirketId : currentSirketId;
-
-    const [defaultYakitFilter, defaultAracFilter, personelFilter] = await Promise.all([
-        getModelFilter('yakit', selectedSirketId),
-        getModelFilter('arac', selectedSirketId),
-        getPersonnelSelectFilter(),
+    const [queryFilter, aracFilter, personelFilter] = await Promise.all([
+        getModelFilter("yakit", selectedSirketId),
+        getAracUsageFilter(selectedSirketId),
+        getPersonnelSelectFilter(selectedSirketId),
     ]);
-
-    const queryFilter = isSofor
-        ? (defaultYakitFilter as Record<string, unknown>)
-        : usageScopeSirketId
-            ? ({ arac: { deletedAt: null, ...(getVehicleUsageCompanyFilter(usageScopeSirketId) as any) } } as Record<string, unknown>)
-            : ({ arac: { deletedAt: null } } as Record<string, unknown>);
-    const aracFilter = isSofor
-        ? (defaultAracFilter as Record<string, unknown>)
-        : usageScopeSirketId
-            ? ({ deletedAt: null, ...(getVehicleUsageCompanyFilter(usageScopeSirketId) as any) } as Record<string, unknown>)
-            : ({ deletedAt: null } as Record<string, unknown>);
 
     const yakitWhere = (queryFilter || {}) as Record<string, unknown>;
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);

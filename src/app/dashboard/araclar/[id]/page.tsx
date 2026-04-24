@@ -232,7 +232,7 @@ export default async function AracDetailPage(props: { params: Promise<{ id: stri
     const selectedSirketId = await getSelectedSirketId(props.searchParams);
     const [filter, kullaniciFilter, rol, sirketListFilter] = await Promise.all([
         getModelFilter("arac", selectedSirketId),
-        getPersonnelSelectFilter(),
+        getPersonnelSelectFilter(selectedSirketId),
         getCurrentUserRole(),
         getSirketListFilter(),
     ]);

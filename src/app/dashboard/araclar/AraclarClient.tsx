@@ -720,7 +720,7 @@ export default function AraclarClient({
                     },
                 ]}
                 toolbarArrangement="report-right-scroll"
-                tableClassName="min-w-[1960px]"
+                tableClassName="w-full min-w-0"
                 onRowClick={(row) => router.push(scopedHref(`/dashboard/araclar/${row.id}`))}
                 excelEntity={
                     isExternalMode

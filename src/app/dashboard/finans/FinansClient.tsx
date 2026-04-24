@@ -188,7 +188,7 @@ export default function FinansClient({ initialRecords, yakitMetrics = [] }: { in
                 </div>
 
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[800px]">
+                    <Table className="w-full min-w-0">
                         <TableHeader className="bg-[#F8FAFC] border-b border-[#E2E8F0]">
                             <TableRow className="hover:bg-transparent">
                                 <TableHead className="w-[150px] font-semibold text-slate-500 py-3.5 px-4 text-[11px] uppercase tracking-wider">

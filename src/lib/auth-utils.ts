@@ -18,6 +18,20 @@ const getSession = cache(async () => {
     return await auth();
 });
 
+const getSirketNameById = cache(async (sirketId?: string | null) => {
+    const normalizedId = typeof sirketId === "string" ? sirketId.trim() : "";
+    if (!normalizedId) return null;
+
+    const sirket = await prisma.sirket
+        .findUnique({
+            where: { id: normalizedId },
+            select: { ad: true },
+        })
+        .catch(() => null);
+
+    return typeof sirket?.ad === "string" && sirket.ad.trim().length > 0 ? sirket.ad.trim() : null;
+});
+
 function getRequestedCompanyId(value?: string | null) {
     const trimmed = value?.trim();
     return trimmed ? trimmed : null;
@@ -48,52 +62,14 @@ export async function getModelFilter(modelName: string, selectedSirketId?: strin
     return getModelFilterWithOptions(modelName, selectedSirketId, { includeDeleted: false });
 }
 
-function normalizeCompanyName(value: string | null | undefined) {
-    const normalized = typeof value === "string" ? value.trim() : "";
-    return normalized || null;
-}
-
 /**
  * Araç kullanım kapsamı filtresi:
- * - Standart politika filtresini korur
- * - Seçili kapsam şirketi varsa, manuel girilmiş `calistigiKurum` metnini de aynı şirkete eşler
+ * - Standart politika filtresini kullanır
+ * - `calistigiKurum` eşlemeleri policy katmanında yönetilir
  */
 export async function getAracUsageFilter(selectedSirketId?: string | null) {
     const baseFilter = (await getModelFilter("arac", selectedSirketId)) as Record<string, unknown>;
-    const session = await getSession();
-    const role = session?.user?.rol;
-
-    if (isDriverRole(role)) {
-        return baseFilter;
-    }
-
-    const scopedSirketId = await getScopedSirketId(selectedSirketId);
-    if (!scopedSirketId) {
-        return baseFilter;
-    }
-
-    const sirket = await prisma.sirket
-        .findUnique({
-            where: { id: scopedSirketId },
-            select: { ad: true },
-        })
-        .catch(() => null);
-    const sirketAd = normalizeCompanyName(sirket?.ad);
-    if (!sirketAd) {
-        return baseFilter;
-    }
-
-    return {
-        OR: [
-            baseFilter,
-            {
-                calistigiKurum: {
-                    equals: sirketAd,
-                    mode: "insensitive",
-                },
-            },
-        ],
-    } as Record<string, unknown>;
+    return baseFilter;
 }
 
 export async function getModelFilterWithOptions(
@@ -108,24 +84,30 @@ export async function getModelFilterWithOptions(
 
     const { rol, sirketId, id: userId } = session.user;
     const requestedCompanyId = getRequestedCompanyId(selectedSirketId);
+    const [currentSirketName, requestedSirketName] = await Promise.all([
+        getSirketNameById(sirketId),
+        getSirketNameById(requestedCompanyId),
+    ]);
 
     return getModelFilterByPolicy({
         modelName,
         role: rol,
         currentSirketId: sirketId,
+        currentSirketName,
         currentUserId: userId,
         requestedSirketId: requestedCompanyId,
+        requestedSirketName,
         includeDeleted: options?.includeDeleted ?? false,
     });
 }
 
 /**
- * Personel secim listeleri icin sabit kapsam kurali:
- * - Bagimsiz kullanici (sirketi olmayan): tum personeller
- * - Sirkete bagli kullanici: sadece kendi sirket personeli
- * - Sofor rolu: politika geregi kendi kaydi
+ * Personel secim listeleri icin kapsam kurali:
+ * - Global kapsam rolleri seçili şirkete göre filtreleyebilir
+ * - Şirkete bağlı kullanıcılar kendi şirket kapsamı ile devam eder
+ * - Şoför rolü politika gereği kendi kaydını görür
  */
-export async function getPersonnelSelectFilter() {
+export async function getPersonnelSelectFilter(selectedSirketId?: string | null) {
     const session = await getSession();
     if (!session?.user) {
         return { id: "blocked" };
@@ -133,14 +115,25 @@ export async function getPersonnelSelectFilter() {
 
     const { rol, sirketId, id: userId } = session.user;
     const currentSirketId = getRequestedCompanyId(sirketId);
-    const requestedSirketId = isDriverRole(rol) ? null : currentSirketId;
+    const selectedCompanyId = getRequestedCompanyId(selectedSirketId);
+    const requestedSirketId = isDriverRole(rol)
+        ? null
+        : canRoleAccessAllCompanies(rol, currentSirketId)
+            ? selectedCompanyId
+            : currentSirketId;
+    const [currentSirketName, requestedSirketName] = await Promise.all([
+        getSirketNameById(currentSirketId),
+        getSirketNameById(requestedSirketId),
+    ]);
 
     return getModelFilterByPolicy({
         modelName: "kullanici",
         role: rol,
         currentSirketId: currentSirketId,
+        currentSirketName,
         currentUserId: userId,
         requestedSirketId,
+        requestedSirketName,
         includeDeleted: false,
     });
 }

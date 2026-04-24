@@ -622,7 +622,7 @@ export default function KiraliklarClient({
                     searchKey="arac_plaka"
                     searchPlaceholder="Plaka / personel / istasyon ara..."
                     toolbarArrangement="report-right-scroll"
-                    tableClassName="min-w-[1100px]"
+                    tableClassName="w-full min-w-0"
                 />
             </section>
 
@@ -676,7 +676,7 @@ export default function KiraliklarClient({
                     searchKey="plaka"
                     searchPlaceholder="Plaka ara..."
                     excelEntity="kiralikArac"
-                    tableClassName="min-w-[1080px]"
+                    tableClassName="w-full min-w-0"
                 />
             </section>
 
@@ -724,7 +724,7 @@ export default function KiraliklarClient({
                     searchKey="adSoyad"
                     searchPlaceholder="Personel ara..."
                     excelEntity="kiralikPersonel"
-                    tableClassName="min-w-[980px]"
+                    tableClassName="w-full min-w-0"
                 />
             </section>
 

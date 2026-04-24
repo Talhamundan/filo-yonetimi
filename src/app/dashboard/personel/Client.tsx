@@ -231,7 +231,7 @@ export default function PersonelClient({
                 serverFiltering={{
                     statusOptions: ROLLER.map((rol) => ({ value: rol, label: getRoleLabel(rol) })),
                 }}
-                tableClassName="min-w-[1280px]"
+                tableClassName="w-full min-w-0"
                 onRowClick={(row) => router.push(scopedHref(`/dashboard/personel/${row.id}`))}
                 excelEntity={
                     isExternalMode

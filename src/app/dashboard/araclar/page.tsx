@@ -422,7 +422,7 @@ export default async function AraclarPage(props: { searchParams?: Promise<Dashbo
 
     const [rawFilter, kullaniciFilter, sirketListFilter, rol] = await Promise.all([
         getAracUsageFilter(selectedSirketId),
-        getPersonnelSelectFilter(),
+        getPersonnelSelectFilter(selectedSirketId),
         getSirketListFilter(),
         getCurrentUserRole(),
     ]);

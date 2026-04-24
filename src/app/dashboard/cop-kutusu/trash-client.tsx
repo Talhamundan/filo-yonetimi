@@ -305,7 +305,7 @@ export default function TrashClient({
 
             <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-[13px]">
+                <table className="w-full min-w-0 text-[13px]">
                     <thead className="bg-slate-50 border-b border-slate-200">
                         <tr>
                             <th className="text-left p-3 font-semibold text-slate-600">Tür</th>

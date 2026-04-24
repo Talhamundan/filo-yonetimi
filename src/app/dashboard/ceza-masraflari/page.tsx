@@ -68,7 +68,7 @@ export default async function CezaMasraflariPage(props: { searchParams?: Promise
     const [cezaFilter, aracFilter, kullaniciFilter] = await Promise.all([
         getModelFilter("ceza", selectedSirketId),
         getModelFilter("arac", selectedSirketId),
-        getPersonnelSelectFilter(),
+        getPersonnelSelectFilter(selectedSirketId),
     ]);
     const cezaWhere = withAyDateFilter((cezaFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);

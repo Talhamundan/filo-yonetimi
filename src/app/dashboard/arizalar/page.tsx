@@ -18,7 +18,7 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
     const [filter, aracFilter, personelFilter] = await Promise.all([
         getModelFilter("arizaKaydi", selectedSirketId),
         getModelFilter("arac", selectedSirketId),
-        getPersonnelSelectFilter(),
+        getPersonnelSelectFilter(selectedSirketId),
     ]);
 
     const yearWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "bildirimTarihi", selectedYil, selectedAy);

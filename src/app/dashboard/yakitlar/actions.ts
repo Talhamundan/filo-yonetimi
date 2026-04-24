@@ -15,20 +15,37 @@ const YAKIT_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.Yakit?.fields?.some((field: any) => field?.name === "soforId")
 );
 
-function getVehicleUsageCompanyFilter(sirketId: string) {
-    return {
-        OR: [
-            { kullanici: { sirketId, deletedAt: null } },
+function getVehicleUsageCompanyFilter(sirketId: string, sirketName?: string | null) {
+    const clauses: Record<string, unknown>[] = [
+        { kullanici: { sirketId, deletedAt: null } },
+        {
+            kullaniciGecmisi: {
+                some: {
+                    bitis: null,
+                    kullanici: { sirketId, deletedAt: null },
+                },
+            },
+        },
+    ];
+
+    const normalizedSirketName = typeof sirketName === "string" ? sirketName.trim() : "";
+    if (normalizedSirketName) {
+        const kurumMatch = { equals: normalizedSirketName, mode: "insensitive" as const };
+        clauses.push(
+            { calistigiKurum: kurumMatch },
+            { kullanici: { calistigiKurum: kurumMatch, deletedAt: null } },
             {
                 kullaniciGecmisi: {
                     some: {
                         bitis: null,
-                        kullanici: { sirketId, deletedAt: null },
+                        kullanici: { calistigiKurum: kurumMatch, deletedAt: null },
                     },
                 },
-            },
-        ],
-    };
+            }
+        );
+    }
+
+    return { OR: clauses };
 }
 
 function revalidateYakitPages(aracId?: string, soforId?: string | null) {
@@ -42,6 +59,17 @@ function revalidateYakitPages(aracId?: string, soforId?: string | null) {
 function normalizeSirketId(value: unknown) {
     const normalized = typeof value === "string" ? value.trim() : "";
     return normalized || null;
+}
+
+async function getSirketNameById(sirketId: string | null) {
+    if (!sirketId) return null;
+    const sirket = await (prisma as any).sirket
+        .findUnique({
+            where: { id: sirketId },
+            select: { ad: true },
+        })
+        .catch(() => null);
+    return typeof sirket?.ad === "string" && sirket.ad.trim().length > 0 ? sirket.ad.trim() : null;
 }
 
 type CreateYakitInput = {
@@ -146,6 +174,7 @@ async function getYakitScopedAracOrThrow<TSelect>(aracId: string, select?: TSele
     } catch (originalError) {
         const actor = await assertAuthenticatedUser();
         const actorSirketId = normalizeSirketId((actor as any)?.sirketId);
+        const actorSirketName = await getSirketNameById(actorSirketId);
         const role = (actor as any)?.rol;
 
         if (!actorSirketId || isDriverRole(role) || canRoleAccessAllCompanies(role, actorSirketId)) {
@@ -156,7 +185,7 @@ async function getYakitScopedAracOrThrow<TSelect>(aracId: string, select?: TSele
             where: {
                 id: aracId,
                 deletedAt: null,
-                ...(getVehicleUsageCompanyFilter(actorSirketId) as any),
+                ...(getVehicleUsageCompanyFilter(actorSirketId, actorSirketName) as any),
             },
             ...(select ? { select } : {}),
         });
@@ -181,6 +210,7 @@ async function getYakitScopedRecordOrThrow<TSelect>(id: string, select?: TSelect
     } catch (originalError) {
         const actor = await assertAuthenticatedUser();
         const actorSirketId = normalizeSirketId((actor as any)?.sirketId);
+        const actorSirketName = await getSirketNameById(actorSirketId);
         const role = (actor as any)?.rol;
 
         if (!actorSirketId || isDriverRole(role) || canRoleAccessAllCompanies(role, actorSirketId)) {
@@ -192,7 +222,7 @@ async function getYakitScopedRecordOrThrow<TSelect>(id: string, select?: TSelect
                 id,
                 arac: {
                     deletedAt: null,
-                    ...(getVehicleUsageCompanyFilter(actorSirketId) as any),
+                    ...(getVehicleUsageCompanyFilter(actorSirketId, actorSirketName) as any),
                 },
             },
             ...(select ? { select } : {}),

@@ -52,7 +52,7 @@ export default async function ZimmetlerPage(props: { searchParams?: Promise<Dash
     const yakitFilter = await getModelFilter("yakit", selectedSirketId);
     const filter = await getModelFilter('kullaniciZimmet', selectedSirketId);
     const aracFilter = await getModelFilter('arac', selectedSirketId);
-    const personelFilter = await getPersonnelSelectFilter();
+    const personelFilter = await getPersonnelSelectFilter(selectedSirketId);
     const zimmetWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "baslangic", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [zimmetWhere as Record<string, unknown>];

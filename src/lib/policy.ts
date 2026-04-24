@@ -170,22 +170,43 @@ function getBlockedFilter(modelName: PolicyModelName) {
 }
 
 function getVehicleUsageCompanyFilter(sirketId: string) {
-    return {
-        OR: [
-            { kullanici: { sirketId, deletedAt: null } },
+    return getVehicleUsageCompanyFilterWithName(sirketId, null);
+}
+
+function getVehicleUsageCompanyFilterWithName(sirketId: string, sirketName: string | null) {
+    const clauses: Record<string, unknown>[] = [
+        { kullanici: { sirketId, deletedAt: null } },
+        {
+            kullaniciGecmisi: {
+                some: {
+                    bitis: null,
+                    kullanici: { sirketId, deletedAt: null },
+                },
+            },
+        },
+    ];
+
+    const normalizedSirketName = (sirketName || "").trim();
+    if (normalizedSirketName) {
+        const kurumMatch = { equals: normalizedSirketName, mode: "insensitive" as const };
+        clauses.push(
+            { calistigiKurum: kurumMatch },
+            { kullanici: { calistigiKurum: kurumMatch, deletedAt: null } },
             {
                 kullaniciGecmisi: {
                     some: {
                         bitis: null,
-                        kullanici: { sirketId, deletedAt: null },
+                        kullanici: { calistigiKurum: kurumMatch, deletedAt: null },
                     },
                 },
-            },
-        ],
-    };
+            }
+        );
+    }
+
+    return { OR: clauses };
 }
 
-function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | null) {
+function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | null, sirketName: string | null) {
     if (modelName === "sirket") {
         return sirketId ? { id: sirketId } : {};
     }
@@ -196,10 +217,22 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
 
     switch (modelName) {
         case "arac":
-            return getVehicleUsageCompanyFilter(sirketId);
+            return getVehicleUsageCompanyFilterWithName(sirketId, sirketName);
         case "kullanici":
         case "personel":
-            return { sirketId };
+            return sirketName
+                ? {
+                      OR: [
+                          { sirketId },
+                          {
+                              calistigiKurum: {
+                                  equals: sirketName,
+                                  mode: "insensitive",
+                              },
+                          },
+                      ],
+                  }
+                : { sirketId };
         case "yakit":
         case "ceza":
         case "masraf":
@@ -208,11 +241,11 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "kasko":
         case "trafikSigortasi":
         case "dokuman":
-            return { arac: getVehicleUsageCompanyFilter(sirketId) };
+            return { arac: getVehicleUsageCompanyFilterWithName(sirketId, sirketName) };
         case "bakim":
             return {
                 OR: [
-                    { arac: getVehicleUsageCompanyFilter(sirketId) },
+                    { arac: getVehicleUsageCompanyFilterWithName(sirketId, sirketName) },
                     { AND: [{ aracId: null }, { sirketId }] },
                 ],
             };
@@ -220,7 +253,7 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
             return { companyId: sirketId };
         case "kullaniciZimmet":
         case "zimmet":
-            return { arac: getVehicleUsageCompanyFilter(sirketId) };
+            return { arac: getVehicleUsageCompanyFilterWithName(sirketId, sirketName) };
         default:
             return { sirketId };
     }
@@ -307,11 +340,22 @@ export function getModelFilterByPolicy(params: {
     modelName: PolicyModelName;
     role: string | null | undefined;
     currentSirketId: string | null | undefined;
+    currentSirketName?: string | null | undefined;
     currentUserId: string | null | undefined;
     requestedSirketId: string | null;
+    requestedSirketName?: string | null | undefined;
     includeDeleted?: boolean;
 }) {
-    const { modelName, role, currentSirketId, currentUserId, requestedSirketId, includeDeleted = false } = params;
+    const {
+        modelName,
+        role,
+        currentSirketId,
+        currentSirketName,
+        currentUserId,
+        requestedSirketId,
+        requestedSirketName,
+        includeDeleted = false,
+    } = params;
     const normalizedRole = normalizeRole(role);
 
     if (!normalizedRole) {
@@ -321,7 +365,11 @@ export function getModelFilterByPolicy(params: {
     if (canRoleAccessAllCompanies(normalizedRole, currentSirketId)) {
         return withActiveVehicleFilter(
             modelName,
-            withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, requestedSirketId), includeDeleted),
+            withSoftDeleteFilter(
+                modelName,
+                getCompanyModelFilter(modelName, requestedSirketId, requestedSirketName || null),
+                includeDeleted
+            ),
             includeDeleted
         );
     }
@@ -341,7 +389,11 @@ export function getModelFilterByPolicy(params: {
 
     return withActiveVehicleFilter(
         modelName,
-        withSoftDeleteFilter(modelName, getCompanyModelFilter(modelName, currentSirketId || null), includeDeleted),
+        withSoftDeleteFilter(
+            modelName,
+            getCompanyModelFilter(modelName, currentSirketId || null, currentSirketName || null),
+            includeDeleted
+        ),
         includeDeleted
     );
 }
