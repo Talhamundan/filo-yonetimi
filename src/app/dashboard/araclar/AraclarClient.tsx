@@ -690,7 +690,7 @@ export default function AraclarClient({
                         { value: "BOSTA", label: "Boşta" },
                         { value: "SERVISTE", label: "Serviste" },
                         { value: "YEDEK", label: "Yedek" },
-                        { value: "ARIZALI", label: "Arızalı" },
+                        { value: "ARIZALI", label: "Kazalı" },
                     ],
                     typeOptions: [
                         { value: "BINEK", label: ARAC_UST_KATEGORI_LABELS.BINEK },

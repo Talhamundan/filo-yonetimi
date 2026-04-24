@@ -19,6 +19,7 @@ import {
     FolderOpen,
     Building2,
     Handshake,
+    FileWarning,
     Truck,
     X,
 } from "lucide-react"
@@ -200,7 +201,7 @@ export default function Sidebar({
                 {/* Operations */}
                 <SectionTitle title="Operasyonlar" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-0.5 mb-4">
-                    <NavItem href="/dashboard/arizalar" scopedHref={buildScopedHref("/dashboard/arizalar")} icon={AlertTriangle} label="Arıza Kayıtları" active={isActivePath("/dashboard/arizalar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/arizalar" scopedHref={buildScopedHref("/dashboard/arizalar")} icon={AlertTriangle} label="Kazalı Araç Takibi" active={isActivePath("/dashboard/arizalar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/servis-kayitlari" scopedHref={buildScopedHref("/dashboard/servis-kayitlari")} icon={Wrench} label="Servis Kayıtları" active={isActivePath("/dashboard/servis-kayitlari")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/muayeneler" scopedHref={buildScopedHref("/dashboard/muayeneler")} icon={CheckCircle} label="Muayene Takibi" active={isActivePath("/dashboard/muayeneler")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
@@ -209,7 +210,7 @@ export default function Sidebar({
                 <SectionTitle title="Finans" collapsed={effectiveCollapsed} />
                 <nav className="flex flex-col gap-0.5 mb-4">
                     <NavItem href="/dashboard/yakitlar" scopedHref={buildScopedHref("/dashboard/yakitlar")} icon={Fuel} label="Yakıt Harcamaları" active={isActivePath("/dashboard/yakitlar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/ceza-masraflari" scopedHref={buildScopedHref("/dashboard/ceza-masraflari")} icon={AlertTriangle} label="Ceza Masrafları" active={isActivePath("/dashboard/ceza-masraflari")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/ceza-masraflari" scopedHref={buildScopedHref("/dashboard/ceza-masraflari")} icon={FileWarning} label="Ceza Masrafları" active={isActivePath("/dashboard/ceza-masraflari")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/masraflar" scopedHref={buildScopedHref("/dashboard/masraflar")} icon={Receipt} label="Genel Masraflar" active={isActivePath("/dashboard/masraflar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 

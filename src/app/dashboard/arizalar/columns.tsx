@@ -10,6 +10,12 @@ import { PersonelLink } from "@/components/links/RecordLinks";
 export type ArizaRow = {
     id: string;
     aciklama: string;
+    kazaTarihi?: Date | null;
+    kazaYeri?: string | null;
+    kazaTuru?: string | null;
+    sigortaDosyaNo?: string | null;
+    eksperNotu?: string | null;
+    kusurOrani?: number | null;
     oncelik: "DUSUK" | "ORTA" | "YUKSEK" | "KRITIK";
     durum: "ACIK" | "SERVISTE" | "TAMAMLANDI" | "IPTAL";
     km: number | null;
@@ -41,11 +47,11 @@ const formatDate = (date: string | Date | null | undefined) =>
 function renderDurumBadge(durum: ArizaRow["durum"]) {
     switch (durum) {
         case "ACIK":
-            return <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none font-semibold">Açık</Badge>;
+            return <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none font-semibold">Bildirildi</Badge>;
         case "SERVISTE":
-            return <Badge className="bg-amber-100 text-amber-700 border-0 shadow-none font-semibold">Serviste</Badge>;
+            return <Badge className="bg-amber-100 text-amber-700 border-0 shadow-none font-semibold">Onarımda</Badge>;
         case "TAMAMLANDI":
-            return <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none font-semibold">Tamamlandı</Badge>;
+            return <Badge className="bg-emerald-100 text-emerald-700 border-0 shadow-none font-semibold">Onarım Tamamlandı</Badge>;
         case "IPTAL":
             return <Badge className="bg-slate-200 text-slate-700 border-0 shadow-none font-semibold">İptal</Badge>;
         default:
@@ -56,13 +62,13 @@ function renderDurumBadge(durum: ArizaRow["durum"]) {
 function renderOncelikBadge(oncelik: ArizaRow["oncelik"]) {
     switch (oncelik) {
         case "KRITIK":
-            return <Badge className="bg-orange-100 text-orange-700 border-0 shadow-none font-semibold">Yüksek</Badge>;
+            return <Badge className="bg-rose-100 text-rose-700 border-0 shadow-none font-semibold">Ağır</Badge>;
         case "YUKSEK":
-            return <Badge className="bg-orange-100 text-orange-700 border-0 shadow-none font-semibold">Yüksek</Badge>;
+            return <Badge className="bg-orange-100 text-orange-700 border-0 shadow-none font-semibold">Ağır</Badge>;
         case "ORTA":
             return <Badge className="bg-blue-100 text-blue-700 border-0 shadow-none font-semibold">Orta</Badge>;
         case "DUSUK":
-            return <Badge className="bg-slate-100 text-slate-600 border-0 shadow-none font-semibold">Düşük</Badge>;
+            return <Badge className="bg-slate-100 text-slate-600 border-0 shadow-none font-semibold">Hafif</Badge>;
         default:
             return <Badge variant="outline">{oncelik}</Badge>;
     }
@@ -71,8 +77,13 @@ function renderOncelikBadge(oncelik: ArizaRow["oncelik"]) {
 export const getColumns = (showCompanyInfo = false): ColumnDef<ArizaRow>[] => [
     {
         accessorKey: "durum",
-        header: "Durum",
+        header: "Onarım Durumu",
         cell: ({ row }) => renderDurumBadge(row.original.durum),
+    },
+    {
+        accessorKey: "kazaTarihi",
+        header: "Kaza Tarihi",
+        cell: ({ row }) => <div className="text-slate-700 font-medium">{formatDate(row.original.kazaTarihi)}</div>,
     },
     {
         accessorKey: "bildirimTarihi",
@@ -95,8 +106,17 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<ArizaRow>[] => [
     },
     {
         accessorKey: "oncelik",
-        header: "Öncelik",
+        header: "Hasar Seviyesi",
         cell: ({ row }) => renderOncelikBadge(row.original.oncelik),
+    },
+    {
+        accessorKey: "kusurOrani",
+        header: "Kusur",
+        cell: ({ row }) => {
+            const kusur = row.original.kusurOrani;
+            if (kusur == null || !Number.isFinite(kusur)) return <div className="text-slate-500">-</div>;
+            return <div className="font-semibold text-slate-700">%{kusur}</div>;
+        },
     },
     {
         accessorKey: "sofor",
@@ -114,8 +134,32 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<ArizaRow>[] => [
         },
     },
     {
+        accessorKey: "kazaTuru",
+        header: "Kaza Türü",
+        cell: ({ row }) => <div className="text-slate-700 font-medium">{row.original.kazaTuru || "-"}</div>,
+    },
+    {
+        accessorKey: "kazaYeri",
+        header: "Kaza Yeri",
+        cell: ({ row }) => <div className="text-slate-700 font-medium">{row.original.kazaYeri || "-"}</div>,
+    },
+    {
+        accessorKey: "sigortaDosyaNo",
+        header: "Sigorta Dosya No",
+        cell: ({ row }) => <div className="text-slate-700 font-medium">{row.original.sigortaDosyaNo || "-"}</div>,
+    },
+    {
+        accessorKey: "eksperNotu",
+        header: "Eksper Notu",
+        cell: ({ row }) => (
+            <div className="max-w-[220px] truncate text-slate-700 font-medium" title={row.original.eksperNotu || ""}>
+                {row.original.eksperNotu || "-"}
+            </div>
+        ),
+    },
+    {
         accessorKey: "aciklama",
-        header: "Arıza Açıklaması",
+        header: "Kaza Özeti",
         cell: ({ row }) => (
             <div className="max-w-[280px] truncate text-slate-700 font-medium" title={row.original.aciklama}>
                 {row.original.aciklama}
@@ -132,7 +176,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<ArizaRow>[] => [
     },
     {
         accessorKey: "servisAdi",
-        header: "Servis",
+        header: "Onarım Merkezi",
         cell: ({ row }) => <div className="font-semibold text-slate-800">{row.original.servisAdi || "-"}</div>,
     },
     {

@@ -24,9 +24,22 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
     const yearWhere = withAyDateFilter((filter || {}) as Record<string, unknown>, "bildirimTarihi", selectedYil, selectedAy);
     const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
     const whereParts: Record<string, unknown>[] = [yearWhere as Record<string, unknown>];
+    const arizaModelFields = new Set(
+        (((prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields || []) as Array<{ name?: string }>)
+            .map((field) => field?.name || "")
+            .filter(Boolean)
+    );
+    const hasKazaYeri = arizaModelFields.has("kazaYeri");
+    const hasKazaTuru = arizaModelFields.has("kazaTuru");
+    const hasSigortaDosyaNo = arizaModelFields.has("sigortaDosyaNo");
+    const hasEksperNotu = arizaModelFields.has("eksperNotu");
 
     const qFilter = buildTokenizedOrWhere(commonFilters.q, (token) => [
         { aciklama: { contains: token, mode: "insensitive" } },
+        ...(hasKazaYeri ? [{ kazaYeri: { contains: token, mode: "insensitive" } }] : []),
+        ...(hasKazaTuru ? [{ kazaTuru: { contains: token, mode: "insensitive" } }] : []),
+        ...(hasSigortaDosyaNo ? [{ sigortaDosyaNo: { contains: token, mode: "insensitive" } }] : []),
+        ...(hasEksperNotu ? [{ eksperNotu: { contains: token, mode: "insensitive" } }] : []),
         { servisAdi: { contains: token, mode: "insensitive" } },
         { yapilanIslemler: { contains: token, mode: "insensitive" } },
         { arac: { plaka: { contains: token, mode: "insensitive" } } },
@@ -73,7 +86,7 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
                   },
               })
               .catch(async (error: any) => {
-                  console.warn("Arıza kayıtları okunamadı.", error);
+                  console.warn("Kaza kayıtları okunamadı.", error);
                   return arizaKaydiModel
                       .findMany({
                           where: scopedWhere as any,
@@ -87,7 +100,7 @@ export default async function ArizalarPage(props: { searchParams?: Promise<Dashb
                           },
                       })
                       .catch((fallbackError: any) => {
-                          console.warn("Arıza kayıtları fallback sorgusu da okunamadı.", fallbackError);
+                          console.warn("Kaza kayıtları fallback sorgusu da okunamadı.", fallbackError);
                           return [];
                       });
               })

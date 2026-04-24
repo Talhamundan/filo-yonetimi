@@ -3,7 +3,7 @@
 import React, { useMemo, useState } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
-import { Plus, ShieldAlert } from "lucide-react";
+import { FileWarning, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
@@ -331,7 +331,7 @@ export default function CezaMasraflariClient({
                 <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div>
                         <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                            <ShieldAlert className="text-rose-600" /> Ceza Masraflari
+                            <FileWarning className="text-rose-600" /> Ceza Masrafları
                         </h2>
                         <p className="text-slate-500 text-sm mt-1">
                             Araçlara ait ceza ödemelerini finans kalemi olarak takip edin.

@@ -45,6 +45,23 @@ function parseSelectedColumns(values: string[]) {
         .slice(0, 256);
 }
 
+function parseFilteredRowIds(values: unknown) {
+    if (!Array.isArray(values)) return [];
+    const normalized = values
+        .map((value) => (typeof value === "string" ? value.trim() : ""))
+        .filter((value) => value.length > 0);
+    return Array.from(new Set(normalized)).slice(0, 5000);
+}
+
+function parseBooleanFlag(value: unknown) {
+    if (typeof value === "boolean") return value;
+    if (typeof value === "string") {
+        const normalized = value.trim().toLowerCase();
+        return normalized === "1" || normalized === "true" || normalized === "yes";
+    }
+    return false;
+}
+
 function buildExcelEntityScopeFilter(
     entity: string,
     selectedDisFirmaId: string | null,
@@ -96,6 +113,93 @@ function buildExcelEntityScopeFilter(
     return {};
 }
 
+async function runExcelExport(params: {
+    entity: string;
+    config: ReturnType<typeof getEntityOrNull>;
+    selectedSirketId: string | null;
+    selectedYil: number | null;
+    selectedAy: number | null;
+    selectedDisFirmaId: string | null;
+    selectedExternalMode: ExternalVendorMode | null;
+    selectedColumns: string[];
+    selectedColumnKeys: string[];
+    filteredRowIds?: string[];
+    restrictToFilteredRows?: boolean;
+}) {
+    const {
+        entity,
+        config,
+        selectedSirketId,
+        selectedYil,
+        selectedAy,
+        selectedDisFirmaId,
+        selectedExternalMode,
+        selectedColumns,
+        selectedColumnKeys,
+        filteredRowIds = [],
+        restrictToFilteredRows = false,
+    } = params;
+
+    if (!config) {
+        return NextResponse.json({ error: "Desteklenmeyen export modeli." }, { status: 404 });
+    }
+
+    const scopedFilter = config.prismaModel === "disFirma"
+        ? {}
+        : await getModelFilter(config.filterModel, selectedSirketId);
+    const entityFilter = buildExcelEntityScopeFilter(entity, selectedDisFirmaId, selectedExternalMode);
+    const baseFilterParts: Record<string, unknown>[] = [];
+    if (scopedFilter && Object.keys(scopedFilter).length > 0) {
+        baseFilterParts.push(scopedFilter as Record<string, unknown>);
+    }
+    if (entityFilter && Object.keys(entityFilter).length > 0) {
+        baseFilterParts.push(entityFilter);
+    }
+    if (restrictToFilteredRows) {
+        if (filteredRowIds.length > 0) {
+            baseFilterParts.push({ id: { in: filteredRowIds } });
+        } else {
+            // Ekranda filtre sonucu boşsa export da boş dönsün.
+            baseFilterParts.push({ id: "__EXPORT_EMPTY_FILTER_RESULT__" });
+        }
+    }
+
+    const baseFilter =
+        baseFilterParts.length === 0
+            ? {}
+            : baseFilterParts.length === 1
+                ? baseFilterParts[0]
+                : { AND: baseFilterParts };
+    const where =
+        config.dateField && selectedYil
+            ? withAyDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil, selectedAy)
+            : baseFilter;
+
+    const { data, sheetName, headers } = await exportEntity(entity, where as any, {
+        selectedColumns,
+        selectedColumnKeys,
+    });
+
+    const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
+    applyExcelWorksheetFormats(worksheet, { entityKey: entity, headers });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
+    const fileBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
+
+    const now = new Date();
+    const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const fileName = `${config.fileNamePrefix}-${stamp}.xlsx`;
+
+    return new NextResponse(fileBuffer, {
+        status: 200,
+        headers: {
+            "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "Content-Disposition": `attachment; filename="${fileName}"`,
+            "Cache-Control": "no-store",
+        },
+    });
+}
+
 export async function GET(
     req: NextRequest,
     context: { params: Promise<{ entity: string }> }
@@ -122,50 +226,16 @@ export async function GET(
         const selectedExternalMode = parseExternalVendorMode(req.nextUrl.searchParams.get("externalMode"));
         const selectedColumns = parseSelectedColumns(req.nextUrl.searchParams.getAll("column"));
         const selectedColumnKeys = parseSelectedColumns(req.nextUrl.searchParams.getAll("columnKey"));
-        const scopedFilter = config.prismaModel === "disFirma"
-            ? {}
-            : await getModelFilter(config.filterModel, selectedSirketId);
-        const entityFilter = buildExcelEntityScopeFilter(entity, selectedDisFirmaId, selectedExternalMode);
-        const baseFilterParts: Record<string, unknown>[] = [];
-        if (scopedFilter && Object.keys(scopedFilter).length > 0) {
-            baseFilterParts.push(scopedFilter as Record<string, unknown>);
-        }
-        if (entityFilter && Object.keys(entityFilter).length > 0) {
-            baseFilterParts.push(entityFilter);
-        }
-        const baseFilter =
-            baseFilterParts.length === 0
-                ? {}
-                : baseFilterParts.length === 1
-                    ? baseFilterParts[0]
-                    : { AND: baseFilterParts };
-        const where =
-            config.dateField && selectedYil
-                ? withAyDateFilter((baseFilter || {}) as Record<string, unknown>, config.dateField, selectedYil, selectedAy)
-                : baseFilter;
-
-        const { data, sheetName, headers } = await exportEntity(entity, where as any, {
+        return runExcelExport({
+            entity,
+            config,
+            selectedSirketId,
+            selectedYil,
+            selectedAy,
+            selectedDisFirmaId,
+            selectedExternalMode,
             selectedColumns,
             selectedColumnKeys,
-        });
-
-        const worksheet = XLSX.utils.json_to_sheet(data, { header: headers });
-        applyExcelWorksheetFormats(worksheet, { entityKey: entity, headers });
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-        const fileBuffer = XLSX.write(workbook, { type: "buffer", bookType: "xlsx" });
-
-        const now = new Date();
-        const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-        const fileName = `${config.fileNamePrefix}-${stamp}.xlsx`;
-
-        return new NextResponse(fileBuffer, {
-            status: 200,
-            headers: {
-                "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                "Content-Disposition": `attachment; filename="${fileName}"`,
-                "Cache-Control": "no-store",
-            },
         });
     } catch (error) {
         console.error("Excel export hatasi:", error);
@@ -182,14 +252,64 @@ export async function POST(
         if (!role) {
             return NextResponse.json({ error: "Bu işlem için giriş yapmalısınız." }, { status: 401 });
         }
-        if (role === "PERSONEL") {
-            return NextResponse.json({ error: "Excel import yetkiniz bulunmuyor." }, { status: 403 });
-        }
 
         const { entity } = await context.params;
         const config = getEntityOrNull(entity);
         if (!config) {
-            return NextResponse.json({ error: "Desteklenmeyen import modeli." }, { status: 404 });
+            return NextResponse.json({ error: "Desteklenmeyen excel modeli." }, { status: 404 });
+        }
+
+        const contentType = (req.headers.get("content-type") || "").toLowerCase();
+        const isImportRequest = contentType.includes("multipart/form-data");
+
+        if (!isImportRequest) {
+            if (role === "PERSONEL") {
+                return NextResponse.json({ error: "Excel dışa aktarma yetkiniz bulunmuyor." }, { status: 403 });
+            }
+
+            const selectedSirketId = req.nextUrl.searchParams.get("sirket");
+            const selectedYil = parseSelectedYil(req.nextUrl.searchParams.get("yil"));
+            const selectedAy = parseSelectedAy(req.nextUrl.searchParams.get("ay"));
+            const selectedDisFirmaId = parseSelectedDisFirmaId(req.nextUrl.searchParams.get("disFirmaId"));
+            const selectedExternalMode = parseExternalVendorMode(req.nextUrl.searchParams.get("externalMode"));
+            const payload = await req.json().catch(() => ({}));
+
+            const bodySelectedColumns = parseSelectedColumns(
+                Array.isArray((payload as any)?.selectedColumns)
+                    ? ((payload as any).selectedColumns as unknown[]).map((item) => String(item))
+                    : []
+            );
+            const bodySelectedColumnKeys = parseSelectedColumns(
+                Array.isArray((payload as any)?.selectedColumnKeys)
+                    ? ((payload as any).selectedColumnKeys as unknown[]).map((item) => String(item))
+                    : []
+            );
+            const selectedColumns = bodySelectedColumns.length > 0
+                ? bodySelectedColumns
+                : parseSelectedColumns(req.nextUrl.searchParams.getAll("column"));
+            const selectedColumnKeys = bodySelectedColumnKeys.length > 0
+                ? bodySelectedColumnKeys
+                : parseSelectedColumns(req.nextUrl.searchParams.getAll("columnKey"));
+            const filteredRowIds = parseFilteredRowIds((payload as any)?.filteredRowIds);
+            const restrictToFilteredRows = parseBooleanFlag((payload as any)?.restrictToFilteredRows);
+
+            return runExcelExport({
+                entity,
+                config,
+                selectedSirketId,
+                selectedYil,
+                selectedAy,
+                selectedDisFirmaId,
+                selectedExternalMode,
+                selectedColumns,
+                selectedColumnKeys,
+                filteredRowIds,
+                restrictToFilteredRows,
+            });
+        }
+
+        if (role === "PERSONEL") {
+            return NextResponse.json({ error: "Excel import yetkiniz bulunmuyor." }, { status: 403 });
         }
         if (config.prismaModel === "bakim") {
             await ensureBakimColumns();

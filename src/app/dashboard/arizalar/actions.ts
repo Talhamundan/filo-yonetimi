@@ -25,10 +25,39 @@ const ARIZA_HAS_SOFOR_ID = Boolean(
 const BAKIM_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.Bakim?.fields?.some((field: any) => field?.name === "soforId")
 );
+const ARIZA_HAS_KAZA_TARIHI = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "kazaTarihi")
+);
+const ARIZA_HAS_KAZA_YERI = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "kazaYeri")
+);
+const ARIZA_HAS_KAZA_TURU = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "kazaTuru")
+);
+const ARIZA_HAS_SIGORTA_DOSYA_NO = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "sigortaDosyaNo")
+);
+const ARIZA_HAS_EKSPER_NOTU = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "eksperNotu")
+);
+const ARIZA_HAS_KUSUR_ORANI = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.ArizaKaydi?.fields?.some((field: any) => field?.name === "kusurOrani")
+);
 
 function normalizeArizaOncelik(oncelik?: ArizaOncelikInput) {
     if (oncelik === "KRITIK") return "YUKSEK";
     return oncelik || "ORTA";
+}
+
+function normalizeKusurOrani(value?: number | null) {
+    if (typeof value !== "number" || !Number.isFinite(value)) {
+        return null;
+    }
+    const rounded = Math.round(value);
+    if (rounded < 0 || rounded > 100) {
+        throw new Error("Kusur oranı 0 ile 100 arasında olmalıdır.");
+    }
+    return rounded;
 }
 
 async function resolveArizaSoforId(inputSoforId: string | null | undefined, fallbackSoforId?: string | null) {
@@ -47,7 +76,7 @@ async function resolveArizaSoforId(inputSoforId: string | null | undefined, fall
 
     const personel = await getScopedKullaniciOrThrow(normalized, { id: true, rol: true });
     if (personel?.rol === "ADMIN") {
-        throw new Error("Arıza kaydı için admin seçilemez.");
+        throw new Error("Kaza kaydı için admin seçilemez.");
     }
 
     return personel.id as string;
@@ -59,7 +88,7 @@ function resolveArizaActionError(error: unknown, fallback: string) {
         message.includes('"ArizaKaydi"') &&
         (message.toLowerCase().includes("does not exist") || message.toLowerCase().includes("relation"))
     ) {
-        return "Arıza kayıt tablosu bulunamadı. Veritabanı migration işlemi uygulanmalı.";
+        return "Kaza kayıt tablosu bulunamadı. Veritabanı migration işlemi uygulanmalı.";
     }
     return message || fallback;
 }
@@ -91,6 +120,12 @@ export async function createArizaKaydi(data: {
     aracId: string;
     soforId?: string | null;
     aciklama: string;
+    kazaTarihi?: Date | null;
+    kazaYeri?: string | null;
+    kazaTuru?: string | null;
+    sigortaDosyaNo?: string | null;
+    eksperNotu?: string | null;
+    kusurOrani?: number | null;
     oncelik?: ArizaOncelikInput;
     km?: number | null;
     servisAdi?: string | null;
@@ -117,7 +152,7 @@ export async function createArizaKaydi(data: {
         if (activeCount > 0) {
             return {
                 success: false,
-                error: `${arac.plaka} için aktif bir arıza kaydı zaten bulunuyor.`,
+                error: `${arac.plaka} için aktif bir kaza kaydı zaten bulunuyor.`,
             };
         }
 
@@ -126,10 +161,11 @@ export async function createArizaKaydi(data: {
                 ? await assertKmWriteConsistency({
                       aracId: arac.id,
                       km: data.km,
-                      fieldLabel: "Arıza KM",
+                      fieldLabel: "Kaza KM",
                       enforceMaxKnownKm: false,
                   })
                 : null;
+        const kusurOrani = ARIZA_HAS_KUSUR_ORANI ? normalizeKusurOrani(data.kusurOrani) : null;
         const fallbackSoforId = await getAracActiveSoforId(arac.id, arac.kullaniciId || null);
         const resolvedSoforId = await resolveArizaSoforId(data.soforId, fallbackSoforId);
         const usageSirketId = await resolveVehicleUsageCompanyId({
@@ -142,6 +178,12 @@ export async function createArizaKaydi(data: {
                 ...(ARIZA_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                 sirketId: usageSirketId,
                 aciklama: data.aciklama,
+                ...(ARIZA_HAS_KAZA_TARIHI ? { kazaTarihi: data.kazaTarihi || data.bildirimTarihi || new Date() } : {}),
+                ...(ARIZA_HAS_KAZA_YERI ? { kazaYeri: data.kazaYeri?.trim() || null } : {}),
+                ...(ARIZA_HAS_KAZA_TURU ? { kazaTuru: data.kazaTuru?.trim() || null } : {}),
+                ...(ARIZA_HAS_SIGORTA_DOSYA_NO ? { sigortaDosyaNo: data.sigortaDosyaNo?.trim() || null } : {}),
+                ...(ARIZA_HAS_EKSPER_NOTU ? { eksperNotu: data.eksperNotu?.trim() || null } : {}),
+                ...(ARIZA_HAS_KUSUR_ORANI ? { kusurOrani } : {}),
                 oncelik: normalizeArizaOncelik(data.oncelik),
                 km: normalizedKm,
                 servisAdi: data.servisAdi || null,
@@ -157,7 +199,7 @@ export async function createArizaKaydi(data: {
             actionType: ActivityActionType.CREATE,
             entityType: ActivityEntityType.DIGER,
             entityId: created.id,
-            summary: `${arac.plaka} için arıza kaydı açıldı.`,
+            summary: `${arac.plaka} için kaza kaydı açıldı.`,
             actor,
             companyId: created.sirketId || actor.sirketId || null,
             metadata: {
@@ -165,6 +207,7 @@ export async function createArizaKaydi(data: {
                 oncelik: created.oncelik,
                 durum: created.durum,
                 km: created.km,
+                kusurOrani: ARIZA_HAS_KUSUR_ORANI ? (created as any).kusurOrani ?? null : null,
                 soforId: ARIZA_HAS_SOFOR_ID ? (created as any).soforId || null : null,
             },
         });
@@ -172,8 +215,8 @@ export async function createArizaKaydi(data: {
         revalidateArizaPages(arac.id, resolvedSoforId);
         return { success: true };
     } catch (error) {
-        console.error("Arıza kaydı oluşturulamadı:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza kaydı oluşturulurken bir hata oluştu.") };
+        console.error("Kaza kaydı oluşturulamadı:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı oluşturulurken bir hata oluştu.") };
     }
 }
 
@@ -182,6 +225,12 @@ export async function updateArizaKaydi(
     data: {
         soforId?: string | null;
         aciklama: string;
+        kazaTarihi?: Date | null;
+        kazaYeri?: string | null;
+        kazaTuru?: string | null;
+        sigortaDosyaNo?: string | null;
+        eksperNotu?: string | null;
+        kusurOrani?: number | null;
         oncelik?: ArizaOncelikInput;
         km?: number | null;
         servisAdi?: string | null;
@@ -203,8 +252,9 @@ export async function updateArizaKaydi(
                 sirketId: true,
                 durum: true,
                 bildirimTarihi: true,
+                ...(ARIZA_HAS_KAZA_TARIHI ? { kazaTarihi: true } : {}),
             },
-            errorMessage: "Arıza kaydı bulunamadı veya yetkiniz yok.",
+            errorMessage: "Kaza kaydı bulunamadı veya yetkiniz yok.",
         });
         const arac = await getScopedAracOrThrow(mevcut.aracId, {
             id: true,
@@ -218,10 +268,11 @@ export async function updateArizaKaydi(
                 ? await assertKmWriteConsistency({
                       aracId: arac.id,
                       km: data.km,
-                      fieldLabel: "Arıza KM",
+                      fieldLabel: "Kaza KM",
                       enforceMaxKnownKm: false,
                   })
                 : null;
+        const kusurOrani = ARIZA_HAS_KUSUR_ORANI ? normalizeKusurOrani(data.kusurOrani) : null;
         const fallbackSoforId = await getAracActiveSoforId(
             arac.id,
             mevcut.soforId || arac.kullaniciId || null
@@ -237,6 +288,19 @@ export async function updateArizaKaydi(
                 ...(ARIZA_HAS_SOFOR_ID ? { soforId: resolvedSoforId } : {}),
                 sirketId: usageSirketId || mevcut.sirketId,
                 aciklama: data.aciklama,
+                ...(ARIZA_HAS_KAZA_TARIHI
+                    ? {
+                          kazaTarihi:
+                              data.kazaTarihi ||
+                              ((mevcut as any).kazaTarihi as Date | null) ||
+                              mevcut.bildirimTarihi,
+                      }
+                    : {}),
+                ...(ARIZA_HAS_KAZA_YERI ? { kazaYeri: data.kazaYeri?.trim() || null } : {}),
+                ...(ARIZA_HAS_KAZA_TURU ? { kazaTuru: data.kazaTuru?.trim() || null } : {}),
+                ...(ARIZA_HAS_SIGORTA_DOSYA_NO ? { sigortaDosyaNo: data.sigortaDosyaNo?.trim() || null } : {}),
+                ...(ARIZA_HAS_EKSPER_NOTU ? { eksperNotu: data.eksperNotu?.trim() || null } : {}),
+                ...(ARIZA_HAS_KUSUR_ORANI ? { kusurOrani } : {}),
                 oncelik: normalizeArizaOncelik(data.oncelik),
                 km: normalizedKm,
                 servisAdi: data.servisAdi || null,
@@ -254,7 +318,7 @@ export async function updateArizaKaydi(
             actionType: ActivityActionType.UPDATE,
             entityType: ActivityEntityType.DIGER,
             entityId: updated.id,
-            summary: `${arac.plaka} için arıza kaydı güncellendi.`,
+            summary: `${arac.plaka} için kaza kaydı güncellendi.`,
             actor,
             companyId: updated.sirketId || actor.sirketId || null,
             metadata: {
@@ -262,6 +326,7 @@ export async function updateArizaKaydi(
                 oncelik: updated.oncelik,
                 durum: updated.durum,
                 km: updated.km,
+                kusurOrani: ARIZA_HAS_KUSUR_ORANI ? (updated as any).kusurOrani ?? null : null,
                 soforId: ARIZA_HAS_SOFOR_ID ? (updated as any).soforId || null : null,
             },
         });
@@ -275,8 +340,8 @@ export async function updateArizaKaydi(
         }
         return { success: true };
     } catch (error) {
-        console.error("Arıza kaydı güncellenemedi:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza kaydı güncellenirken bir hata oluştu.") };
+        console.error("Kaza kaydı güncellenemedi:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı güncellenirken bir hata oluştu.") };
     }
 }
 
@@ -295,10 +360,10 @@ export async function seviseGonderArizaKaydi(id: string) {
         });
 
         if (!kayit) {
-            return { success: false, error: "Arıza kaydı bulunamadı veya yetkiniz yok." };
+            return { success: false, error: "Kaza kaydı bulunamadı veya yetkiniz yok." };
         }
         if (kayit.durum !== "ACIK") {
-            return { success: false, error: "Sadece açık arızalar servise gönderilebilir." };
+            return { success: false, error: "Sadece açık kaza kayıtları onarıma gönderilebilir." };
         }
 
         await (prisma as any).arizaKaydi.update({
@@ -314,7 +379,7 @@ export async function seviseGonderArizaKaydi(id: string) {
             actionType: ActivityActionType.STATUS_CHANGE,
             entityType: ActivityEntityType.DIGER,
             entityId: kayit.id,
-            summary: `${kayit.arac.plaka} arızası servise gönderildi.`,
+            summary: `${kayit.arac.plaka} kaza kaydı onarıma gönderildi.`,
             actor,
             companyId: kayit.sirketId || kayit.arac.sirketId || actor.sirketId || null,
             metadata: {
@@ -326,8 +391,8 @@ export async function seviseGonderArizaKaydi(id: string) {
         revalidateArizaPages(kayit.aracId, kayit.soforId || null);
         return { success: true };
     } catch (error) {
-        console.error("Arıza servise gönderilemedi:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza servise gönderilirken bir hata oluştu.") };
+        console.error("Kaza kaydı onarıma gönderilemedi:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı onarıma gönderilirken bir hata oluştu.") };
     }
 }
 
@@ -355,13 +420,13 @@ export async function tamamlaArizaKaydi(
         });
 
         if (!kayit) {
-            return { success: false, error: "Arıza kaydı bulunamadı veya yetkiniz yok." };
+            return { success: false, error: "Kaza kaydı bulunamadı veya yetkiniz yok." };
         }
         if (kayit.durum === "TAMAMLANDI") {
-            return { success: false, error: "Arıza kaydı zaten tamamlandı." };
+            return { success: false, error: "Kaza kaydı zaten tamamlandı." };
         }
         if (kayit.durum === "IPTAL") {
-            return { success: false, error: "İptal edilen arıza tamamlanamaz." };
+            return { success: false, error: "İptal edilen kaza kaydı tamamlanamaz." };
         }
 
         const normalizedKmInput = normalizeKmInput(data?.km);
@@ -370,7 +435,7 @@ export async function tamamlaArizaKaydi(
                 ? await assertKmWriteConsistency({
                       aracId: kayit.aracId,
                       km: normalizedKmInput,
-                      fieldLabel: "Arıza Kapanış KM",
+                      fieldLabel: "Kapanış KM",
                       enforceMaxKnownKm: false,
                   })
                 : kayit.km ?? kayit.arac.guncelKm;
@@ -425,7 +490,7 @@ export async function tamamlaArizaKaydi(
             actionType: ActivityActionType.STATUS_CHANGE,
             entityType: ActivityEntityType.DIGER,
             entityId: kayit.id,
-            summary: `${kayit.arac.plaka} arızası tamamlandı.`,
+            summary: `${kayit.arac.plaka} kaza kaydı tamamlandı.`,
             actor,
             companyId: kayit.sirketId || kayit.arac.sirketId || actor.sirketId || null,
             metadata: {
@@ -439,8 +504,8 @@ export async function tamamlaArizaKaydi(
         revalidateArizaPages(kayit.aracId, kayit.soforId || null);
         return { success: true };
     } catch (error) {
-        console.error("Arıza tamamlanamadı:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza tamamlanırken bir hata oluştu.") };
+        console.error("Kaza kaydı tamamlanamadı:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı tamamlanırken bir hata oluştu.") };
     }
 }
 
@@ -459,10 +524,10 @@ export async function iptalEtArizaKaydi(id: string) {
         });
 
         if (!kayit) {
-            return { success: false, error: "Arıza kaydı bulunamadı veya yetkiniz yok." };
+            return { success: false, error: "Kaza kaydı bulunamadı veya yetkiniz yok." };
         }
         if (kayit.durum === "TAMAMLANDI") {
-            return { success: false, error: "Tamamlanan arıza kaydı iptal edilemez." };
+            return { success: false, error: "Tamamlanan kaza kaydı iptal edilemez." };
         }
         if (kayit.durum === "IPTAL") {
             return { success: true };
@@ -482,7 +547,7 @@ export async function iptalEtArizaKaydi(id: string) {
             actionType: ActivityActionType.STATUS_CHANGE,
             entityType: ActivityEntityType.DIGER,
             entityId: kayit.id,
-            summary: `${kayit.arac.plaka} arıza kaydı iptal edildi.`,
+            summary: `${kayit.arac.plaka} kaza kaydı iptal edildi.`,
             actor,
             companyId: kayit.sirketId || kayit.arac.sirketId || actor.sirketId || null,
             metadata: {
@@ -494,8 +559,8 @@ export async function iptalEtArizaKaydi(id: string) {
         revalidateArizaPages(kayit.aracId, kayit.soforId || null);
         return { success: true };
     } catch (error) {
-        console.error("Arıza iptal edilemedi:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza iptal edilirken bir hata oluştu.") };
+        console.error("Kaza kaydı iptal edilemedi:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı iptal edilirken bir hata oluştu.") };
     }
 }
 
@@ -514,12 +579,12 @@ export async function deleteArizaKaydi(id: string) {
         });
 
         if (!kayit) {
-            return { success: false, error: "Arıza kaydı bulunamadı veya yetkiniz yok." };
+            return { success: false, error: "Kaza kaydı bulunamadı veya yetkiniz yok." };
         }
         if (kayit.bakimId || kayit.durum === "TAMAMLANDI") {
             return {
                 success: false,
-                error: "Bakım kaydı ile ilişkilenen veya tamamlanan arızalar silinemez.",
+                error: "Bakım kaydı ile ilişkilenen veya tamamlanan kaza kayıtları silinemez.",
             };
         }
 
@@ -530,7 +595,7 @@ export async function deleteArizaKaydi(id: string) {
             actionType: ActivityActionType.DELETE,
             entityType: ActivityEntityType.DIGER,
             entityId: kayit.id,
-            summary: `${kayit.arac.plaka} arıza kaydı silindi.`,
+            summary: `${kayit.arac.plaka} kaza kaydı silindi.`,
             actor,
             companyId: kayit.sirketId || kayit.arac.sirketId || actor.sirketId || null,
             metadata: {
@@ -542,7 +607,7 @@ export async function deleteArizaKaydi(id: string) {
         revalidateArizaPages(kayit.aracId, kayit.soforId || null);
         return { success: true };
     } catch (error) {
-        console.error("Arıza kaydı silinemedi:", error);
-        return { success: false, error: resolveArizaActionError(error, "Arıza kaydı silinirken bir hata oluştu.") };
+        console.error("Kaza kaydı silinemedi:", error);
+        return { success: false, error: resolveArizaActionError(error, "Kaza kaydı silinirken bir hata oluştu.") };
     }
 }

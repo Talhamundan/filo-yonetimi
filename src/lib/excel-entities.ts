@@ -100,8 +100,8 @@ export const EXCEL_ENTITY_CONFIG: Record<ExcelEntityKey, ExcelEntityConfig> = {
         prismaModel: "arizaKaydi",
         filterModel: "arizaKaydi",
         dateField: "bildirimTarihi",
-        sheetName: "Ariza",
-        fileNamePrefix: "ariza-kayitlari",
+        sheetName: "Kaza",
+        fileNamePrefix: "kaza-kayitlari",
     },
     bakim: {
         prismaModel: "bakim",

@@ -965,7 +965,28 @@ export function DataTable<TData, TValue>({
             })
 
             const endpoint = `/api/excel/${excelEntity}${params.toString() ? `?${params.toString()}` : ""}`
-            const response = await fetch(endpoint, { method: "GET" })
+            const filteredRowIds = table
+                .getFilteredRowModel()
+                .rows.map((row) => {
+                    const original = row.original as { id?: unknown }
+                    return typeof original?.id === "string" && original.id.trim().length > 0
+                        ? original.id.trim()
+                        : null
+                })
+                .filter((id): id is string => Boolean(id))
+
+            const response = await fetch(endpoint, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                    selectedColumns: selectedExportColumns.map((column) => column.label).filter(Boolean),
+                    selectedColumnKeys: selectedExportColumns.map((column) => column.key).filter(Boolean),
+                    filteredRowIds,
+                    restrictToFilteredRows: hasActiveFilter,
+                }),
+            })
 
             if (!response.ok) {
                 throw new Error(await getResponseErrorMessage(response, "Excel dışa aktarma başarısız oldu."))
@@ -992,7 +1013,7 @@ export function DataTable<TData, TValue>({
         } finally {
             setIsExporting(false)
         }
-    }, [excelEntity, isExporting, isImporting, searchParams, selectedExportColumns])
+    }, [excelEntity, hasActiveFilter, isExporting, isImporting, searchParams, selectedExportColumns, table])
 
     const handleImportFileChange = React.useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0]

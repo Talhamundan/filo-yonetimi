@@ -360,8 +360,8 @@ export default function PersonelDetailClient({
 
     const handleDeleteAriza = async (rowId: string) => {
         const confirmed = await openConfirm({
-            title: "Arıza Kaydını Sil",
-            message: "Bu arıza kaydını silmek istediğinizden emin misiniz?",
+            title: "Kaza Kaydını Sil",
+            message: "Bu kaza kaydını silmek istediğinizden emin misiniz?",
             confirmText: "Sil",
             variant: "danger",
         });
@@ -369,7 +369,7 @@ export default function PersonelDetailClient({
         setActionLoading(true);
         const res = await deleteArizaKaydi(rowId);
         if (res.success) {
-            toast.success("Arıza kaydı silindi");
+            toast.success("Kaza kaydı silindi");
             router.refresh();
         } else {
             toast.error("Silme başarısız", { description: res.error });
@@ -719,7 +719,7 @@ export default function PersonelDetailClient({
                             Cezalar
                         </TabsTrigger>
                         <TabsTrigger value="arizalar" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
-                            Arıza Kayıtları
+                            Kaza Kayıtları
                         </TabsTrigger>
                         <TabsTrigger value="servisler" className="px-4 py-2 rounded-lg data-[state=active]:bg-slate-900 data-[state=active]:text-white">
                             Servis Kayıtları
@@ -962,7 +962,7 @@ export default function PersonelDetailClient({
                                     ) : (
                                         <TableRow>
                                             <TableCell colSpan={6} className="h-32 text-center text-slate-400 italic">
-                                                Bu personele ait arıza kaydı bulunmuyor.
+                                                Bu personele ait kaza kaydı bulunmuyor.
                                             </TableCell>
                                         </TableRow>
                                     )}
@@ -1246,7 +1246,7 @@ export default function PersonelDetailClient({
                 <Dialog open={arizaOpen} onOpenChange={setArizaOpen}>
                     <DialogContent>
                         <DialogHeader>
-                            <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
+                            <DialogTitle>Kaza Kaydını Düzenle</DialogTitle>
                         </DialogHeader>
                         <div className="grid gap-4 py-4">
                             <div className="grid grid-cols-4 items-center gap-4">
@@ -1292,7 +1292,7 @@ export default function PersonelDetailClient({
                                         soforId: arizaData.soforId,
                                     });
                                     if (res.success) {
-                                        toast.success("Arıza kaydı güncellendi");
+                                        toast.success("Kaza kaydı güncellendi");
                                         setArizaOpen(false);
                                         router.refresh();
                                     } else {

@@ -47,10 +47,10 @@ interface DashboardClientProps {
 }
 
 const ARIZA_ONCELIK_LABEL = {
-    KRITIK: "Yüksek",
-    YUKSEK: "Yüksek",
+    KRITIK: "Ağır",
+    YUKSEK: "Ağır",
     ORTA: "Orta",
-    DUSUK: "Düşük",
+    DUSUK: "Hafif",
 } as const;
 
 const ARIZA_ONCELIK_TONE = {
@@ -823,7 +823,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
             id: `ariza-${item.id}`,
             href: "/dashboard/arizalar",
             plaka: item.plaka,
-            line: `Arıza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Serviste" : "Açık"}`,
+            line: `Kaza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Onarımda" : "Bildirildi"}`,
             lineClass: ARIZA_ONCELIK_TONE[item.oncelik as keyof typeof ARIZA_ONCELIK_TONE] || "text-slate-700",
             detail: item.aciklama,
         }));
@@ -847,7 +847,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
             id: `ariza-${item.id}`,
             href: "/dashboard/arizalar",
             plaka: item.plaka,
-            line: `Arıza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Serviste" : "Açık"}`,
+            line: `Kaza • ${ARIZA_ONCELIK_LABEL[item.oncelik as keyof typeof ARIZA_ONCELIK_LABEL] || item.oncelik} • ${item.durum === "SERVISTE" ? "Onarımda" : "Bildirildi"}`,
             lineClass: ARIZA_ONCELIK_TONE[item.oncelik as keyof typeof ARIZA_ONCELIK_TONE] || "text-slate-700",
             detail: item.aciklama,
         }));
@@ -980,7 +980,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 ))
                             ) : (
                                 <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-500 text-center">
-                                    Acil evrak veya arıza kaydı yok.
+                                    Acil evrak veya kaza kaydı yok.
                                 </div>
                             )}
                         </div>
@@ -1007,7 +1007,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                                 ))
                             ) : (
                                 <div className="rounded-lg border border-dashed border-slate-200 px-3 py-3 text-xs text-slate-500 text-center">
-                                    Yaklaşan evrak veya takip arızası yok.
+                                    Yaklaşan evrak veya kaza takibi yok.
                                 </div>
                             )}
                         </div>
@@ -1079,7 +1079,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                             </CardTitle>
                         </CardHeader>
                         <CardContent>
-                            <p className="text-sm text-slate-500 mb-6">Yeni bir periyodik bakım veya arıza kaydı oluşturun.</p>
+                            <p className="text-sm text-slate-500 mb-6">Yeni bir periyodik bakım veya kaza kaydı oluşturun.</p>
                             <Button className="w-full bg-rose-600 hover:bg-rose-700 text-white font-semibold" asChild>
                                 <Link href="/dashboard/servis-kayitlari?add=true">
                                     İşlem Başlat <ArrowRight className="ml-2 h-4 w-4" />
@@ -1163,7 +1163,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                         <span className="w-px h-2 bg-slate-200" />
                         <span className="inline-flex items-center gap-1.5">
                             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
-                            Arızalı: <span className="font-bold text-slate-900">{metrics.arizaliArac}</span>
+                            Kazalı: <span className="font-bold text-slate-900">{metrics.arizaliArac}</span>
                         </span>
                     </div>
                 </div>

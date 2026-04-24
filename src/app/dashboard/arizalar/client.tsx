@@ -60,6 +60,12 @@ const EMPTY_FORM = {
     aracId: "",
     soforId: "",
     aciklama: "",
+    kazaTarihi: new Date().toISOString().slice(0, 16),
+    kazaYeri: "",
+    kazaTuru: "",
+    sigortaDosyaNo: "",
+    eksperNotu: "",
+    kusurOrani: "",
     oncelik: "ORTA" as "DUSUK" | "ORTA" | "YUKSEK",
     km: "",
     servisAdi: "",
@@ -114,13 +120,19 @@ export default function ArizalarClient({
 
     const handleCreate = async () => {
         if (!formData.aracId || !formData.aciklama.trim()) {
-            return toast.warning("Eksik Bilgi", { description: "Araç ve arıza açıklaması zorunludur." });
+            return toast.warning("Eksik Bilgi", { description: "Araç ve kaza özeti zorunludur." });
         }
         setLoading(true);
         const res = await createArizaKaydi({
             aracId: formData.aracId,
             soforId: formData.soforId || null,
             aciklama: formData.aciklama.trim(),
+            kazaTarihi: formData.kazaTarihi ? new Date(formData.kazaTarihi) : null,
+            kazaYeri: formData.kazaYeri || null,
+            kazaTuru: formData.kazaTuru || null,
+            sigortaDosyaNo: formData.sigortaDosyaNo || null,
+            eksperNotu: formData.eksperNotu || null,
+            kusurOrani: formData.kusurOrani ? Number(formData.kusurOrani) : null,
             oncelik: formData.oncelik,
             km: formData.km ? Number(formData.km) : null,
             servisAdi: formData.servisAdi || null,
@@ -131,7 +143,7 @@ export default function ArizalarClient({
         if (res.success) {
             setCreateOpen(false);
             resetForm();
-            toast.success("Arıza kaydı oluşturuldu.");
+            toast.success("Kaza kaydı oluşturuldu.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -144,6 +156,12 @@ export default function ArizalarClient({
             aracId: row.arac.id,
             soforId: normalizeSoforId(row.soforId),
             aciklama: row.aciklama || "",
+            kazaTarihi: row.kazaTarihi ? new Date(row.kazaTarihi).toISOString().slice(0, 16) : "",
+            kazaYeri: row.kazaYeri || "",
+            kazaTuru: row.kazaTuru || "",
+            sigortaDosyaNo: row.sigortaDosyaNo || "",
+            eksperNotu: row.eksperNotu || "",
+            kusurOrani: row.kusurOrani != null ? String(row.kusurOrani) : "",
             oncelik: row.oncelik === "KRITIK" ? "YUKSEK" : row.oncelik || "ORTA",
             km: row.km != null ? String(row.km) : "",
             servisAdi: row.servisAdi || "",
@@ -162,6 +180,12 @@ export default function ArizalarClient({
         const res = await updateArizaKaydi(editRow.id, {
             soforId: formData.soforId || null,
             aciklama: formData.aciklama.trim(),
+            kazaTarihi: formData.kazaTarihi ? new Date(formData.kazaTarihi) : null,
+            kazaYeri: formData.kazaYeri || null,
+            kazaTuru: formData.kazaTuru || null,
+            sigortaDosyaNo: formData.sigortaDosyaNo || null,
+            eksperNotu: formData.eksperNotu || null,
+            kusurOrani: formData.kusurOrani ? Number(formData.kusurOrani) : null,
             oncelik: formData.oncelik,
             km: formData.km ? Number(formData.km) : null,
             servisAdi: formData.servisAdi || null,
@@ -172,7 +196,7 @@ export default function ArizalarClient({
         if (res.success) {
             setEditRow(null);
             resetForm();
-            toast.success("Arıza kaydı güncellendi.");
+            toast.success("Kaza kaydı güncellendi.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -182,15 +206,15 @@ export default function ArizalarClient({
 
     const handleSeviseGonder = async (row: ArizaRow) => {
         const confirmed = await openConfirm({
-            title: "Servise Gönder",
-            message: `${row.arac.plaka} için açılan arıza kaydı servise gönderilecek. Onaylıyor musunuz?`,
-            confirmText: "Gönder",
+            title: "Onarıma Gönder",
+            message: `${row.arac.plaka} için açılan kaza kaydı onarıma gönderilecek. Onaylıyor musunuz?`,
+            confirmText: "Onarıma Gönder",
             variant: "warning",
         });
         if (!confirmed) return;
         const res = await seviseGonderArizaKaydi(row.id);
         if (res.success) {
-            toast.success("Araç servise alındı.");
+            toast.success("Araç onarıma alındı.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -221,7 +245,7 @@ export default function ArizalarClient({
         if (res.success) {
             setCompleteRow(null);
             setCompleteForm({ ...EMPTY_COMPLETE_FORM });
-            toast.success("Arıza kaydı tamamlandı.");
+            toast.success("Kaza kaydı tamamlandı.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -231,15 +255,15 @@ export default function ArizalarClient({
 
     const handleIptal = async (row: ArizaRow) => {
         const confirmed = await openConfirm({
-            title: "Arızayı İptal Et",
-            message: `${row.arac.plaka} için açılan arıza kaydı iptal edilecek. Onaylıyor musunuz?`,
+            title: "Kaza Kaydını İptal Et",
+            message: `${row.arac.plaka} için açılan kaza kaydı iptal edilecek. Onaylıyor musunuz?`,
             confirmText: "İptal Et",
             variant: "warning",
         });
         if (!confirmed) return;
         const res = await iptalEtArizaKaydi(row.id);
         if (res.success) {
-            toast.success("Arıza kaydı iptal edildi.");
+            toast.success("Kaza kaydı iptal edildi.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -248,15 +272,15 @@ export default function ArizalarClient({
 
     const handleDelete = async (row: ArizaRow) => {
         const confirmed = await openConfirm({
-            title: "Arıza Kaydını Sil",
-            message: `${row.arac.plaka} için arıza kaydını silmek istediğinize emin misiniz?`,
+            title: "Kaza Kaydını Sil",
+            message: `${row.arac.plaka} için kaza kaydını silmek istediğinize emin misiniz?`,
             confirmText: "Evet, Sil",
             variant: "danger",
         });
         if (!confirmed) return;
         const res = await deleteArizaKaydi(row.id);
         if (res.success) {
-            toast.success("Arıza kaydı silindi.");
+            toast.success("Kaza kaydı silindi.");
             router.refresh();
         } else {
             toast.error("İşlem başarısız.", { description: res.error });
@@ -278,7 +302,7 @@ export default function ArizalarClient({
                             <button
                                 onClick={() => handleSeviseGonder(item)}
                                 className="p-1.5 rounded-md hover:bg-amber-50 text-slate-500 hover:text-amber-700 transition-colors"
-                                title="Servise Gönder"
+                                title="Onarıma Gönder"
                             >
                                 <Wrench size={15} />
                             </button>
@@ -314,10 +338,10 @@ export default function ArizalarClient({
             <header className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                 <div>
                     <h2 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2">
-                        <TriangleAlert className="text-rose-600" /> Arıza Kayıtları
+                        <TriangleAlert className="text-rose-600" /> Kazalı Araç Durum Takibi
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">
-                        Servise gitmeden bekleyen arızaları takip edin, servise sevk edin ve tamamlandığında bakım kaydına bağlayın.
+                        Kaza detaylarını, onarım durumunu ve maliyetleri tek yerden takip edin; onarım tamamlandığında bakım kaydına bağlayın.
                     </p>
                 </div>
                 <Dialog open={createOpen} onOpenChange={(v) => {
@@ -327,13 +351,13 @@ export default function ArizalarClient({
                     <DialogTrigger asChild>
                         <button className="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2 rounded-md font-medium text-sm shadow-sm transition-all flex items-center gap-2">
                             <Plus size={16} />
-                            Yeni Arıza Kaydı
+                            Yeni Kaza Kaydı
                         </button>
                     </DialogTrigger>
                     <DialogContent >
                         <DialogHeader>
-                            <DialogTitle>Yeni Arıza Kaydı</DialogTitle>
-                            <DialogDescription>Araçta tespit edilen arızayı sisteme kaydedin.</DialogDescription>
+                            <DialogTitle>Yeni Kaza Kaydı</DialogTitle>
+                            <DialogDescription>Kaza ile ilgili tüm bilgileri sisteme kaydedin.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-2">
                             <div className="space-y-1.5">
@@ -374,7 +398,7 @@ export default function ArizalarClient({
                                     />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Öncelik</label>
+                                    <label className="text-sm font-medium">Hasar Seviyesi</label>
                                     <select
                                         className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                                         value={formData.oncelik}
@@ -382,9 +406,9 @@ export default function ArizalarClient({
                                             setFormData((prev) => ({ ...prev, oncelik: event.target.value as typeof prev.oncelik }))
                                         }
                                     >
-                                        <option value="DUSUK">Düşük</option>
+                                        <option value="DUSUK">Hafif Hasar</option>
                                         <option value="ORTA">Orta</option>
-                                        <option value="YUKSEK">Yüksek</option>
+                                        <option value="YUKSEK">Ağır Hasar</option>
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
@@ -407,18 +431,75 @@ export default function ArizalarClient({
                                     />
                                 </div>
                             </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kaza Tarihi</label>
+                                    <Input
+                                        type="datetime-local"
+                                        value={formData.kazaTarihi}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, kazaTarihi: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kaza Türü</label>
+                                    <Input
+                                        value={formData.kazaTuru}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, kazaTuru: event.target.value }))}
+                                        className="h-9"
+                                        placeholder="Örn: Çarpma, Devrilme"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kaza Yeri</label>
+                                    <Input
+                                        value={formData.kazaYeri}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, kazaYeri: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Sigorta Dosya No</label>
+                                    <Input
+                                        value={formData.sigortaDosyaNo}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, sigortaDosyaNo: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Kusur Oranı (%)</label>
+                                    <Input
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={formData.kusurOrani}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, kusurOrani: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-sm font-medium">Eksper Notu</label>
+                                    <Input
+                                        value={formData.eksperNotu}
+                                        onChange={(event) => setFormData((prev) => ({ ...prev, eksperNotu: event.target.value }))}
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Arıza Açıklaması <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium">Kaza Özeti <span className="text-red-500">*</span></label>
                                 <textarea
                                     value={formData.aciklama}
                                     onChange={(event) => setFormData((prev) => ({ ...prev, aciklama: event.target.value }))}
-                                    placeholder="Arızayı detaylandırın..."
+                                    placeholder="Kazayı detaylandırın..."
                                     className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-400 h-20 resize-none"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Servis Adı</label>
+                                    <label className="text-sm font-medium">Onarım Merkezi</label>
                                     <Input
                                         value={formData.servisAdi}
                                         onChange={(event) => setFormData((prev) => ({ ...prev, servisAdi: event.target.value }))}
@@ -438,7 +519,7 @@ export default function ArizalarClient({
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Yapılan / Planlanan İşlemler</label>
+                                <label className="text-sm font-medium">Onarım İşlemleri</label>
                                 <textarea
                                     value={formData.yapilanIslemler}
                                     onChange={(event) => setFormData((prev) => ({ ...prev, yapilanIslemler: event.target.value }))}
@@ -468,7 +549,7 @@ export default function ArizalarClient({
             }}>
                 <DialogContent >
                     <DialogHeader>
-                        <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
+                        <DialogTitle>Kaza Kaydını Düzenle</DialogTitle>
                         <DialogDescription>{editRow?.arac.plaka} için kayıt bilgilerini güncelleyin.</DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
@@ -511,7 +592,7 @@ export default function ArizalarClient({
                                 />
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Öncelik</label>
+                                <label className="text-sm font-medium">Hasar Seviyesi</label>
                                 <select
                                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                                     value={formData.oncelik}
@@ -519,9 +600,9 @@ export default function ArizalarClient({
                                         setFormData((prev) => ({ ...prev, oncelik: event.target.value as typeof prev.oncelik }))
                                     }
                                 >
-                                    <option value="DUSUK">Düşük</option>
+                                    <option value="DUSUK">Hafif Hasar</option>
                                     <option value="ORTA">Orta</option>
-                                    <option value="YUKSEK">Yüksek</option>
+                                    <option value="YUKSEK">Ağır Hasar</option>
                                 </select>
                             </div>
                             <div className="space-y-1.5">
@@ -544,8 +625,62 @@ export default function ArizalarClient({
                                 />
                             </div>
                         </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Kaza Tarihi</label>
+                                <Input
+                                    type="datetime-local"
+                                    value={formData.kazaTarihi}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, kazaTarihi: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Kaza Türü</label>
+                                <Input
+                                    value={formData.kazaTuru}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, kazaTuru: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Kaza Yeri</label>
+                                <Input
+                                    value={formData.kazaYeri}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, kazaYeri: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Sigorta Dosya No</label>
+                                <Input
+                                    value={formData.sigortaDosyaNo}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, sigortaDosyaNo: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Kusur Oranı (%)</label>
+                                <Input
+                                    type="number"
+                                    min={0}
+                                    max={100}
+                                    value={formData.kusurOrani}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, kusurOrani: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                            <div className="space-y-1.5">
+                                <label className="text-sm font-medium">Eksper Notu</label>
+                                <Input
+                                    value={formData.eksperNotu}
+                                    onChange={(event) => setFormData((prev) => ({ ...prev, eksperNotu: event.target.value }))}
+                                    className="h-9"
+                                />
+                            </div>
+                        </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Arıza Açıklaması <span className="text-red-500">*</span></label>
+                            <label className="text-sm font-medium">Kaza Özeti <span className="text-red-500">*</span></label>
                             <textarea
                                 value={formData.aciklama}
                                 onChange={(event) => setFormData((prev) => ({ ...prev, aciklama: event.target.value }))}
@@ -554,7 +689,7 @@ export default function ArizalarClient({
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Servis Adı</label>
+                                <label className="text-sm font-medium">Onarım Merkezi</label>
                                 <Input
                                     value={formData.servisAdi}
                                     onChange={(event) => setFormData((prev) => ({ ...prev, servisAdi: event.target.value }))}
@@ -573,7 +708,7 @@ export default function ArizalarClient({
                             </div>
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Yapılan / Planlanan İşlemler</label>
+                            <label className="text-sm font-medium">Onarım İşlemleri</label>
                             <textarea
                                 value={formData.yapilanIslemler}
                                 onChange={(event) => setFormData((prev) => ({ ...prev, yapilanIslemler: event.target.value }))}
@@ -601,16 +736,16 @@ export default function ArizalarClient({
             }}>
                 <DialogContent >
                     <DialogHeader>
-                        <DialogTitle>Arızayı Tamamla</DialogTitle>
+                        <DialogTitle>Onarımı Tamamla</DialogTitle>
                         <DialogDescription>
-                            {completeRow?.arac.plaka} için servis işlemini kapatın. İsterseniz otomatik bakım kaydı oluşturabilirsiniz.
+                            {completeRow?.arac.plaka} için onarım sürecini kapatın. İsterseniz otomatik bakım kaydı oluşturabilirsiniz.
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-2">
                         <SelectedAracInfo arac={selectedCompleteArac || undefined} />
                         <div className="grid grid-cols-2 gap-3">
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Servis Adı</label>
+                                <label className="text-sm font-medium">Onarım Merkezi</label>
                                 <Input
                                     value={completeForm.servisAdi}
                                     onChange={(event) => setCompleteForm((prev) => ({ ...prev, servisAdi: event.target.value }))}
@@ -638,7 +773,7 @@ export default function ArizalarClient({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-sm font-medium">Yapılan İşlemler</label>
+                            <label className="text-sm font-medium">Yapılan Onarım İşlemleri</label>
                             <textarea
                                 value={completeForm.yapilanIslemler}
                                 onChange={(event) => setCompleteForm((prev) => ({ ...prev, yapilanIslemler: event.target.value }))}

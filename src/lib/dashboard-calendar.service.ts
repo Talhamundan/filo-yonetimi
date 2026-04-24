@@ -355,7 +355,7 @@ export async function getDashboardCalendarData(params: {
             plaka: row.arac?.plaka || "-",
             oncelik: normalizeArizaOncelik((row.oncelik || "ORTA") as DashboardArizaOncelik),
             durum: (row.durum === "SERVISTE" ? "SERVISTE" : "ACIK") as "SERVISTE" | "ACIK",
-            aciklama: row.aciklama || "Arıza kaydı",
+            aciklama: row.aciklama || "Kaza kaydı",
             bildirimTarihi: new Date(row.bildirimTarihi || new Date()).toISOString(),
         }))
         .sort((a, b) => {

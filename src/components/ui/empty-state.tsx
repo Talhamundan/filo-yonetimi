@@ -42,8 +42,8 @@ const CONFIG: Record<string, StateConfig> = {
     },
     ariza: {
         icon: Sparkles,
-        title: "Mükemmel! Arıza Kaydı Yok",
-        description: "Şu anda bildirilmiş herhangi bir arıza bulunmuyor. Araçlarınızın durumu gayet iyi görünüyor.",
+        title: "Mükemmel! Kaza Kaydı Yok",
+        description: "Şu anda açık bir kaza/onarım kaydı bulunmuyor. Araçlarınızın durumu gayet iyi görünüyor.",
         colorClass: "text-sky-600",
         bgClass: "bg-sky-50",
     },

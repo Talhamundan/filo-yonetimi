@@ -239,6 +239,12 @@ model ArizaKaydi {
   sirketId          String?
   bakimId           String?          @unique
   aciklama          String
+  kazaTarihi        DateTime?
+  kazaYeri          String?
+  kazaTuru          String?
+  sigortaDosyaNo    String?
+  eksperNotu        String?
+  kusurOrani        Int?
   oncelik           ArizaOncelik     @default(ORTA)
   durum             ArizaKaydiDurumu @default(ACIK)
   km                Int?

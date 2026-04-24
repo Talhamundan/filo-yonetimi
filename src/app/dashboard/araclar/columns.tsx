@@ -95,7 +95,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
                 switch (durum) {
                     case 'SERVISTE': return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-semibold px-2.5 py-0.5 border-0 shadow-none">Serviste</Badge>;
                     case 'YEDEK': return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold px-2.5 py-0.5 border-0 shadow-none">Yedek</Badge>;
-                    case 'ARIZALI': return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 font-semibold px-2.5 py-0.5 border-0 shadow-none">Arızalı</Badge>;
+                    case 'ARIZALI': return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 font-semibold px-2.5 py-0.5 border-0 shadow-none">Kazalı</Badge>;
                     default: return <Badge variant="outline" className="font-semibold px-2.5 py-0.5 shadow-none">{durum}</Badge>;
                 }
             },

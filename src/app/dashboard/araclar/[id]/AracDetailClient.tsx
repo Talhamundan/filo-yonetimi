@@ -654,7 +654,7 @@ export default function AracDetailClient({
 
     const handleUpdateAriza = async () => {
         if (!editArizaRow || !arizaEditForm.aciklama.trim()) {
-            toast.warning("Eksik Bilgi", { description: "Arıza açıklaması zorunludur." });
+            toast.warning("Eksik Bilgi", { description: "Kaza açıklaması zorunludur." });
             return;
         }
 
@@ -672,7 +672,7 @@ export default function AracDetailClient({
         setArizaActionLoading(false);
 
         if (res.success) {
-            toast.success("Arıza kaydı güncellendi.");
+            toast.success("Kaza kaydı güncellendi.");
             closeArizaEdit();
             router.refresh();
             return;
@@ -683,7 +683,7 @@ export default function AracDetailClient({
     const handleSeviseGonderAriza = async (row: AracDetaySaaS) => {
         const confirmed = await openConfirm({
             title: "Servise Gönder",
-            message: `${arac.plaka} için açılan arıza kaydı servise gönderilecek. Onaylıyor musunuz?`,
+            message: `${arac.plaka} için açılan kaza kaydı onarıma gönderilecek. Onaylıyor musunuz?`,
             confirmText: "Gönder",
             variant: "warning",
         });
@@ -703,8 +703,8 @@ export default function AracDetailClient({
 
     const handleDeleteAriza = async (row: AracDetaySaaS) => {
         const confirmed = await openConfirm({
-            title: "Arıza Kaydını Sil",
-            message: `${arac.plaka} için arıza kaydını silmek istediğinize emin misiniz?`,
+            title: "Kaza Kaydını Sil",
+            message: `${arac.plaka} için kaza kaydını silmek istediğinize emin misiniz?`,
             confirmText: "Evet, Sil",
             variant: "danger",
         });
@@ -715,7 +715,7 @@ export default function AracDetailClient({
         setArizaActionLoading(false);
 
         if (res.success) {
-            toast.success("Arıza kaydı silindi.");
+            toast.success("Kaza kaydı silindi.");
             router.refresh();
             return;
         }
@@ -1091,7 +1091,7 @@ export default function AracDetailClient({
             case 'AKTIF': return <Badge className="bg-emerald-100 text-emerald-800 hover:bg-emerald-200 font-semibold px-3 py-1 border-0 shadow-none">Aktif</Badge>;
             case 'SERVISTE': return <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-200 font-semibold px-3 py-1 border-0 shadow-none">Serviste</Badge>;
             case 'YEDEK': return <Badge className="bg-slate-100 text-slate-700 hover:bg-slate-200 font-semibold px-3 py-1 border-0 shadow-none">Yedek</Badge>;
-            case 'ARIZALI': return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 font-semibold px-3 py-1 border-0 shadow-none">Arızalı</Badge>;
+            case 'ARIZALI': return <Badge className="bg-rose-100 text-rose-800 hover:bg-rose-200 font-semibold px-3 py-1 border-0 shadow-none">Kazalı</Badge>;
             case 'SATILDI': return <Badge className="bg-gray-100 text-gray-600 hover:bg-gray-200 font-semibold px-3 py-1 border-0 shadow-none">Satıldı</Badge>;
             case 'BOSTA': return <Badge className="bg-sky-100 text-sky-800 hover:bg-sky-200 font-semibold px-3 py-1 border-0 shadow-none">Boşta</Badge>;
             default: return <Badge variant="outline" className="font-semibold px-3 py-1 shadow-none">{durum}</Badge>;
@@ -2107,7 +2107,7 @@ export default function AracDetailClient({
                 <Dialog open={!!editArizaRow} onOpenChange={(open) => !open && closeArizaEdit()}>
                     <DialogContent >
                         <DialogHeader>
-                            <DialogTitle>Arıza Kaydını Düzenle</DialogTitle>
+                            <DialogTitle>Kaza Kaydını Düzenle</DialogTitle>
                             <DialogDescription>{arac.plaka} için kayıt bilgilerini güncelleyin.</DialogDescription>
                         </DialogHeader>
                         <div className="grid gap-4 py-2">
@@ -2162,7 +2162,7 @@ export default function AracDetailClient({
                                 </div>
                             </div>
                             <div className="space-y-1.5">
-                                <label className="text-sm font-medium">Arıza Açıklaması <span className="text-red-500">*</span></label>
+                                <label className="text-sm font-medium">Kaza Açıklaması <span className="text-red-500">*</span></label>
                                 <textarea value={arizaEditForm.aciklama} onChange={(e) => setArizaEditForm({ ...arizaEditForm, aciklama: e.target.value })} className="flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-2 text-sm shadow-sm h-20 resize-none focus:outline-none focus:ring-1 focus:ring-slate-400" />
                             </div>
                             <div className="grid grid-cols-2 gap-3 border-t pt-4">
@@ -2507,7 +2507,7 @@ export default function AracDetailClient({
                             <Wrench size={16} className="mr-2" /> Servis Kayıtları
                         </TabsTrigger>
                         <TabsTrigger value="ariza" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
-                            <AlertTriangle size={16} className="mr-2" /> Arıza Kayıtları
+                            <AlertTriangle size={16} className="mr-2" /> Kaza Kayıtları
                         </TabsTrigger>
                         <TabsTrigger value="yakit" className="data-[state=active]:bg-slate-900 data-[state=active]:text-white rounded-lg px-4 py-2 border border-transparent data-[state=inactive]:border-slate-200">
                             <Fuel size={16} className="mr-2" /> Yakıt Kayıtları
@@ -2854,7 +2854,7 @@ export default function AracDetailClient({
                                         ) : (
                                             <TableRow>
                                                 <TableCell colSpan={7} className="h-32 text-center text-slate-500">
-                                                    Arıza kaydı bulunmuyor.
+                                                    Kaza kaydı bulunmuyor.
                                                 </TableCell>
                                             </TableRow>
                                         )}

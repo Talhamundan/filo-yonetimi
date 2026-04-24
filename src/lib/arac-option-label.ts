@@ -23,7 +23,7 @@ function formatAracDurumLabel(durum?: string | null): string {
         case "SERVISTE":
             return "serviste";
         case "ARIZALI":
-            return "arızalı";
+            return "kazalı";
         case "YEDEK":
             return "yedek";
         default: {
