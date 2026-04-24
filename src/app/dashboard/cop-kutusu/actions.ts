@@ -34,7 +34,7 @@ function revalidateEntityPaths(entity: SoftDeleteEntity) {
 
     switch (entity) {
         case "arac":
-            paths.add("/dashboard/evrak-takip");
+            paths.add("/dashboard/stok-takibi");
             paths.add("/dashboard/finans");
             paths.add("/dashboard/kasko");
             paths.add("/dashboard/trafik-sigortasi");
@@ -59,12 +59,12 @@ function revalidateEntityPaths(entity: SoftDeleteEntity) {
             break;
         case "dokuman":
             paths.add("/dashboard/dokumanlar");
-            paths.add("/dashboard/evrak-takip");
+            paths.add("/dashboard/stok-takibi");
             break;
         case "ceza":
             paths.add("/dashboard/cezalar");
             paths.add("/dashboard/ceza-masraflari");
-            paths.add("/dashboard/evrak-takip");
+            paths.add("/dashboard/stok-takibi");
             break;
         case "kullanici":
             paths.add("/dashboard/personel");

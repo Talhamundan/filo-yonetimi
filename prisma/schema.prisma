@@ -15,6 +15,7 @@ model Sirket {
   santiyeler      String[]    @default([])
   araclar         Arac[]
   kullanicilar    Kullanici[]
+  stokKalemleri   StokKalem[]
 }
 
 model DisFirma {
@@ -432,6 +433,24 @@ model Dokuman {
   @@index([aracId])
   @@index([sirketId])
   @@index([deletedAt])
+}
+
+model StokKalem {
+  id               String   @id @default(cuid())
+  ad               String
+  kategori         String?
+  miktar           Float    @default(0)
+  birim            String   @default("ADET")
+  konum            String?
+  kritikSeviye     Float?
+  aciklama         String?
+  sirketId         String?
+  olusturmaTarihi  DateTime @default(now())
+  guncellemeTarihi DateTime @default(now()) @updatedAt
+  sirket           Sirket?  @relation(fields: [sirketId], references: [id], onDelete: SetNull)
+
+  @@index([sirketId])
+  @@index([ad])
 }
 
 enum Rol {

@@ -17,6 +17,7 @@ export type PolicyModelName =
     | "activityLog"
     | "kullaniciZimmet"
     | "zimmet"
+    | "stokKalem"
     | string;
 
 const GLOBAL_SCOPE_ROLES = new Set<Rol>(["ADMIN"]);
@@ -254,6 +255,8 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "kullaniciZimmet":
         case "zimmet":
             return { arac: getVehicleUsageCompanyFilterWithName(sirketId, sirketName) };
+        case "stokKalem":
+            return { sirketId };
         default:
             return { sirketId };
     }
@@ -281,6 +284,9 @@ function getDriverModelFilter(modelName: PolicyModelName, userId: string, sirket
     }
     if (modelName === "kullanici" || modelName === "personel") {
         return { id: userId, deletedAt: null };
+    }
+    if (modelName === "stokKalem") {
+        return { sirketId: sirketId || "blocked" };
     }
     if (modelName === "sirket") {
         return { id: sirketId || "blocked" };

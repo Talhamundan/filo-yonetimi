@@ -1,250 +1,26 @@
-import { prisma } from "../../../lib/prisma";
-import EvrakTakipClient from "./EvrakTakipClient";
-import { differenceInDays } from "date-fns";
-import { getModelFilter } from "@/lib/auth-utils";
-import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
-import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
-import { matchesTokenizedSearch } from "@/lib/search-query";
+import { redirect } from "next/navigation";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 
-type AracLite = {
-    id: string;
-    plaka: string;
-    marka: string;
-    sirket?: { ad: string } | null;
-};
-
-type EvrakKaydi = {
-    id: string;
-    aracId: string;
-    gecerlilikTarihi: Date;
-};
-
-function getDurum(kalanGun: number) {
-    if (kalanGun < 0) return "GECIKTI";
-    if (kalanGun <= 15) return "YUKSEK";
-    if (kalanGun <= 30) return "YAKLASTI";
-    return "GECERLI";
-}
-
-function isWithinSelectedPeriod(date: Date, yilBasi: Date, yilSonu: Date) {
-    const time = new Date(date).getTime();
-    return time >= yilBasi.getTime() && time <= yilSonu.getTime();
-}
-
-function buildLatestMap<T extends EvrakKaydi>(records: T[]) {
-    const map = new Map<string, T>();
-    for (const item of records) {
-        if (!item?.aracId) continue;
-        if (!map.has(item.aracId)) {
-            map.set(item.aracId, item);
-        }
-    }
-    return map;
-}
-
-export default async function EvrakTakipPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
+export default async function EvrakTakipRedirectPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
+    const [selectedSirketId, selectedYil, selectedAy, resolvedSearchParams] = await Promise.all([
         getSelectedSirketId(props.searchParams),
         getSelectedYil(props.searchParams),
         getSelectedAy(props.searchParams),
-        getCommonListFilters(props.searchParams),
-    ]);
-    const { start: yilBasi, end: yilSonu } = getAyDateRange(selectedYil, selectedAy);
-    const [aracFilter, muayeneFilter, kaskoFilter, trafikFilter] = await Promise.all([
-        getModelFilter("arac", selectedSirketId),
-        getModelFilter("muayene", selectedSirketId),
-        getModelFilter("kasko", selectedSirketId),
-        getModelFilter("trafikSigortasi", selectedSirketId),
+        props.searchParams ? props.searchParams : Promise.resolve({} as DashboardSearchParams),
     ]);
 
-    const araclar: AracLite[] = await (prisma as any).arac
-        .findMany({
-            where: aracFilter as any,
-            orderBy: { plaka: "asc" },
-            select: {
-                id: true,
-                plaka: true,
-                marka: true,
-                sirket: { select: { ad: true } },
-            },
-        })
-        .catch(async (error: unknown) => {
-            console.warn("Evrak takip arac sorgusu (sirket include) basarisiz, minimal sorgu ile devam ediliyor.", error);
-            try {
-                return await (prisma as any).arac.findMany({
-                    where: aracFilter as any,
-                    orderBy: { plaka: "asc" },
-                    select: {
-                        id: true,
-                        plaka: true,
-                        marka: true,
-                    },
-                });
-            } catch (fallbackError) {
-                console.warn("Evrak takip minimal arac sorgusu da basarisiz, bos liste ile devam ediliyor.", fallbackError);
-                return [];
-            }
-        });
+    const params = new URLSearchParams();
+    if (selectedSirketId) params.set("sirket", selectedSirketId);
+    if (selectedYil) params.set("yil", String(selectedYil));
+    params.set("ay", selectedAy == null ? "all" : String(selectedAy));
 
-    const aracIds = (araclar as any[]).map((a: any) => a.id).filter(Boolean);
-    if (aracIds.length === 0) {
-        return <EvrakTakipClient initialEvraklar={[]} />;
+    const passthroughKeys = ["q", "status", "type", "from", "to"] as const;
+    for (const key of passthroughKeys) {
+        const value = resolvedSearchParams[key];
+        const text = Array.isArray(value) ? value[0] : value;
+        if (text) params.set(key, text);
     }
 
-    const [muayeneKayitlari, kaskoKayitlari, trafikKayitlari] = await Promise.all([
-        (prisma as any).muayene
-            .findMany({
-                where: {
-                    ...(muayeneFilter as any),
-                    aracId: { in: aracIds },
-                },
-                orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { muayeneTarihi: "desc" }, { gecerlilikTarihi: "desc" }],
-                select: {
-                    id: true,
-                    aracId: true,
-                    gecerlilikTarihi: true,
-                },
-            })
-            .catch((error: unknown) => {
-                console.warn("Evrak takip muayene sorgusu basarisiz, bu kalem atlandi.", error);
-                return [];
-            }),
-        (prisma as any).kasko
-            .findMany({
-                where: {
-                    ...(kaskoFilter as any),
-                    aracId: { in: aracIds },
-                },
-                orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { baslangicTarihi: "desc" }, { bitisTarihi: "desc" }],
-                select: {
-                    id: true,
-                    aracId: true,
-                    bitisTarihi: true,
-                },
-            })
-            .catch((error: unknown) => {
-                console.warn("Evrak takip kasko sorgusu basarisiz, bu kalem atlandi.", error);
-                return [];
-            }),
-        (prisma as any).trafikSigortasi
-            .findMany({
-                where: {
-                    ...(trafikFilter as any),
-                    aracId: { in: aracIds },
-                },
-                orderBy: [{ aracId: "asc" }, { aktifMi: "desc" }, { baslangicTarihi: "desc" }, { bitisTarihi: "desc" }],
-                select: {
-                    id: true,
-                    aracId: true,
-                    bitisTarihi: true,
-                },
-            })
-            .catch((error: unknown) => {
-                console.warn("Evrak takip trafik sigortasi sorgusu basarisiz, bu kalem atlandi.", error);
-                return [];
-            }),
-    ]);
-
-    const latestMuayene = buildLatestMap(
-        (muayeneKayitlari as any[])
-            .filter((item: any) => item?.gecerlilikTarihi)
-            .map((item: any) => ({
-                id: item.id,
-                aracId: item.aracId,
-                gecerlilikTarihi: new Date(item.gecerlilikTarihi),
-            }))
-    );
-
-    const latestKasko = buildLatestMap(
-        (kaskoKayitlari as any[])
-            .filter((item: any) => item?.bitisTarihi)
-            .map((item: any) => ({
-                id: item.id,
-                aracId: item.aracId,
-                gecerlilikTarihi: new Date(item.bitisTarihi),
-            }))
-    );
-
-    const latestTrafik = buildLatestMap(
-        (trafikKayitlari as any[])
-            .filter((item: any) => item?.bitisTarihi)
-            .map((item: any) => ({
-                id: item.id,
-                aracId: item.aracId,
-                gecerlilikTarihi: new Date(item.bitisTarihi),
-            }))
-    );
-
-    const bugun = new Date();
-    const evrakListesi: any[] = [];
-
-    for (const arac of araclar as any[]) {
-        const muayene = latestMuayene.get(arac.id);
-        if (muayene && isWithinSelectedPeriod(muayene.gecerlilikTarihi, yilBasi, yilSonu)) {
-            const kalanGun = differenceInDays(muayene.gecerlilikTarihi, bugun);
-            evrakListesi.push({
-                id: `m-${muayene.id}`,
-                aracId: arac.id,
-                plaka: arac.plaka,
-                marka: arac.marka,
-                sirketAd: arac.sirket?.ad || null,
-                tur: "Muayene",
-                gecerlilikTarihi: muayene.gecerlilikTarihi,
-                kalanGun,
-                durum: getDurum(kalanGun),
-            });
-        }
-
-        const kasko = latestKasko.get(arac.id);
-        if (kasko && isWithinSelectedPeriod(kasko.gecerlilikTarihi, yilBasi, yilSonu)) {
-            const kalanGun = differenceInDays(kasko.gecerlilikTarihi, bugun);
-            evrakListesi.push({
-                id: `k-${kasko.id}`,
-                aracId: arac.id,
-                plaka: arac.plaka,
-                marka: arac.marka,
-                sirketAd: arac.sirket?.ad || null,
-                tur: "Kasko",
-                gecerlilikTarihi: kasko.gecerlilikTarihi,
-                kalanGun,
-                durum: getDurum(kalanGun),
-            });
-        }
-
-        const trafik = latestTrafik.get(arac.id);
-        if (trafik && isWithinSelectedPeriod(trafik.gecerlilikTarihi, yilBasi, yilSonu)) {
-            const kalanGun = differenceInDays(trafik.gecerlilikTarihi, bugun);
-            evrakListesi.push({
-                id: `ts-${trafik.id}`,
-                aracId: arac.id,
-                plaka: arac.plaka,
-                marka: arac.marka,
-                sirketAd: arac.sirket?.ad || null,
-                tur: "Trafik Sigortası",
-                gecerlilikTarihi: trafik.gecerlilikTarihi,
-                kalanGun,
-                durum: getDurum(kalanGun),
-            });
-        }
-    }
-    const dateRange = getDateRangeFilter(commonFilters.from, commonFilters.to);
-    const q = commonFilters.q.trim();
-    const filteredEvrakListesi = evrakListesi
-        .filter((row) => {
-            if (q) {
-                const haystack = [row.plaka, row.marka, row.tur, row.sirketAd || ""].join(" ");
-                if (!matchesTokenizedSearch(haystack, q)) return false;
-            }
-            if (commonFilters.status) {
-                const normalizedStatus = commonFilters.status === "KRITIK" ? "YUKSEK" : commonFilters.status;
-                if (row.durum !== normalizedStatus) return false;
-            }
-            if (commonFilters.type && row.tur !== commonFilters.type) return false;
-            if (dateRange?.gte && row.gecerlilikTarihi < dateRange.gte) return false;
-            if (dateRange?.lte && row.gecerlilikTarihi > dateRange.lte) return false;
-            return true;
-        })
-        .sort((a, b) => a.kalanGun - b.kalanGun);
-
-    return <EvrakTakipClient initialEvraklar={filteredEvrakListesi} />;
+    const query = params.toString();
+    redirect(`/dashboard/stok-takibi${query ? `?${query}` : ""}`);
 }

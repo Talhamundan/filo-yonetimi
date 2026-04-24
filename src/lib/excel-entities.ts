@@ -18,7 +18,8 @@ export type ExcelEntityKey =
     | "trafikSigortasi"
     | "masraf"
     | "ceza"
-    | "dokuman";
+    | "dokuman"
+    | "stokKalem";
 
 type ExcelEntityConfig = {
     prismaModel: string;
@@ -158,6 +159,13 @@ export const EXCEL_ENTITY_CONFIG: Record<ExcelEntityKey, ExcelEntityConfig> = {
         dateField: "yuklemeTarihi",
         sheetName: "Dokuman",
         fileNamePrefix: "dokumanlar",
+    },
+    stokKalem: {
+        prismaModel: "stokKalem",
+        filterModel: "stokKalem",
+        dateField: "guncellemeTarihi",
+        sheetName: "StokTakibi",
+        fileNamePrefix: "stok-takibi",
     },
 };
 

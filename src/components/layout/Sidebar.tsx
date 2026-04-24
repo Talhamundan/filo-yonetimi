@@ -21,6 +21,7 @@ import {
     Handshake,
     FileWarning,
     Truck,
+    Boxes,
     X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -204,6 +205,7 @@ export default function Sidebar({
                     <NavItem href="/dashboard/arizalar" scopedHref={buildScopedHref("/dashboard/arizalar")} icon={AlertTriangle} label="Kazalı Araç Takibi" active={isActivePath("/dashboard/arizalar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/servis-kayitlari" scopedHref={buildScopedHref("/dashboard/servis-kayitlari")} icon={Wrench} label="Servis Kayıtları" active={isActivePath("/dashboard/servis-kayitlari")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/muayeneler" scopedHref={buildScopedHref("/dashboard/muayeneler")} icon={CheckCircle} label="Muayene Takibi" active={isActivePath("/dashboard/muayeneler")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                    <NavItem href="/dashboard/stok-takibi" scopedHref={buildScopedHref("/dashboard/stok-takibi")} icon={Boxes} label="Stok Takibi" active={isActivePath("/dashboard/stok-takibi")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Finance */}
@@ -220,7 +222,6 @@ export default function Sidebar({
                     <NavItem href="/dashboard/sigortaci" scopedHref={buildScopedHref("/dashboard/sigortaci")} icon={ShieldAlert} label="Sigortacı Operasyon" active={isActivePath("/dashboard/sigortaci")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/trafik-sigortasi" scopedHref={buildScopedHref("/dashboard/trafik-sigortasi")} icon={ShieldCheck} label="Trafik Sigortaları" active={isActivePath("/dashboard/trafik-sigortasi")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                     <NavItem href="/dashboard/kasko" scopedHref={buildScopedHref("/dashboard/kasko")} icon={FileText} label="Kasko Poliçeleri" active={isActivePath("/dashboard/kasko")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/evrak-takip" scopedHref={buildScopedHref("/dashboard/evrak-takip")} icon={AlertTriangle} label="Evrak Takibi" active={isActivePath("/dashboard/evrak-takip")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
                 {/* Documents */}

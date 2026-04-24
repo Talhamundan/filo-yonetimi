@@ -560,7 +560,7 @@ export async function deleteArac(id: string) {
 
         revalidatePath(PATH);
         revalidatePath("/dashboard");
-        revalidatePath("/dashboard/evrak-takip");
+        revalidatePath("/dashboard/stok-takibi");
         revalidatePath("/dashboard/finans");
         revalidatePath("/dashboard/kasko");
         revalidatePath("/dashboard/trafik-sigortasi");

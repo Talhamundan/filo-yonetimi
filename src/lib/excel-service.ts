@@ -567,6 +567,30 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
             arac: ["Araç", "Arac", "Plaka"],
         },
     },
+    stokKalem: {
+        visibleColumns: ["ad", "kategori", "miktar", "birim", "konum", "kritikSeviye", "aciklama", "sirket"],
+        strictVisibleColumns: true,
+        labels: {
+            ad: "Stok Adı",
+            kategori: "Kategori",
+            miktar: "Adet",
+            birim: "Birim",
+            konum: "Stok Yeri",
+            kritikSeviye: "Kritik Seviye",
+            aciklama: "Açıklama",
+            sirket: "Şirket",
+        },
+        aliases: {
+            ad: ["Stok Adı", "Stok Adi", "Parça Adı", "Parca Adi", "Malzeme Adı", "Malzeme Adi"],
+            kategori: ["Kategori", "Parça Türü", "Parca Turu", "Tür", "Tur"],
+            miktar: ["Adet", "Miktar", "Stok Adedi", "Stok Miktarı", "Stok Miktari"],
+            birim: ["Birim", "Ölçü Birimi", "Olcu Birimi"],
+            konum: ["Stok Yeri", "Konum", "Depo", "Raf", "Yer"],
+            kritikSeviye: ["Kritik Seviye", "Minimum Stok", "Alt Limit"],
+            aciklama: ["Açıklama", "Aciklama", "Not"],
+            sirket: ["Şirket", "Sirket", "Bağlı Şirket", "Bagli Sirket"],
+        },
+    },
 };
 
 const ARAC_EXTERNAL_VISIBLE_COLUMNS = [

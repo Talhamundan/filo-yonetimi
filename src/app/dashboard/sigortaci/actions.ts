@@ -11,7 +11,7 @@ import { ensureSigortaAcenteColumns, getExistingSigortaColumns, isSigortaOptiona
 const PATH = "/dashboard/sigortaci";
 const KASKO_PATH = "/dashboard/kasko";
 const TRAFIK_PATH = "/dashboard/trafik-sigortasi";
-const EVRAK_PATH = "/dashboard/evrak-takip";
+const EVRAK_PATH = "/dashboard/stok-takibi";
 const ARACLAR_PATH = "/dashboard/araclar";
 
 type TeklifInput = {

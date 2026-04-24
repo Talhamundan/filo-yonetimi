@@ -931,7 +931,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <button
                         type="button"
-                        onClick={() => navigateWithScope("/dashboard/evrak-takip")}
+                        onClick={() => navigateWithScope("/dashboard/stok-takibi")}
                         className="inline-flex items-center gap-2 text-left text-sm font-semibold text-slate-900 transition-colors hover:text-rose-700 cursor-pointer"
                         aria-label="Operasyon Takibi sayfasını aç"
                         title="Operasyon Takibi"

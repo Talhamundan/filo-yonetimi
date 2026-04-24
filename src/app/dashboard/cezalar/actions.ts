@@ -11,7 +11,7 @@ import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = "/dashboard/cezalar";
 const DASHBOARD_PATH = "/dashboard";
-const EVRAK_PATH = "/dashboard/evrak-takip";
+const EVRAK_PATH = "/dashboard/stok-takibi";
 const ARACLAR_PATH = "/dashboard/araclar";
 
 function revalidateCezaRelatedPaths(aracIds?: Array<string | null | undefined>) {

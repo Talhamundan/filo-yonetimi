@@ -8,7 +8,7 @@ import { ensureMuayeneColumns, isMuayeneOptionalFieldCompatibilityError } from "
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/muayeneler';
-const EVRAK_PATH = "/dashboard/evrak-takip";
+const EVRAK_PATH = "/dashboard/stok-takibi";
 const ARACLAR_PATH = "/dashboard/araclar";
 
 function parseDateInput(value: string) {

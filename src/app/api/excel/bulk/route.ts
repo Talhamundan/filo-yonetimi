@@ -26,7 +26,8 @@ const BULK_IMPORT_ORDER: ExcelEntityKey[] = [
     "ariza",
     "masraf",
     "ceza",
-    "dokuman"
+    "dokuman",
+    "stokKalem",
 ];
 
 // Export edilecek tüm entity'ler (tekrarlı dış kapsam entity'leri dahil edilmez)
@@ -46,6 +47,7 @@ const ALL_ENTITIES: ExcelEntityKey[] = [
     "masraf",
     "ceza",
     "dokuman",
+    "stokKalem",
 ];
 
 export async function GET() {

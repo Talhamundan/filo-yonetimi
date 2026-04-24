@@ -17,6 +17,7 @@ import { deleteMasraf } from "@/app/dashboard/masraflar/actions";
 import { deleteCezaMasraf } from "@/app/dashboard/ceza-masraflari/actions";
 import { deleteDokuman } from "@/app/dashboard/dokumanlar/actions";
 import { deleteDisFirma } from "@/app/dashboard/_dis-firmalar/actions";
+import { deleteStokKalem } from "@/app/dashboard/stok-takibi/actions";
 
 type DeleteResult = { success: boolean; error?: string };
 
@@ -56,6 +57,8 @@ async function deleteByEntity(entity: ExcelEntityKey, id: string): Promise<Delet
             return deleteCezaMasraf(id);
         case "dokuman":
             return deleteDokuman(id);
+        case "stokKalem":
+            return deleteStokKalem(id);
         default:
             return { success: false, error: "Bu tablo için toplu silme desteklenmiyor." };
     }

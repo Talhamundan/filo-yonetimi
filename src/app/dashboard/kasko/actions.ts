@@ -7,7 +7,7 @@ import { ensureSigortaAcenteColumns, getExistingSigortaColumns, isSigortaOptiona
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/kasko';
-const EVRAK_PATH = "/dashboard/evrak-takip";
+const EVRAK_PATH = "/dashboard/stok-takibi";
 const ARACLAR_PATH = "/dashboard/araclar";
 
 function revalidateKaskoRelatedPaths(aracId?: string) {
