@@ -7,6 +7,11 @@ import { getDashboardDriverData } from "@/lib/dashboard-driver.service";
 import { getDashboardFuelAverageData } from "@/lib/dashboard-fuel-average.service";
 import { prisma } from "@/lib/prisma";
 import { KIRALIK_SIRKET_ADI } from "@/lib/ruhsat-sahibi";
+import { Prisma } from "@prisma/client";
+
+const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+);
 
 export type {
     DashboardCalendarEvent,
@@ -22,6 +27,7 @@ export type {
     DashboardOperationArizaItem,
     DashboardMonthlyTrendItem,
     DashboardOwnershipCostItem,
+    DashboardStockItem,
     DashboardVehicleFuelAverageItem,
     DashboardVehicleCostItem,
 } from "@/lib/dashboard-types";
@@ -74,6 +80,7 @@ function getEmptyDashboardData(): DashboardData {
         ownershipCostReport: [],
         vehicleFuelAverageReport: [],
         driverFuelAverageReport: [],
+        stokOzet: [],
     };
 }
 
@@ -113,7 +120,13 @@ async function getDashboardDataUnsafe(
     const cezaScope = getCezaScopeWhere(scope);
     const dateContext = buildDateContext(selectedYil, selectedAy, comparisonGranularity);
 
-    const [fleetData, costData, fuelConsumptionData, calendarData, vehicleData, driverData, fuelAverageData, tankData] = await Promise.all([
+    const stockScopeWhere = scope as Prisma.StokKalemWhereInput;
+    const tankScopeSirketId =
+        typeof (scope as { sirketId?: unknown })?.sirketId === "string"
+            ? ((scope as { sirketId?: string }).sirketId || "").trim()
+            : null;
+
+    const [fleetData, costData, fuelConsumptionData, calendarData, vehicleData, driverData, fuelAverageData, tankData, stockRows] = await Promise.all([
         getFleetStatusData(scope, vehicleScope),
         getDashboardCostData({ scope, cezaScope, vehicleScope, dateContext, comparisonGranularity }),
         getDashboardFuelConsumptionData({ scope, vehicleScope, dateContext }),
@@ -121,9 +134,24 @@ async function getDashboardDataUnsafe(
         getDashboardVehicleData({ scope, cezaScope, dateContext, vehicleScope }),
         getDashboardDriverData({ scope, cezaScope, dateContext, vehicleScope }),
         getDashboardFuelAverageData({ scope, dateContext, vehicleScope }),
-        prisma.yakitTank.aggregate({
-            where: { aktifMi: true },
+        (prisma as any).yakitTank.aggregate({
+            where: {
+                aktifMi: true,
+                ...(YAKIT_TANK_HAS_SIRKET_FIELD && tankScopeSirketId ? { sirketId: tankScopeSirketId } : {}),
+            },
             _sum: { kapasiteLitre: true, mevcutLitre: true }
+        }),
+        prisma.stokKalem.findMany({
+            where: stockScopeWhere,
+            select: {
+                id: true,
+                ad: true,
+                miktar: true,
+                birim: true,
+                kritikSeviye: true,
+            },
+            orderBy: [{ ad: "asc" }],
+            take: 12,
         }),
     ]);
 
@@ -181,6 +209,24 @@ async function getDashboardDataUnsafe(
         ownershipCostReport: costData.ownershipCostReport,
         vehicleFuelAverageReport: fuelAverageData.vehicleFuelAverageReport,
         driverFuelAverageReport: fuelAverageData.driverFuelAverageReport,
+        stokOzet: (stockRows as Array<{
+            id: string;
+            ad: string;
+            miktar: number | null;
+            birim: string | null;
+            kritikSeviye: number | null;
+        }>).map((item) => {
+            const miktar = Number(item.miktar || 0);
+            const kritikSeviye = item.kritikSeviye == null ? null : Number(item.kritikSeviye);
+            return {
+                id: item.id,
+                ad: item.ad,
+                miktar,
+                birim: (item.birim || "ADET").toUpperCase(),
+                kritikSeviye,
+                kritikMi: kritikSeviye != null && miktar <= kritikSeviye,
+            };
+        }),
     };
 }
 

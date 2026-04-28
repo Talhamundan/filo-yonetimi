@@ -8,6 +8,10 @@ import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-disp
 import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 import { buildTokenizedOrWhere } from "@/lib/search-query";
 
+const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+);
+
 export default async function YakitlarPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, selectedAy, commonFilters] = await Promise.all([
         getSelectedSirketId(props.searchParams),
@@ -17,10 +21,11 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
     ]);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
-    const [queryFilter, aracFilter, personelFilter] = await Promise.all([
+    const [queryFilter, aracFilter, personelFilter, yakitTankFilter] = await Promise.all([
         getModelFilter("yakit", selectedSirketId),
         getAracUsageFilter(selectedSirketId),
         getPersonnelSelectFilter(selectedSirketId),
+        YAKIT_TANK_HAS_SIRKET_FIELD ? getModelFilter("yakitTank", selectedSirketId) : Promise.resolve({}),
     ]);
 
     const yakitWhere = (queryFilter || {}) as Record<string, unknown>;
@@ -67,6 +72,16 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         : whereParts.length === 1 
             ? whereParts[0] 
             : { AND: whereParts };
+    const yakitTankWhere = (yakitTankFilter || {}) as Record<string, unknown>;
+    const tankHareketScope =
+        YAKIT_TANK_HAS_SIRKET_FIELD && Object.keys(yakitTankWhere).length > 0
+            ? ({
+                OR: [
+                    { tank: yakitTankWhere as any },
+                    { hedefTank: yakitTankWhere as any },
+                ],
+            } as Record<string, unknown>)
+            : null;
 
     const [yakitlar, araclar, personeller, yakitTanklari, tankHareketleri] = await Promise.all([
         (prisma as any).yakit.findMany({ 
@@ -172,18 +187,32 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             orderBy: [{ ad: "asc" }, { soyad: "asc" }],
         }).catch(() => []),
         (prisma as any).yakitTank.findMany({
-            where: { aktifMi: true },
+            where: {
+                AND: [
+                    yakitTankWhere as any,
+                    { aktifMi: true },
+                ],
+            },
+            ...(YAKIT_TANK_HAS_SIRKET_FIELD
+                ? { include: { sirket: { select: { id: true, ad: true } } } }
+                : {}),
             orderBy: { olusturmaTarihi: 'asc' }
         }),
         (prisma as any).yakitTankHareket.findMany({
             where: {
-                tip: { in: ['ALIM', 'TRANSFER'] }
+                tip: { in: ['ALIM', 'TRANSFER'] },
+                ...(tankHareketScope ? (tankHareketScope as any) : {}),
             },
             orderBy: { tarih: 'desc' },
-            include: {
-                tank: { select: { ad: true } },
-                hedefTank: { select: { ad: true } }
-            }
+            include: YAKIT_TANK_HAS_SIRKET_FIELD
+                ? {
+                    tank: { select: { ad: true, sirket: { select: { id: true, ad: true } } } },
+                    hedefTank: { select: { ad: true, sirket: { select: { id: true, ad: true } } } },
+                }
+                : {
+                    tank: { select: { ad: true } },
+                    hedefTank: { select: { ad: true } },
+                }
         })
     ]);
     
@@ -241,7 +270,11 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 plaka: plaka,
                 marka: "Tanker",
                 model: "Sistem",
-                sirket: { ad: "BERA" }
+                sirket: {
+                    ad: YAKIT_TANK_HAS_SIRKET_FIELD
+                        ? (h.tank?.sirket?.ad || h.hedefTank?.sirket?.ad || "-")
+                        : "-"
+                }
             } as any,
             isStokHareketi: true // Custom flag for UI
         } as any;

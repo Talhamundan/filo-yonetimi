@@ -15,7 +15,6 @@ import { useConfirm } from "@/components/ui/confirm-modal";
 import type { ColumnDef } from "@tanstack/react-table";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { getRoleLabel } from "@/lib/role-label";
-import type { YakitTank } from "@prisma/client";
 
 type AssignablePersonel = {
     id: string;
@@ -41,14 +40,30 @@ type RegisteredUserRow = {
     sirketAdi: string;
 };
 
+type TankRow = {
+    id: string;
+    ad: string;
+    sirketId: string | null;
+    kapasiteLitre: number;
+    mevcutLitre: number;
+    aktifMi: boolean;
+    sirket?: { id: string; ad: string } | null;
+};
+
 export default function OnayMerkeziClient({
     registeredUsers,
     assignablePersoneller,
     yakitTanklar,
+    sirketler,
+    selectedScopeSirketId,
+    canScopeTankByCompany,
 }: {
     registeredUsers: RegisteredUser[];
     assignablePersoneller: AssignablePersonel[];
-    yakitTanklar: YakitTank[];
+    yakitTanklar: TankRow[];
+    sirketler: Array<{ id: string; ad: string }>;
+    selectedScopeSirketId: string | null;
+    canScopeTankByCompany: boolean;
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const router = useRouter();
@@ -69,27 +84,43 @@ export default function OnayMerkeziClient({
     const [isBulkImporting, setIsBulkImporting] = useState(false);
     
     // Yakit Tank States
+    const defaultTankSirketId = canScopeTankByCompany ? (selectedScopeSirketId || "") : "";
     const [isAddingTank, setIsAddingTank] = useState(false);
-    const [editTankRow, setEditTankRow] = useState<YakitTank | null>(null);
+    const [editTankRow, setEditTankRow] = useState<TankRow | null>(null);
     const [isSavingTank, setIsSavingTank] = useState(false);
-    const [tankForm, setTankForm] = useState({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+    const [tankForm, setTankForm] = useState({
+        ad: "",
+        sirketId: defaultTankSirketId,
+        kapasiteLitre: 0,
+        mevcutLitre: 0,
+        aktifMi: true,
+    });
+
+    React.useEffect(() => {
+        if (!isAddingTank && !editTankRow) return;
+        setTankForm((prev) => ({
+            ...prev,
+            sirketId: prev.sirketId || defaultTankSirketId,
+        }));
+    }, [defaultTankSirketId, editTankRow, isAddingTank]);
 
     const handleCreateTank = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0) {
-            toast.warning("Tank adı ve geçerli kapasite zorunludur.");
+        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0 || (canScopeTankByCompany && !tankForm.sirketId.trim())) {
+            toast.warning("Tank adı, şirket ve geçerli kapasite zorunludur.");
             return;
         }
         setIsSavingTank(true);
         const res = await createYakitTank({
             ad: tankForm.ad,
+            ...(canScopeTankByCompany ? { sirketId: tankForm.sirketId } : {}),
             kapasiteLitre: tankForm.kapasiteLitre,
             mevcutLitre: tankForm.mevcutLitre
         });
         if (res.success) {
             toast.success("Yakıt tankı tanımlandı.");
             setIsAddingTank(false);
-            setTankForm({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+            setTankForm({ ad: "", sirketId: defaultTankSirketId, kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
             router.refresh();
         } else {
             toast.error(res.error || "Tank eklenemedi.");
@@ -99,12 +130,15 @@ export default function OnayMerkeziClient({
 
     const handleSaveTank = async () => {
         if (!editTankRow) return;
-        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0) {
-            toast.warning("Tank adı ve geçerli kapasite zorunludur.");
+        if (!tankForm.ad.trim() || tankForm.kapasiteLitre <= 0 || (canScopeTankByCompany && !tankForm.sirketId.trim())) {
+            toast.warning("Tank adı, şirket ve geçerli kapasite zorunludur.");
             return;
         }
         setIsSavingTank(true);
-        const res = await updateYakitTank(editTankRow.id, tankForm);
+        const res = await updateYakitTank(editTankRow.id, {
+            ...tankForm,
+            ...(canScopeTankByCompany ? {} : { sirketId: undefined }),
+        });
         if (res.success) {
             toast.success("Yakıt tankı güncellendi.");
             setEditTankRow(null);
@@ -115,7 +149,7 @@ export default function OnayMerkeziClient({
         setIsSavingTank(false);
     };
 
-    const handleDeleteTank = async (tank: YakitTank) => {
+    const handleDeleteTank = async (tank: TankRow) => {
         const confirmed = await openConfirm({
             title: "Tankı Sil",
             message: `${tank.ad} isimli yakıt tankını silmek istediğinizden emin misiniz?`,
@@ -301,11 +335,17 @@ export default function OnayMerkeziClient({
         }
     };
 
-    const tankColumns: ColumnDef<YakitTank>[] = [
+    const tankColumns: ColumnDef<TankRow>[] = [
         {
             accessorKey: "ad",
             header: "Tank Adı",
             cell: ({ row }) => <span className="font-bold text-slate-900">{row.original.ad}</span>,
+        },
+        {
+            accessorKey: "sirket",
+            header: "Şirket",
+            accessorFn: (row) => row.sirket?.ad || "-",
+            cell: ({ row }) => <span>{row.original.sirket?.ad || "-"}</span>,
         },
         {
             accessorKey: "kapasiteLitre",
@@ -339,6 +379,7 @@ export default function OnayMerkeziClient({
                         setEditTankRow(row.original);
                         setTankForm({
                             ad: row.original.ad,
+                            sirketId: canScopeTankByCompany ? (row.original.sirketId || defaultTankSirketId) : "",
                             kapasiteLitre: row.original.kapasiteLitre,
                             mevcutLitre: row.original.mevcutLitre,
                             aktifMi: row.original.aktifMi
@@ -503,7 +544,7 @@ export default function OnayMerkeziClient({
                     </div>
                     <button
                         onClick={() => {
-                            setTankForm({ ad: "", kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
+                            setTankForm({ ad: "", sirketId: defaultTankSirketId, kapasiteLitre: 0, mevcutLitre: 0, aktifMi: true });
                             setIsAddingTank(true);
                         }}
                         className="inline-flex h-10 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-semibold text-white hover:bg-indigo-700 transition-colors shadow-sm"
@@ -616,6 +657,24 @@ export default function OnayMerkeziClient({
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateTank} className="grid gap-4 py-4">
+                        {canScopeTankByCompany && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Şirket</label>
+                                <select
+                                    value={tankForm.sirketId}
+                                    onChange={(e) => setTankForm({ ...tankForm, sirketId: e.target.value })}
+                                    disabled={Boolean(selectedScopeSirketId)}
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none disabled:bg-slate-50"
+                                >
+                                    <option value="">Şirket seçin</option>
+                                    {sirketler.map((sirket) => (
+                                        <option key={sirket.id} value={sirket.id}>
+                                            {sirket.ad}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700 italic">Tank / Depo Adı</label>
                             <input
@@ -670,6 +729,24 @@ export default function OnayMerkeziClient({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="grid gap-4 py-4">
+                        {canScopeTankByCompany && (
+                            <div className="space-y-2">
+                                <label className="text-sm font-bold text-slate-700 italic">Şirket</label>
+                                <select
+                                    value={tankForm.sirketId}
+                                    onChange={(e) => setTankForm({ ...tankForm, sirketId: e.target.value })}
+                                    disabled={Boolean(selectedScopeSirketId)}
+                                    className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm focus:border-indigo-500 outline-none disabled:bg-slate-50"
+                                >
+                                    <option value="">Şirket seçin</option>
+                                    {sirketler.map((sirket) => (
+                                        <option key={sirket.id} value={sirket.id}>
+                                            {sirket.ad}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div className="space-y-2">
                             <label className="text-sm font-bold text-slate-700 italic">Tank Adı</label>
                             <input

@@ -93,6 +93,7 @@ export default async function PersonelPage(props: { searchParams?: Promise<Dashb
         getModelFilter("kullaniciZimmet", selectedSirketId),
     ]);
     const personelWhereParts: Record<string, unknown>[] = [((filter || {}) as Record<string, unknown>)];
+    personelWhereParts.push({ rol: { not: "ADMIN" } });
 
     const hasCalistigiKurumModelField = supportsKullaniciCalistigiKurumField();
     const hasCalistigiKurumColumn = hasCalistigiKurumModelField

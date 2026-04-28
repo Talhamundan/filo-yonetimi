@@ -15,6 +15,7 @@ import {
     Truck,
     Users,
     Fuel,
+    Boxes,
 } from "lucide-react";
 import {
     BarChart,
@@ -165,6 +166,27 @@ function formatCategoryValue(categoryKey: string, value: number) {
         : formatCurrencyValue(value);
 }
 
+function formatStockQuantity(value: number) {
+    const normalized = Number(value || 0);
+    if (Number.isInteger(normalized)) {
+        return normalized.toLocaleString("tr-TR");
+    }
+    return normalized.toLocaleString("tr-TR", {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+    });
+}
+
+function normalizeStockUnit(unit: string) {
+    const normalized = String(unit || "ADET").trim().toUpperCase();
+    if (normalized === "ADET") return "adet";
+    if (normalized === "LITRE") return "litre";
+    if (normalized === "KG") return "kg";
+    if (normalized === "SET") return "set";
+    if (normalized === "KOLI") return "koli";
+    return normalized.toLocaleLowerCase("tr-TR");
+}
+
 function getGaugeColorForUsage(percentage: number) {
     if (percentage <= 85) return "#16A34A";
     if (percentage <= 100) return "#F59E0B";
@@ -229,6 +251,7 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
         companyCostReport = [],
         vehicleFuelAverageReport = [],
         driverFuelAverageReport = [],
+        stokOzet = [],
     } = data || {} as any;
 
     const calendarCardRef = useRef<HTMLDivElement | null>(null);
@@ -506,27 +529,19 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
     const utilizationGaugeColor =
         fleetUtilizationPercent >= 85 ? "#16A34A" : fleetUtilizationPercent >= 70 ? "#F59E0B" : "#DC2626";
 
-    const dashboardTotalExpense = Number(metrics.aylikToplamGider || 0);
-    
-    const dashboardFuelExpense = useMemo(
-        () => companyCostReport.reduce((sum: number, row: any) => sum + Number(row?.yakit || 0), 0),
-        [companyCostReport]
-    );
-    const dashboardServiceExpense = useMemo(
-        () => companyCostReport.reduce((sum: number, row: any) => sum + Number(row?.bakim || 0), 0),
-        [companyCostReport]
-    );
-
-    const fuelCostRatioPercent = dashboardTotalExpense > 0 ? (dashboardFuelExpense / dashboardTotalExpense) * 100 : 0;
-    const fuelCostRatioGaugeColor = fuelCostRatioPercent > 75 ? "#DC2626" : fuelCostRatioPercent > 60 ? "#F59E0B" : "#16A34A";
-
-    const serviceCostRatioPercent = dashboardTotalExpense > 0 ? (dashboardServiceExpense / dashboardTotalExpense) * 100 : 0;
-    const serviceCostRatioGaugeColor = serviceCostRatioPercent > 25 ? "#DC2626" : serviceCostRatioPercent > 15 ? "#F59E0B" : "#16A34A";
-    
     const tankOccupancyPercent = metrics.toplamTankKapasite > 0 
         ? (metrics.toplamTankMevcut / metrics.toplamTankKapasite) * 100 
         : 0;
     const tankGaugeColor = tankOccupancyPercent >= 20 ? "#16A34A" : tankOccupancyPercent >= 10 ? "#F59E0B" : "#DC2626";
+    const stockSummaryRows = useMemo<DashboardData["stokOzet"]>(
+        () => (Array.isArray(stokOzet) ? (stokOzet as DashboardData["stokOzet"]) : []),
+        [stokOzet]
+    );
+    const stockItems = useMemo(() => stockSummaryRows.slice(0, 7), [stockSummaryRows]);
+    const criticalStockCount = useMemo(
+        () => stockSummaryRows.filter((item) => item.kritikMi).length,
+        [stockSummaryRows]
+    );
 
     const isAdminOrYetkili = role === "ADMIN" || role === "YETKILI";
     const shouldShowVehicleAndDriverCostLists = isAdminOrYetkili;
@@ -1338,16 +1353,65 @@ export default function DashboardClient({ initialData, isTechnicalPersonnel, rec
                     onClick={() => navigateWithScope("/dashboard/yakitlar")}
                 />
 
-                <GaugeChart
-                    label="Yakıt Maliyet Payı"
-                    sublabel="Dönem İçi Maliyet Yoğunluğu"
-                    value={Math.min(100, Math.max(0, fuelCostRatioPercent))}
-                    min={0}
-                    max={100}
-                    valueText={`${fuelCostRatioPercent.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`}
-                    helperText={`Yakıt Gideri: ${formatCurrencyValue(dashboardFuelExpense)}`}
-                    color={fuelCostRatioGaugeColor}
-                />
+                <Card
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => navigateWithScope("/dashboard/stok-takibi")}
+                    onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigateWithScope("/dashboard/stok-takibi");
+                        }
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white p-4 transition-all duration-300 cursor-pointer hover:border-indigo-200 hover:-translate-y-1 hover:shadow-md"
+                >
+                    <div className="mb-3 flex items-start justify-between gap-2">
+                        <div>
+                            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Stok Takibi</p>
+                            <p className="mt-1 text-[11px] text-slate-500">Kalem Bazlı Mevcut Adet</p>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="p-1.5 bg-slate-50 rounded-md text-slate-600 border border-slate-100 flex items-center justify-center">
+                                <Boxes size={16} />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="h-36 overflow-y-auto pr-1">
+                        {stockItems.length > 0 ? (
+                            <div className="space-y-1.5">
+                                {stockItems.map((item) => (
+                                    <div
+                                        key={item.id}
+                                        className="flex items-center justify-between rounded-md border border-slate-100 bg-slate-50/70 px-2 py-1.5"
+                                    >
+                                        <p className="truncate pr-2 text-xs font-semibold text-slate-800" title={item.ad}>
+                                            {item.ad}
+                                        </p>
+                                        <div className="flex items-center gap-2 shrink-0">
+                                            {item.kritikMi ? (
+                                                <span className="rounded border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold text-rose-700">
+                                                    Kritik
+                                                </span>
+                                            ) : null}
+                                            <span className="text-xs font-bold text-slate-700 whitespace-nowrap">
+                                                {formatStockQuantity(item.miktar)} {normalizeStockUnit(item.birim)}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="h-full flex items-center justify-center rounded-md border border-dashed border-slate-200 bg-slate-50 text-xs text-slate-500">
+                                Görüntülenecek stok kalemi yok.
+                            </div>
+                        )}
+                    </div>
+
+                    <p className="mt-1 text-center text-xs font-medium text-slate-600">
+                        Toplam {stockSummaryRows.length.toLocaleString("tr-TR")} kalem • Kritik: {criticalStockCount}
+                    </p>
+                </Card>
             </div>
 
             <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_1fr] items-start gap-4">

@@ -16,6 +16,7 @@ model Sirket {
   araclar         Arac[]
   kullanicilar    Kullanici[]
   stokKalemleri   StokKalem[]
+  yakitTanklari   YakitTank[]
 }
 
 model DisFirma {
@@ -339,16 +340,19 @@ model Yakit {
 model YakitTank {
   id               String             @id @default(cuid())
   ad               String
+  sirketId         String?
   kapasiteLitre    Float
   mevcutLitre      Float              @default(0)
   birimMaliyet     Float              @default(0)
   aktifMi          Boolean            @default(true)
   olusturmaTarihi  DateTime           @default(now())
   guncellemeTarihi DateTime           @default(now()) @updatedAt
+  sirket           Sirket?            @relation(fields: [sirketId], references: [id])
   hedefHareketler  YakitTankHareket[] @relation("YakitTankHedef")
   hareketler       YakitTankHareket[] @relation("YakitTankKaynak")
 
   @@index([aktifMi])
+  @@index([sirketId])
 }
 
 model YakitTankHareket {

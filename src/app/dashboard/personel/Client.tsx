@@ -229,7 +229,9 @@ export default function PersonelClient({
                 searchKey="adSoyad"
                 searchPlaceholder="İsim ile ara..."
                 serverFiltering={{
-                    statusOptions: ROLLER.map((rol) => ({ value: rol, label: getRoleLabel(rol) })),
+                    statusOptions: ROLLER
+                        .filter((rol) => rol !== "ADMIN")
+                        .map((rol) => ({ value: rol, label: getRoleLabel(rol) })),
                 }}
                 tableClassName="w-full min-w-0"
                 onRowClick={(row) => router.push(scopedHref(`/dashboard/personel/${row.id}`))}

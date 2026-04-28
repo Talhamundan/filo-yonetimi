@@ -14,6 +14,9 @@ const PERSONEL_PATH = "/dashboard/personel";
 const YAKIT_HAS_SOFOR_ID = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.Yakit?.fields?.some((field: any) => field?.name === "soforId")
 );
+const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+);
 
 function getVehicleUsageCompanyFilter(sirketId: string, sirketName?: string | null) {
     const clauses: Record<string, unknown>[] = [
@@ -59,6 +62,31 @@ function revalidateYakitPages(aracId?: string, soforId?: string | null) {
 function normalizeSirketId(value: unknown) {
     const normalized = typeof value === "string" ? value.trim() : "";
     return normalized || null;
+}
+
+function getTankScopeForActor(actor: { rol?: string | null; sirketId?: string | null }) {
+    if (!YAKIT_TANK_HAS_SIRKET_FIELD) {
+        return {} as Record<string, unknown>;
+    }
+    const actorSirketId = normalizeSirketId(actor?.sirketId);
+    if (isDriverRole(actor?.rol)) {
+        return { id: "blocked" } as Record<string, unknown>;
+    }
+    if (canRoleAccessAllCompanies(actor?.rol, actorSirketId)) {
+        return {} as Record<string, unknown>;
+    }
+    return actorSirketId ? ({ sirketId: actorSirketId } as Record<string, unknown>) : ({ id: "blocked" } as Record<string, unknown>);
+}
+
+function getTankScopeForCompany(sirketId: string | null | undefined, fallbackScope: Record<string, unknown>) {
+    if (!YAKIT_TANK_HAS_SIRKET_FIELD) {
+        return fallbackScope;
+    }
+    const normalized = normalizeSirketId(sirketId);
+    if (normalized) {
+        return { sirketId: normalized } as Record<string, unknown>;
+    }
+    return fallbackScope;
 }
 
 async function getSirketNameById(sirketId: string | null) {
@@ -265,8 +293,14 @@ export async function addFuelToTanker(data: {
     tarih: string;
 }) {
     try {
-        await assertAuthenticatedUser();
-        const tank = await (prisma as any).yakitTank.findUnique({ where: { id: data.tankId } });
+        const actor = await assertAuthenticatedUser();
+        const tankScope = getTankScopeForActor(actor as any);
+        const tank = await (prisma as any).yakitTank.findFirst({
+            where: {
+                id: data.tankId,
+                ...(tankScope as any),
+            },
+        });
         if (!tank) throw new Error("Tank bulunamadı.");
 
         const parsedTarih = parseDateInput(data.tarih, "Alım tarihi");
@@ -311,19 +345,22 @@ export async function transferFuelToBidon(data: {
     tarih: string;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
+        const tankScope = getTankScopeForActor(actor as any);
         const parsedTarih = parseDateInput(data.tarih, "Aktarım tarihi");
         const parsedLitre = Number(data.litre);
 
         // Find Binlik Bidon Group
         const bidon = await (prisma as any).yakitTank.findFirst({ 
             where: { 
+                ...(tankScope as any),
                 ad: { contains: "bidon", mode: 'insensitive' },
                 aktifMi: true
             },
             orderBy: { kapasiteLitre: 'desc' }
         }) || await (prisma as any).yakitTank.findFirst({ 
             where: { 
+                ...(tankScope as any),
                 ad: { contains: "binlik", mode: 'insensitive' },
                 aktifMi: true
             }
@@ -334,6 +371,7 @@ export async function transferFuelToBidon(data: {
         // Find best source tank (Mithra/Ana Tank group)
         const allMainTanks = await (prisma as any).yakitTank.findMany({
             where: {
+                ...(tankScope as any),
                 OR: [
                     { ad: { contains: "ana tank", mode: 'insensitive' } },
                     { ad: { contains: "mithra", mode: 'insensitive' } }
@@ -395,7 +433,8 @@ export async function transferFuelToBidon(data: {
 
 export async function createYakit(data: CreateYakitInput) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
+        const actorTankScope = getTankScopeForActor(actor as any);
         const arac = await getYakitScopedAracOrThrow(data.aracId, {
             id: true,
             sirketId: true,
@@ -405,6 +444,7 @@ export async function createYakit(data: CreateYakitInput) {
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
         });
+        const usageTankScope = getTankScopeForCompany(usageContext.kullanimSirketId, actorTankScope);
         const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = parseDateInput(data.tarih, "Yakıt tarihi");
         const parsedLitre = parseDecimalInput(data.litre, "Litre");
@@ -427,6 +467,7 @@ export async function createYakit(data: CreateYakitInput) {
         const matchingTank = inputIstasyon 
             ? await (prisma as any).yakitTank.findFirst({ 
                 where: { 
+                    ...(usageTankScope as any),
                     ad: { equals: inputIstasyon, mode: 'insensitive' },
                     aktifMi: true
                 } 
@@ -443,6 +484,7 @@ export async function createYakit(data: CreateYakitInput) {
             // Mithra Group: find first available Ana Tank
             const allMainTanks = await (prisma as any).yakitTank.findMany({
                 where: {
+                    ...(usageTankScope as any),
                     OR: [
                         { ad: { contains: "ana tank", mode: 'insensitive' } },
                         { ad: { contains: "mithra", mode: 'insensitive' } }
@@ -460,6 +502,7 @@ export async function createYakit(data: CreateYakitInput) {
             // Binlik/Bidon Group
             const allBidons = await (prisma as any).yakitTank.findMany({
                 where: {
+                    ...(usageTankScope as any),
                     OR: [
                         { ad: { contains: "binlik", mode: 'insensitive' } },
                         { ad: { contains: "gezici", mode: 'insensitive' } },
@@ -476,9 +519,16 @@ export async function createYakit(data: CreateYakitInput) {
         }
 
         if (selectedTankId) {
-            const tank = await (prisma as any).yakitTank.findUnique({ where: { id: selectedTankId } });
+            const tank = await (prisma as any).yakitTank.findFirst({
+                where: {
+                    id: selectedTankId,
+                    ...(usageTankScope as any),
+                },
+            });
             if (tank) {
                 finalTutar = parsedLitre * tank.birimMaliyet;
+            } else {
+                selectedTankId = null;
             }
         }
 
@@ -499,7 +549,15 @@ export async function createYakit(data: CreateYakitInput) {
             });
 
             if (selectedTankId) {
-                const tank = await tx.yakitTank.findUnique({ where: { id: selectedTankId } });
+                const tank = await tx.yakitTank.findFirst({
+                    where: {
+                        id: selectedTankId,
+                        ...(usageTankScope as any),
+                    },
+                });
+                if (!tank) {
+                    throw new Error("Seçilen tanka erişim yetkiniz yok.");
+                }
                 await tx.yakitTank.update({
                     where: { id: selectedTankId },
                     data: { mevcutLitre: { decrement: parsedLitre } }
@@ -539,7 +597,8 @@ export async function createYakit(data: CreateYakitInput) {
 
 export async function updateYakit(id: string, data: UpdateYakitInput) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
+        const actorTankScope = getTankScopeForActor(actor as any);
         const mevcutKayit = await getYakitScopedRecordOrThrow(id, {
             aracId: true,
             sirketId: true,
@@ -587,6 +646,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
         });
+        const usageTankScope = getTankScopeForCompany(usageContext.kullanimSirketId, actorTankScope);
         const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = data.tarih ? parseDateInput(data.tarih, "Yakıt tarihi") : undefined;
         const parsedLitre = data.litre !== undefined ? parseDecimalInput(data.litre, "Litre") : undefined;
@@ -618,6 +678,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             const matchingTank = inputIstasyon 
                 ? await tx.yakitTank.findFirst({ 
                     where: { 
+                        ...(usageTankScope as any),
                         ad: { equals: inputIstasyon, mode: 'insensitive' },
                         aktifMi: true
                     } 
@@ -633,6 +694,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             } else if (isMithraGroup) {
                 const allMainTanks = await tx.yakitTank.findMany({
                     where: {
+                        ...(usageTankScope as any),
                         OR: [
                             { ad: { contains: "ana tank", mode: 'insensitive' } },
                             { ad: { contains: "mithra", mode: 'insensitive' } }
@@ -648,6 +710,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             } else if (isBinlikGroup) {
                 const allBidons = await tx.yakitTank.findMany({
                     where: {
+                        ...(usageTankScope as any),
                         OR: [
                             { ad: { contains: "binlik", mode: 'insensitive' } },
                             { ad: { contains: "gezici", mode: 'insensitive' } },
@@ -664,8 +727,17 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             }
 
             if (selectedTankId) {
-                const tank = await tx.yakitTank.findUnique({ where: { id: selectedTankId } });
-                if (tank) finalTutar = newLitre * tank.birimMaliyet;
+                const tank = await tx.yakitTank.findFirst({
+                    where: {
+                        id: selectedTankId,
+                        ...(usageTankScope as any),
+                    },
+                });
+                if (tank) {
+                    finalTutar = newLitre * tank.birimMaliyet;
+                } else {
+                    selectedTankId = null;
+                }
             }
 
             const updated = await tx.yakit.update({
@@ -687,7 +759,15 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
             });
 
             if (selectedTankId) {
-                const tank = await tx.yakitTank.findUnique({ where: { id: selectedTankId } });
+                const tank = await tx.yakitTank.findFirst({
+                    where: {
+                        id: selectedTankId,
+                        ...(usageTankScope as any),
+                    },
+                });
+                if (!tank) {
+                    throw new Error("Seçilen tanka erişim yetkiniz yok.");
+                }
                 await tx.yakitTank.update({
                     where: { id: selectedTankId },
                     data: { mevcutLitre: { decrement: newLitre } }
@@ -773,9 +853,16 @@ export async function deleteYakit(id: string) {
 
 export async function deleteTankHareket(id: string) {
     try {
-        await assertAuthenticatedUser();
-        const hareket = await (prisma as any).yakitTankHareket.findUnique({
-            where: { id }
+        const actor = await assertAuthenticatedUser();
+        const tankScope = getTankScopeForActor(actor as any);
+        const hareket = await (prisma as any).yakitTankHareket.findFirst({
+            where: {
+                id,
+                OR: [
+                    { tank: tankScope as any },
+                    { hedefTank: tankScope as any },
+                ],
+            },
         });
         if (!hareket) throw new Error("Hareket kaydı bulunamadı.");
 
@@ -823,9 +910,20 @@ export async function updateTank(id: string, data: {
     birimMaliyet?: number;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
+        const tankScope = getTankScopeForActor(actor as any);
+        const scopedTank = await (prisma as any).yakitTank.findFirst({
+            where: {
+                id,
+                ...(tankScope as any),
+            },
+            select: { id: true },
+        });
+        if (!scopedTank) {
+            throw new Error("Tank bulunamadı veya yetkiniz yok.");
+        }
         await (prisma as any).yakitTank.update({
-            where: { id },
+            where: { id: scopedTank.id },
             data: {
                 ...(data.ad ? { ad: data.ad } : {}),
                 ...(data.kapasiteLitre !== undefined ? { kapasiteLitre: Number(data.kapasiteLitre) } : {}),
@@ -847,9 +945,16 @@ export async function updateTankHareket(id: string, data: {
     tarih?: string;
 }) {
     try {
-        await assertAuthenticatedUser();
-        const oldHareket = await (prisma as any).yakitTankHareket.findUnique({
-            where: { id }
+        const actor = await assertAuthenticatedUser();
+        const tankScope = getTankScopeForActor(actor as any);
+        const oldHareket = await (prisma as any).yakitTankHareket.findFirst({
+            where: {
+                id,
+                OR: [
+                    { tank: tankScope as any },
+                    { hedefTank: tankScope as any },
+                ],
+            },
         });
         if (!oldHareket) throw new Error("Hareket kaydı bulunamadı.");
 
@@ -877,7 +982,13 @@ export async function updateTankHareket(id: string, data: {
 
             // APPLY new impact
             if (oldHareket.tip === YakitTankHareketTip.ALIM) {
-                const tank = await tx.yakitTank.findUnique({ where: { id: oldHareket.tankId } });
+                const tank = await tx.yakitTank.findFirst({
+                    where: {
+                        id: oldHareket.tankId,
+                        ...(tankScope as any),
+                    },
+                });
+                if (!tank) throw new Error("Tank bulunamadı veya yetkiniz yok.");
                 const yeniHacim = tank.mevcutLitre + newLitre;
                 const yeniMaliyet = yeniHacim > 0 
                     ? (tank.mevcutLitre * tank.birimMaliyet + newTutar) / yeniHacim 
@@ -891,8 +1002,19 @@ export async function updateTankHareket(id: string, data: {
                     }
                 });
             } else if (oldHareket.tip === YakitTankHareketTip.TRANSFER && oldHareket.hedefTankId) {
-                const source = await tx.yakitTank.findUnique({ where: { id: oldHareket.tankId } });
-                const target = await tx.yakitTank.findUnique({ where: { id: oldHareket.hedefTankId } });
+                const source = await tx.yakitTank.findFirst({
+                    where: {
+                        id: oldHareket.tankId,
+                        ...(tankScope as any),
+                    },
+                });
+                const target = await tx.yakitTank.findFirst({
+                    where: {
+                        id: oldHareket.hedefTankId,
+                        ...(tankScope as any),
+                    },
+                });
+                if (!source || !target) throw new Error("Aktarım tanklarına erişim yetkiniz yok.");
                 
                 const aktarilanDeger = newLitre * source.birimMaliyet;
                 

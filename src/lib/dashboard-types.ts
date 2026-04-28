@@ -79,6 +79,7 @@ export type DashboardData = {
     ownershipCostReport: DashboardOwnershipCostItem[];
     vehicleFuelAverageReport: DashboardVehicleFuelAverageItem[];
     driverFuelAverageReport: DashboardDriverFuelAverageItem[];
+    stokOzet: DashboardStockItem[];
 };
 
 // ──────────────────────────────────────────────
@@ -253,4 +254,13 @@ export type DashboardDriverFuelAverageItem = {
     consumptionUnit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR";
     fleetAverageLitresPer100Km?: number;
     isAboveFleetAverage?: boolean;
+};
+
+export type DashboardStockItem = {
+    id: string;
+    ad: string;
+    miktar: number;
+    birim: string;
+    kritikSeviye: number | null;
+    kritikMi: boolean;
 };

@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import { logEntityActivity } from "@/lib/activity-log"
 import bcrypt from "bcryptjs"
+import { resolveActionSirketId } from "@/lib/action-scope"
 
 type ActorUser = {
   id: string
@@ -21,6 +22,10 @@ async function assertAdmin() {
   }
   return user
 }
+
+const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
+  (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+)
 
 export async function createUserAccount(data: {
   personelId: string
@@ -334,19 +339,22 @@ export async function deleteUserAccount(userId: string) {
 // Yakit Tanki Yonetimi
 export async function createYakitTank(data: {
   ad: string
+  sirketId?: string | null
   kapasiteLitre: number
   mevcutLitre: number
 }) {
   try {
     const actor = await assertAdmin()
+    const sirketId = YAKIT_TANK_HAS_SIRKET_FIELD ? await resolveActionSirketId(data.sirketId) : null
     const ad = data.ad.trim()
-    if (!ad || data.kapasiteLitre <= 0) {
-      return { success: false, error: "Tank adı ve geçerli kapasite zorunludur." }
+    if (!ad || data.kapasiteLitre <= 0 || (YAKIT_TANK_HAS_SIRKET_FIELD && !sirketId)) {
+      return { success: false, error: "Tank adı, şirket ve geçerli kapasite zorunludur." }
     }
 
-    const created = await prisma.yakitTank.create({
+    const created = await (prisma as any).yakitTank.create({
       data: {
         ad,
+        ...(YAKIT_TANK_HAS_SIRKET_FIELD && sirketId ? { sirket: { connect: { id: sirketId } } } : {}),
         kapasiteLitre: data.kapasiteLitre,
         mevcutLitre: data.mevcutLitre || 0,
         aktifMi: true,
@@ -359,8 +367,9 @@ export async function createYakitTank(data: {
       entityId: created.id,
       summary: `${created.ad} yakıt tankı sisteme tanımlandı.`,
       actor,
-      companyId: actor.sirketId || null,
+      companyId: (created as any).sirketId || sirketId || actor.sirketId || null,
       metadata: {
+        sirketId: (created as any).sirketId || sirketId || null,
         kapasite: created.kapasiteLitre,
         baslangicLitre: created.mevcutLitre,
       },
@@ -377,21 +386,24 @@ export async function createYakitTank(data: {
 
 export async function updateYakitTank(id: string, data: {
   ad: string
+  sirketId?: string | null
   kapasiteLitre: number
   mevcutLitre: number
   aktifMi: boolean
 }) {
   try {
     const actor = await assertAdmin()
+    const sirketId = YAKIT_TANK_HAS_SIRKET_FIELD ? await resolveActionSirketId(data.sirketId) : null
     const ad = data.ad.trim()
-    if (!ad || data.kapasiteLitre <= 0) {
-      return { success: false, error: "Tank adı ve geçerli kapasite zorunludur." }
+    if (!ad || data.kapasiteLitre <= 0 || (YAKIT_TANK_HAS_SIRKET_FIELD && !sirketId)) {
+      return { success: false, error: "Tank adı, şirket ve geçerli kapasite zorunludur." }
     }
 
-    const updated = await prisma.yakitTank.update({
+    const updated = await (prisma as any).yakitTank.update({
       where: { id },
       data: {
         ad,
+        ...(YAKIT_TANK_HAS_SIRKET_FIELD && sirketId ? { sirket: { connect: { id: sirketId } } } : {}),
         kapasiteLitre: data.kapasiteLitre,
         mevcutLitre: data.mevcutLitre,
         aktifMi: data.aktifMi,
@@ -404,8 +416,9 @@ export async function updateYakitTank(id: string, data: {
       entityId: updated.id,
       summary: `${updated.ad} yakıt tankı güncellendi.`,
       actor,
-      companyId: actor.sirketId || null,
+      companyId: (updated as any).sirketId || sirketId || actor.sirketId || null,
       metadata: {
+        sirketId: (updated as any).sirketId || sirketId || null,
         kapasite: updated.kapasiteLitre,
         mevcutLitre: updated.mevcutLitre,
         aktifMi: updated.aktifMi,
