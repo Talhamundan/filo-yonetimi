@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserRole } from "@/lib/auth-utils";
 import { applyExcelWorksheetFormats } from "@/lib/excel-worksheet-format";
+import { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 import {
     exportEntity,
@@ -11,6 +12,13 @@ import {
     ensureCezaFineTrackingColumns
 } from "@/lib/excel-service";
 import { EXCEL_ENTITY_CONFIG, ExcelEntityKey } from "@/lib/excel-entities";
+
+const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
+    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId") ||
+    Prisma.dmmf.datamodel.models
+        .find((model) => model.name === "YakitTank")
+        ?.fields.some((field) => field.name === "sirketId")
+);
 
 // Import hiyerarşisi: İlişkilerin bozulmaması için bu sıra ile import edilmeli.
 const BULK_IMPORT_ORDER: ExcelEntityKey[] = [
@@ -447,14 +455,14 @@ async function importYakitTankRows(tx: any, records: Array<Record<string, unknow
             skipped++;
             continue;
         }
-        const sirketId = await findSirketId(tx, row.sirketId, row.sirketAdi);
+        const sirketId = YAKIT_TANK_HAS_SIRKET_FIELD ? await findSirketId(tx, row.sirketId, row.sirketAdi) : null;
         const data = {
             ad,
-            sirketId,
             kapasiteLitre,
             mevcutLitre: toOptionalNumber(row.mevcutLitre) ?? 0,
             birimMaliyet: toOptionalNumber(row.birimMaliyet) ?? 0,
             aktifMi: toBool(row.aktifMi ?? true),
+            ...(YAKIT_TANK_HAS_SIRKET_FIELD ? { sirketId } : {}),
         };
         const id = normalizeText(row.id);
         const existing = id
