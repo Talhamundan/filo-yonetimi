@@ -181,16 +181,18 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         },
     },
     sirket: {
-        visibleColumns: ["ad", "bulunduguIl", "vergiNo"],
+        visibleColumns: ["ad", "bulunduguIl", "santiyeler", "vergiNo"],
         strictVisibleColumns: true,
         labels: {
             ad: "Şirket Adı",
             bulunduguIl: "Merkez İl",
+            santiyeler: "Şantiyeler",
             vergiNo: "Vergi No",
         },
         aliases: {
             ad: ["Şirket Adı", "Sirket Adi", "Şirket", "Sirket"],
             bulunduguIl: ["Merkez İl", "Merkez Il", "Şehir", "Sehir", "İl", "Il"],
+            santiyeler: ["Şantiyeler", "Santiyeler", "Şantiye", "Santiye", "Şantiye Listesi", "Santiye Listesi"],
             vergiNo: ["Vergi No", "Vergi Numarası", "Vergi Numarasi"],
         },
     },
@@ -1134,6 +1136,53 @@ export function getColumnFields(model: NonNullable<ReturnType<typeof getModelMet
     return model.fields.filter((field) => field.kind === "scalar" || field.kind === "enum");
 }
 
+function hasScalarField(model: NonNullable<ReturnType<typeof getModelMeta>>, fieldName: string) {
+    return model.fields.some((field) => (field.kind === "scalar" || field.kind === "enum") && field.name === fieldName);
+}
+
+function getRelationFieldNameForForeignKey(model: NonNullable<ReturnType<typeof getModelMeta>>, foreignKeyFieldName: string) {
+    const objectFields = model.fields.filter((field) => field.kind === "object");
+    const exact = objectFields.find((field) => getRelationFromFields(field).includes(foreignKeyFieldName));
+    if (exact) return exact.name;
+
+    const baseName = foreignKeyFieldName.endsWith("Id") ? foreignKeyFieldName.slice(0, -2) : foreignKeyFieldName;
+    return objectFields.find((field) => field.name === baseName)?.name || null;
+}
+
+function withActiveExportWhere(model: NonNullable<ReturnType<typeof getModelMeta>>, where?: WhereData) {
+    const filters: WhereData[] = [];
+    if (where && Object.keys(where).length > 0) {
+        filters.push(where);
+    }
+
+    if (hasScalarField(model, "deletedAt")) {
+        filters.push({ deletedAt: null });
+    }
+
+    if (model.name !== "Arac" && hasScalarField(model, "aracId")) {
+        const relationName = getRelationFieldNameForForeignKey(model, "aracId");
+        if (relationName) filters.push({ [relationName]: { deletedAt: null } });
+    }
+
+    if (model.name !== "Kullanici" && hasScalarField(model, "kullaniciId")) {
+        const relationName = getRelationFieldNameForForeignKey(model, "kullaniciId");
+        if (relationName) filters.push({ [relationName]: { deletedAt: null } });
+    }
+
+    if (model.name !== "Kullanici" && hasScalarField(model, "soforId")) {
+        const relationName = getRelationFieldNameForForeignKey(model, "soforId");
+        if (relationName) filters.push({ [relationName]: { deletedAt: null } });
+    }
+
+    if (model.name === "Hesap") {
+        filters.push({ personel: { deletedAt: null } });
+    }
+
+    if (filters.length === 0) return undefined;
+    if (filters.length === 1) return filters[0];
+    return { AND: filters };
+}
+
 export function getObjectFields(model: NonNullable<ReturnType<typeof getModelMeta>>) {
     return model.fields.filter((field) => field.kind === "object");
 }
@@ -1385,6 +1434,7 @@ export function toExportCell(value: unknown) {
     if (value === undefined) return null;
     if (value === null) return null;
     if (value instanceof Date) return value.toISOString();
+    if (Array.isArray(value)) return value.map((item) => String(item ?? "").trim()).filter(Boolean).join(", ");
     if (typeof value === "bigint") return value.toString();
     if (Buffer.isBuffer(value) || value instanceof Uint8Array) {
         return Buffer.from(value).toString("base64");
@@ -1404,6 +1454,34 @@ export function toExportCell(value: unknown) {
         return JSON.stringify(serializable);
     }
     return value;
+}
+
+function parseStringListCellValue(value: unknown) {
+    const normalized = normalizeCell(value);
+    if (normalized === null || isNullishCellValue(normalized)) return [];
+    const rawItems = Array.isArray(normalized)
+        ? normalized
+        : (() => {
+            if (typeof normalized === "string") {
+                const trimmed = normalized.trim();
+                if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                    try {
+                        const parsed = JSON.parse(trimmed);
+                        if (Array.isArray(parsed)) return parsed;
+                    } catch {
+                        // Normal ayiracli metin olarak parse etmeye devam et.
+                    }
+                }
+                return trimmed.split(/[,;\n]+/);
+            }
+            return [normalized];
+        })();
+
+    return [...new Set(
+        rawItems
+            .map((item) => String(item ?? "").trim())
+            .filter(Boolean)
+    )];
 }
 
 export function excelDateToJSDate(value: number) {
@@ -1588,6 +1666,13 @@ export function coerceValue(
     const value = normalizeCell(rawValue);
     if (value === null) return null;
     const valueIsNullish = isNullishCellValue(value);
+
+    if ((field as PrismaField & { isList?: boolean }).isList) {
+        if (field.type === "String") {
+            return parseStringListCellValue(value);
+        }
+        return Array.isArray(value) ? value : [];
+    }
 
     if (field.kind === "enum") {
         if (valueIsNullish) return null;
@@ -2272,6 +2357,18 @@ export async function findExistingBusinessRecord(tx: unknown, modelName: string,
         return existing.length > 0 ? existing[0].id : null;
     }
 
+    if (modelName === "sirket") {
+        if (!parsedRow.ad) return null;
+        const existing = await delegate.findMany({
+            where: {
+                ad: { equals: String(parsedRow.ad).trim(), mode: "insensitive" },
+            },
+            select: { id: true },
+            take: 1,
+        });
+        return existing.length > 0 ? existing[0].id : null;
+    }
+
     if (modelName === "yakit") {
         if (!parsedRow.aracId || !parsedRow.tarih || parsedRow.litre === undefined) return null;
         
@@ -2910,8 +3007,9 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
         ])
     );
     
+    const activeExportWhere = withActiveExportWhere(modelMeta, where);
     const rows = await modelDelegate.findMany({
-        where: where ? (where as WhereData) : undefined,
+        where: activeExportWhere,
         orderBy: orderByField ? { [orderByField]: "asc" } : undefined,
         include: Object.keys(include).length > 0 ? include : undefined,
     });
