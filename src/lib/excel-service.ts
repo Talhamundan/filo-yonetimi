@@ -470,19 +470,19 @@ export const EXCEL_MODEL_PROFILES: Record<string, ExcelModelProfile> = {
         },
     },
     masraf: {
-        visibleColumns: ["tarih", "arac", "kategori", "tutar", "aciklama"],
+        visibleColumns: ["tarih", "arac", "tur", "tutar", "aciklama"],
         strictVisibleColumns: true,
         labels: {
             tarih: "Tarih",
             arac: "Plaka",
-            kategori: "Kategori",
+            tur: "Masraf Türü",
             tutar: "Tutar",
             aciklama: "Açıklama",
         },
         aliases: {
             arac: ["Araç", "Arac", "Plaka"],
             tutar: ["Tutar", "Bedel", "Maliyet"],
-            kategori: ["Tür", "Masraf Türü"],
+            tur: ["Tür", "Tur", "Kategori", "Masraf Türü", "Masraf Turu"],
         },
     },
     arizaKaydi: {
@@ -787,6 +787,21 @@ const ENUM_INPUT_ALIASES: Record<string, Record<string, string>> = {
     },
     Rol: {
         SURUCU: "PERSONEL",
+    },
+    MasrafKategorisi: {
+        "HGS YUKLEME": "HGS_YUKLEME",
+        "HGS YÜKLEME": "HGS_YUKLEME",
+        "BAKIM ONARIM": "BAKIM_ONARIM",
+        "BAKIM/ONARIM": "BAKIM_ONARIM",
+        "LASTİK": "LASTIK",
+        "TEMİZLİK": "TEMIZLIK",
+        "KOPRU OBO": "KOPRU_OBO",
+        "KÖPRÜ OBO": "KOPRU_OBO",
+        "KOPRU/OTOYOL": "KOPRU_OBO",
+        "KÖPRÜ/OTOYOL": "KOPRU_OBO",
+        "OTOYOL": "KOPRU_OBO",
+        "YAG DEGISIMI": "BAKIM_ONARIM",
+        "YAĞ DEĞİŞİMİ": "BAKIM_ONARIM",
     },
 };
 
@@ -3273,6 +3288,11 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                 if (!parsedRow.muayeneTarihi) {
                     parsedRow.muayeneTarihi = parsedRow.gecerlilikTarihi || new Date();
                 }
+            }
+
+            if (config.prismaModel === "masraf") {
+                if (!parsedRow.aracId) { skipped++; continue; }
+                parsedRow.tur = parsedRow.tur || "DIGER";
             }
 
             if (config.prismaModel === "kullaniciZimmet") {

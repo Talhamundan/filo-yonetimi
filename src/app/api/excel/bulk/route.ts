@@ -15,6 +15,9 @@ import { EXCEL_ENTITY_CONFIG, ExcelEntityKey } from "@/lib/excel-entities";
 // Import hiyerarşisi: İlişkilerin bozulmaması için bu sıra ile import edilmeli.
 const BULK_IMPORT_ORDER: ExcelEntityKey[] = [
     "sirket",
+    "disFirma",
+    "taseronFirma",
+    "kiralikFirma",
     "personel",
     "arac",
     "zimmet",
@@ -139,7 +142,8 @@ export async function POST(req: NextRequest) {
                 }
             }
         }, {
-            timeout: 60000 // Toplu işlem için daha uzun timeout (60 sn)
+            maxWait: 30000,
+            timeout: 300000 // Toplu işlem dosyalarında relation çözümü ve upsertler uzun sürebilir.
         });
 
         return NextResponse.json({

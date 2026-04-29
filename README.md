@@ -47,6 +47,16 @@ npx prisma migrate dev
 npx prisma generate
 ```
 
+For a Windows/server deployment, run the production migration flow before starting:
+```bash
+npm install
+npm run db:deploy
+npm run build
+npm run start
+```
+
+`npm install` also runs `prisma generate`, so the generated Prisma client stays in sync with `prisma/schema.prisma`.
+
 ## Run
 ### Development
 ```bash
@@ -55,7 +65,7 @@ npm run dev
 
 ### Production Build
 ```bash
-npm run build
+npm run build:deploy
 npm run start
 ```
 
