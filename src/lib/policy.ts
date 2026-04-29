@@ -106,11 +106,13 @@ export function resolveEffectiveSessionRole(role: string | null | undefined, com
 
 export function canRoleAccessAllCompanies(
     role: string | null | undefined,
-    sirketId?: string | null | undefined
+    sirketId?: string | null | undefined,
+    authorizedSirketIds?: string[] | null | undefined
 ) {
     const normalizedRole = normalizeRole(role);
     if (!normalizedRole) return false;
     if (GLOBAL_SCOPE_ROLES.has(normalizedRole)) return true;
+    if (authorizedSirketIds?.some((id) => typeof id === "string" && id.trim().length > 0)) return false;
 
     const normalizedSirketId = typeof sirketId === "string" ? sirketId.trim() : sirketId;
     return (normalizedRole === "YETKILI" || normalizedRole === "TEKNIK") && !normalizedSirketId;
@@ -262,6 +264,18 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
     }
 }
 
+function getMultiCompanyModelFilter(
+    modelName: PolicyModelName,
+    sirketIds: string[],
+    sirketNamesById: Record<string, string | null | undefined>
+) {
+    const normalizedIds = [...new Set(sirketIds.map((id) => id.trim()).filter(Boolean))];
+    if (normalizedIds.length === 0) return getCompanyModelFilter(modelName, null, null);
+
+    const filters = normalizedIds.map((id) => getCompanyModelFilter(modelName, id, sirketNamesById[id] || null));
+    return filters.length === 1 ? filters[0] : { OR: filters };
+}
+
 function getDriverModelFilter(modelName: PolicyModelName, userId: string, sirketId: string | null) {
     const aracRelatedModels = [
         "yakit",
@@ -347,6 +361,8 @@ export function getModelFilterByPolicy(params: {
     role: string | null | undefined;
     currentSirketId: string | null | undefined;
     currentSirketName?: string | null | undefined;
+    authorizedSirketIds?: string[] | null | undefined;
+    authorizedSirketNamesById?: Record<string, string | null | undefined>;
     currentUserId: string | null | undefined;
     requestedSirketId: string | null;
     requestedSirketName?: string | null | undefined;
@@ -357,6 +373,8 @@ export function getModelFilterByPolicy(params: {
         role,
         currentSirketId,
         currentSirketName,
+        authorizedSirketIds,
+        authorizedSirketNamesById = {},
         currentUserId,
         requestedSirketId,
         requestedSirketName,
@@ -368,12 +386,31 @@ export function getModelFilterByPolicy(params: {
         return getBlockedFilter(modelName);
     }
 
-    if (canRoleAccessAllCompanies(normalizedRole, currentSirketId)) {
+    const normalizedAuthorizedIds = [...new Set((authorizedSirketIds || []).map((id) => id.trim()).filter(Boolean))];
+
+    if (canRoleAccessAllCompanies(normalizedRole, currentSirketId, normalizedAuthorizedIds)) {
         return withActiveVehicleFilter(
             modelName,
             withSoftDeleteFilter(
                 modelName,
                 getCompanyModelFilter(modelName, requestedSirketId, requestedSirketName || null),
+                includeDeleted
+            ),
+            includeDeleted
+        );
+    }
+
+    if (normalizedAuthorizedIds.length > 0 && normalizedRole !== "PERSONEL") {
+        const requestedId = requestedSirketId?.trim() || null;
+        if (requestedId && !normalizedAuthorizedIds.includes(requestedId)) {
+            return getBlockedFilter(modelName);
+        }
+        const allowedIds = requestedId ? [requestedId] : normalizedAuthorizedIds;
+        return withActiveVehicleFilter(
+            modelName,
+            withSoftDeleteFilter(
+                modelName,
+                getMultiCompanyModelFilter(modelName, allowedIds, authorizedSirketNamesById),
                 includeDeleted
             ),
             includeDeleted

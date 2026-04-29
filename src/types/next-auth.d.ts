@@ -6,6 +6,7 @@ declare module "next-auth" {
       id: string
       rol: string
       sirketId: string | null
+      yetkiliSirketIds: string[]
       onayDurumu: string
     } & DefaultSession["user"]
   }
@@ -13,6 +14,7 @@ declare module "next-auth" {
   interface User {
     rol: string
     sirketId: string | null
+    yetkiliSirketIds?: string[]
     onayDurumu: string
   }
 }
@@ -21,6 +23,7 @@ declare module "next-auth/jwt" {
   interface JWT {
     rol: string
     sirketId: string | null
+    yetkiliSirketIds?: string[]
     onayDurumu: string
   }
 }

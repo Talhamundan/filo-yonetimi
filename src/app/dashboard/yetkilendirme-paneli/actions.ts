@@ -184,12 +184,13 @@ export async function updateUserStatus(userId: string, status: OnayDurumu, role?
 
 export async function updateUserAccount(
   userId: string,
-  data: { kullaniciAdi: string; sifre?: string; rol: Rol }
+  data: { kullaniciAdi: string; sifre?: string; rol: Rol; yetkiliSirketIds?: string[] }
 ) {
   try {
     const actor = await assertAdmin()
     const username = data.kullaniciAdi.trim().toLowerCase()
     const nextPassword = (data.sifre || "").trim()
+    const requestedYetkiliSirketIds = [...new Set((data.yetkiliSirketIds || []).map((id) => id.trim()).filter(Boolean))]
 
     if (!username) {
       return { success: false, error: "Personel giriş adı zorunludur." }
@@ -212,6 +213,7 @@ export async function updateUserAccount(
         rol: true,
         sirketId: true,
         hesap: { select: { id: true, kullaniciAdi: true } },
+        yetkiliSirketler: { select: { sirketId: true } },
       },
     })
     if (!previous) {
@@ -224,6 +226,10 @@ export async function updateUserAccount(
     const hashedPassword = nextPassword ? await bcrypt.hash(nextPassword, 10) : null
 
     const updated = await prisma.$transaction(async (tx) => {
+      const validSirketler = requestedYetkiliSirketIds.length
+        ? await tx.sirket.findMany({ where: { id: { in: requestedYetkiliSirketIds } }, select: { id: true } })
+        : []
+      const validSirketIds = validSirketler.map((row) => row.id)
       const updatedPersonel = await tx.kullanici.update({
         where: { id: userId },
         data: { rol: data.rol },
@@ -235,6 +241,13 @@ export async function updateUserAccount(
           sirketId: true,
         },
       })
+      await tx.kullaniciYetkiliSirket.deleteMany({ where: { kullaniciId: userId } })
+      if ((data.rol === Rol.YETKILI || data.rol === Rol.TEKNIK) && validSirketIds.length > 0) {
+        await tx.kullaniciYetkiliSirket.createMany({
+          data: validSirketIds.map((sirketId) => ({ kullaniciId: userId, sirketId })),
+          skipDuplicates: true,
+        })
+      }
       if (previous.hesap) {
         await tx.hesap.update({
           where: { id: previous.hesap.id },
@@ -269,6 +282,9 @@ export async function updateUserAccount(
         oncekiKullaniciAdi: previous.hesap?.kullaniciAdi || null,
         yeniKullaniciAdi: username,
         sifreGuncellendi: Boolean(nextPassword),
+        oncekiYetkiliSirketIds: previous.yetkiliSirketler.map((row) => row.sirketId),
+        yeniYetkiliSirketIds:
+          data.rol === Rol.YETKILI || data.rol === Rol.TEKNIK ? requestedYetkiliSirketIds : [],
       },
     })
 

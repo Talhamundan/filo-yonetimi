@@ -10,19 +10,21 @@ export const authConfig = {
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
-        const typedUser = user as { rol: string; sirketId: string | null; onayDurumu: string }
+        const typedUser = user as { rol: string; sirketId: string | null; yetkiliSirketIds?: string[]; onayDurumu: string }
         token.rol = typedUser.rol
         token.sirketId = typedUser.sirketId
+        token.yetkiliSirketIds = typedUser.yetkiliSirketIds || []
         token.onayDurumu = typedUser.onayDurumu
       }
       return token
     },
     async session({ session, token }) {
-      const typedToken = token as JWT & { rol?: string; sirketId?: string | null; onayDurumu?: string }
+      const typedToken = token as JWT & { rol?: string; sirketId?: string | null; yetkiliSirketIds?: string[]; onayDurumu?: string }
       if (token) {
         session.user.id = token.sub || ""
         session.user.rol = typedToken.rol || "PERSONEL"
         session.user.sirketId = typedToken.sirketId || null
+        session.user.yetkiliSirketIds = typedToken.yetkiliSirketIds || []
         session.user.onayDurumu = typedToken.onayDurumu || "BEKLIYOR"
       }
       return session

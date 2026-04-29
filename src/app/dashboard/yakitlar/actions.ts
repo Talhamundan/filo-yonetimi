@@ -64,16 +64,20 @@ function normalizeSirketId(value: unknown) {
     return normalized || null;
 }
 
-function getTankScopeForActor(actor: { rol?: string | null; sirketId?: string | null }) {
+function getTankScopeForActor(actor: { rol?: string | null; sirketId?: string | null; yetkiliSirketIds?: string[] | null }) {
     if (!YAKIT_TANK_HAS_SIRKET_FIELD) {
         return {} as Record<string, unknown>;
     }
     const actorSirketId = normalizeSirketId(actor?.sirketId);
+    const authorizedSirketIds = (actor?.yetkiliSirketIds || []).map((id) => normalizeSirketId(id)).filter(Boolean) as string[];
     if (isDriverRole(actor?.rol)) {
         return { id: "blocked" } as Record<string, unknown>;
     }
-    if (canRoleAccessAllCompanies(actor?.rol, actorSirketId)) {
+    if (canRoleAccessAllCompanies(actor?.rol, actorSirketId, authorizedSirketIds)) {
         return {} as Record<string, unknown>;
+    }
+    if (authorizedSirketIds.length > 0) {
+        return { sirketId: { in: authorizedSirketIds } } as Record<string, unknown>;
     }
     return actorSirketId ? ({ sirketId: actorSirketId } as Record<string, unknown>) : ({ id: "blocked" } as Record<string, unknown>);
 }

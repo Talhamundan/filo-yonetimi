@@ -86,6 +86,8 @@ const CUSTOM_HEADERS = {
         "personelAdSoyad",
         "kullaniciAdi",
         "sifreHash",
+        "yetkiliSirketIds",
+        "yetkiliSirketAdlari",
         "aktifMi",
         "sonGirisTarihi",
         "olusturmaTarihi",
@@ -210,6 +212,10 @@ async function appendCustomBackupSheets(workbook: XLSX.WorkBook) {
                         ad: true,
                         soyad: true,
                         tcNo: true,
+                        yetkiliSirketler: {
+                            include: { sirket: { select: { id: true, ad: true } } },
+                            orderBy: { sirket: { ad: "asc" } },
+                        },
                     },
                 },
             },
@@ -247,6 +253,8 @@ async function appendCustomBackupSheets(workbook: XLSX.WorkBook) {
         personelAdSoyad: `${row.personel?.ad || ""} ${row.personel?.soyad || ""}`.trim(),
         kullaniciAdi: row.kullaniciAdi,
         sifreHash: row.sifreHash,
+        yetkiliSirketIds: row.personel?.yetkiliSirketler?.map((item) => item.sirketId).join(", ") || null,
+        yetkiliSirketAdlari: row.personel?.yetkiliSirketler?.map((item) => item.sirket?.ad).filter(Boolean).join(", ") || null,
         aktifMi: row.aktifMi,
         sonGirisTarihi: row.sonGirisTarihi,
         olusturmaTarihi: row.olusturmaTarihi,
@@ -437,6 +445,29 @@ async function importHesapRows(tx: any, records: Array<Record<string, unknown>>)
         } else {
             await tx.hesap.create({ data: { id: normalizeText(row.id) || undefined, ...data } });
             created++;
+        }
+
+        const yetkiliSirketIds = [
+            ...normalizeText(row.yetkiliSirketIds).split(/[,;\n]+/),
+            ...normalizeText(row.yetkiliSirketAdlari).split(/[,;\n]+/),
+        ].map((value) => value.trim()).filter(Boolean);
+        if (yetkiliSirketIds.length > 0) {
+            const sirketler = await tx.sirket.findMany({
+                where: {
+                    OR: yetkiliSirketIds.flatMap((value) => [
+                        { id: value },
+                        { ad: { equals: value, mode: "insensitive" } },
+                    ]),
+                },
+                select: { id: true },
+            });
+            await tx.kullaniciYetkiliSirket.deleteMany({ where: { kullaniciId: personelId } });
+            if (sirketler.length > 0) {
+                await tx.kullaniciYetkiliSirket.createMany({
+                    data: sirketler.map((sirket: { id: string }) => ({ kullaniciId: personelId, sirketId: sirket.id })),
+                    skipDuplicates: true,
+                });
+            }
         }
     }
 

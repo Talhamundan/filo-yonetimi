@@ -29,6 +29,7 @@ type RegisteredUser = {
     soyad: string;
     rol: Rol;
     sirket?: { ad: string } | null;
+    yetkiliSirketler?: Array<{ sirketId: string; sirket?: { id: string; ad: string } | null }>;
     hesap?: { kullaniciAdi: string } | null;
 };
 
@@ -38,6 +39,8 @@ type RegisteredUserRow = {
     kullaniciAdi: string;
     rol: Rol;
     sirketAdi: string;
+    yetkiliSirketIds: string[];
+    yetkiliSirketAdlari: string;
 };
 
 type TankRow = {
@@ -73,7 +76,7 @@ export default function OnayMerkeziClient({
     const [isSavingUser, setIsSavingUser] = useState(false);
     const [showCreatePassword, setShowCreatePassword] = useState(false);
     const [showEditPassword, setShowEditPassword] = useState(false);
-    const [editForm, setEditForm] = useState({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" as Rol });
+    const [editForm, setEditForm] = useState({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" as Rol, yetkiliSirketIds: [] as string[] });
     const hasAssignablePersonel = assignablePersoneller.length > 0;
     const [createForm, setCreateForm] = useState({
         personelId: "",
@@ -320,6 +323,11 @@ export default function OnayMerkeziClient({
         kullaniciAdi: user.hesap?.kullaniciAdi || "-",
         rol: user.rol,
         sirketAdi: user.sirket?.ad || "Bağımsız",
+        yetkiliSirketIds: (user.yetkiliSirketler || []).map((item) => item.sirketId),
+        yetkiliSirketAdlari: (user.yetkiliSirketler || [])
+            .map((item) => item.sirket?.ad)
+            .filter(Boolean)
+            .join(", "),
     }));
 
     const openUserEdit = (row: RegisteredUserRow) => {
@@ -327,6 +335,7 @@ export default function OnayMerkeziClient({
             kullaniciAdi: row.kullaniciAdi === "-" ? "" : row.kullaniciAdi,
             sifre: "",
             rol: row.rol,
+            yetkiliSirketIds: row.yetkiliSirketIds,
         });
         setShowEditPassword(false);
         setEditRow(row);
@@ -344,12 +353,13 @@ export default function OnayMerkeziClient({
             kullaniciAdi: editForm.kullaniciAdi,
             sifre: editForm.sifre,
             rol: editForm.rol,
+            yetkiliSirketIds: editForm.yetkiliSirketIds,
         });
 
         if (result.success) {
             toast.success("Personel bilgileri güncellendi.");
             setEditRow(null);
-            setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" });
+            setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL", yetkiliSirketIds: [] });
             setShowEditPassword(false);
             router.refresh();
         } else {
@@ -467,7 +477,12 @@ export default function OnayMerkeziClient({
         },
         {
             accessorKey: "sirketAdi",
-            header: "Şirket",
+            header: "Ana Şirket",
+        },
+        {
+            accessorKey: "yetkiliSirketAdlari",
+            header: "Yetkili Olduğu Şirketler",
+            cell: ({ row }) => row.original.yetkiliSirketAdlari || "-",
         },
         {
             id: "actions",
@@ -620,7 +635,7 @@ export default function OnayMerkeziClient({
                 onOpenChange={(open) => {
                     if (!open) {
                         setEditRow(null);
-                        setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL" });
+                        setEditForm({ kullaniciAdi: "", sifre: "", rol: "PERSONEL", yetkiliSirketIds: [] });
                         setShowEditPassword(false);
                     }
                 }}
@@ -676,6 +691,34 @@ export default function OnayMerkeziClient({
                                 <option value="ADMIN">Admin</option>
                             </select>
                         </div>
+                        {(editForm.rol === "YETKILI" || editForm.rol === "TEKNIK") && (
+                            <div className="space-y-2">
+                                <label className="text-xs font-semibold text-slate-600">Görebileceği Şirketler</label>
+                                <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
+                                    {sirketler.map((sirket) => {
+                                        const checked = editForm.yetkiliSirketIds.includes(sirket.id);
+                                        return (
+                                            <label key={sirket.id} className="flex items-center gap-2 rounded-md px-2 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={(event) => {
+                                                        setEditForm((prev) => ({
+                                                            ...prev,
+                                                            yetkiliSirketIds: event.target.checked
+                                                                ? [...prev.yetkiliSirketIds, sirket.id]
+                                                                : prev.yetkiliSirketIds.filter((id) => id !== sirket.id),
+                                                        }));
+                                                    }}
+                                                    className="h-4 w-4 rounded border-slate-300 text-indigo-600"
+                                                />
+                                                <span>{sirket.ad}</span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
                     </div>
                     <DialogFooter>
                         <button

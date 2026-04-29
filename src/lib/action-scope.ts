@@ -24,9 +24,15 @@ export async function resolveActionSirketId(inputSirketId?: string | null) {
     }
 
     const requestedSirketId = inputSirketId?.trim() || null;
+    const authorizedSirketIds = Array.isArray((actor as any).yetkiliSirketIds)
+        ? (actor as any).yetkiliSirketIds.map((id: unknown) => String(id || "").trim()).filter(Boolean)
+        : [];
 
     if (requestedSirketId) {
         if (hasGlobalAccess) {
+            return requestedSirketId;
+        }
+        if (authorizedSirketIds.includes(requestedSirketId)) {
             return requestedSirketId;
         }
         if (currentSirketId && requestedSirketId === currentSirketId) {

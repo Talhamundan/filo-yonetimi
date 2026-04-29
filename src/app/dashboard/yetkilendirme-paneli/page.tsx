@@ -34,12 +34,12 @@ export default async function OnayMerkeziPage(props: { searchParams?: Promise<Da
                 baseKullaniciFilter,
                 {
                     hesap: {
-                        is: {},
+                        isNot: null,
                     },
                 },
             ],
         },
-        include: { sirket: true, hesap: true },
+        include: { sirket: true, hesap: true, yetkiliSirketler: { include: { sirket: true }, orderBy: { sirket: { ad: "asc" } } } },
         orderBy: [{ ad: "asc" }, { soyad: "asc" }],
     });
     const assignablePersoneller = await prisma.kullanici.findMany({

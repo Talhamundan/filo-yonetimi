@@ -49,6 +49,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               email: "admin",
               rol: "ADMIN",
               sirketId: null,
+              yetkiliSirketIds: [],
               onayDurumu: "ONAYLANDI"
             }
           }
@@ -70,6 +71,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   sirketId: true,
                   onayDurumu: true,
                   deletedAt: true,
+                  yetkiliSirketler: { select: { sirketId: true } },
                 },
               },
             },
@@ -118,6 +120,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             email: hesap.kullaniciAdi,
             rol: user.rol,
             sirketId: user.sirketId,
+            yetkiliSirketIds: user.yetkiliSirketler.map((item) => item.sirketId),
             onayDurumu: user.onayDurumu
           }
         } catch (error) {

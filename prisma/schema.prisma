@@ -15,6 +15,7 @@ model Sirket {
   santiyeler      String[]    @default([])
   araclar         Arac[]
   kullanicilar    Kullanici[]
+  yetkiliKullanicilar KullaniciYetkiliSirket[]
   stokKalemleri   StokKalem[]
   yakitTanklari   YakitTank[]
 }
@@ -106,6 +107,7 @@ model Kullanici {
   hesap                Hesap?
   sirket               Sirket?            @relation(fields: [sirketId], references: [id])
   disFirma             DisFirma?          @relation(fields: [disFirmaId], references: [id], onDelete: SetNull)
+  yetkiliSirketler     KullaniciYetkiliSirket[]
   zimmetler            KullaniciZimmet[]
   yakitKayitlari       Yakit[]            @relation("YakitSoforRelation")
   yakitTankHareketleri YakitTankHareket[]
@@ -114,6 +116,19 @@ model Kullanici {
   @@index([disFirmaId])
   @@index([deletedAt])
   @@map("Personel")
+}
+
+model KullaniciYetkiliSirket {
+  id          String    @id @default(cuid())
+  kullaniciId String
+  sirketId    String
+  olusturmaTarihi DateTime @default(now())
+  kullanici   Kullanici @relation(fields: [kullaniciId], references: [id], onDelete: Cascade)
+  sirket      Sirket    @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+
+  @@unique([kullaniciId, sirketId])
+  @@index([kullaniciId])
+  @@index([sirketId])
 }
 
 model KullaniciZimmet {
