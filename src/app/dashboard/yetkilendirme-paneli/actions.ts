@@ -1,7 +1,7 @@
 "use server"
 
 import { prisma } from "@/lib/prisma"
-import { ActivityActionType, ActivityEntityType, OnayDurumu, Rol } from "@prisma/client"
+import { ActivityActionType, ActivityEntityType, OnayDurumu, Prisma, Rol } from "@prisma/client"
 import { revalidatePath } from "next/cache"
 import { auth } from "@/auth"
 import { logEntityActivity } from "@/lib/activity-log"
@@ -24,7 +24,10 @@ async function assertAdmin() {
 }
 
 const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
-  (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+  (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId") ||
+  Prisma.dmmf.datamodel.models
+    .find((model) => model.name === "YakitTank")
+    ?.fields.some((field) => field.name === "sirketId")
 )
 
 export async function createUserAccount(data: {

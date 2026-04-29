@@ -42,10 +42,20 @@ export async function getSelectedSirketId(
 ) {
     const resolved = searchParams ? await searchParams : {};
     const rawValue = resolved?.sirket;
-    const value = Array.isArray(rawValue) ? rawValue[0] : rawValue;
+    const value = Array.isArray(rawValue)
+        ? rawValue.find((item) => {
+              const normalized = item?.trim().toLowerCase();
+              return normalized && normalized !== "all" && normalized !== "__all__";
+          }) || rawValue[0]
+        : rawValue;
     const trimmed = value?.trim();
+    const normalized = trimmed?.toLowerCase();
 
-    return trimmed ? trimmed : null;
+    if (!trimmed || normalized === "all" || normalized === "__all__") {
+        return null;
+    }
+
+    return trimmed;
 }
 
 export async function getSelectedDisFirmaId(

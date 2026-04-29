@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createUserAccount, deleteUserAccount, updateUserAccount, createYakitTank, updateYakitTank, deleteYakitTank } from "./actions";
 import { toast } from "sonner";
-import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2, Fuel } from "lucide-react";
+import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2, Fuel, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
@@ -82,6 +82,7 @@ export default function OnayMerkeziClient({
     });
     const [isBulkExporting, setIsBulkExporting] = useState(false);
     const [isBulkImporting, setIsBulkImporting] = useState(false);
+    const [isDeletingAllData, setIsDeletingAllData] = useState(false);
     
     // Yakit Tank States
     const defaultTankSirketId = canScopeTankByCompany ? (selectedScopeSirketId || "") : "";
@@ -199,7 +200,7 @@ export default function OnayMerkeziClient({
 
         const confirmed = await openConfirm({
             title: "Tüm Verileri Geri Yükle",
-            message: "Bu işlem sistemdeki tüm verileri (araç, personel, yakıt, servis vb.) güncelleyecek veya yeni kayıtlar ekleyecektir. Devam etmek istiyor musunuz?",
+            message: "Excel geri yükleme mevcut kayıtları günceller ve yeni kayıt ekler; dosyada olmayan eski kayıtları silmez. Mac-Windows birebir eşitleme için PostgreSQL yedeği kullanın. Devam etmek istiyor musunuz?",
             confirmText: "Evet, Geri Yükle",
             variant: "danger",
         });
@@ -233,6 +234,47 @@ export default function OnayMerkeziClient({
             toast.dismiss(loadingToast);
             setIsBulkImporting(false);
             event.target.value = "";
+        }
+    };
+
+    const handleDeleteAllData = async () => {
+        if (isDeletingAllData || isBulkExporting || isBulkImporting) return;
+
+        const firstConfirmed = await openConfirm({
+            title: "Tüm Verileri Sil",
+            message: "Bu işlem şirketler, personeller, araçlar, yakıtlar, servisler, masraflar, giriş hesapları ve yakıt tankları dahil tüm operasyon verilerini kalıcı olarak silecek. Devam etmek istiyor musunuz?",
+            confirmText: "Devam Et",
+            variant: "danger",
+        });
+        if (!firstConfirmed) return;
+
+        const typed = window.prompt("Son onay için TUM_VERILERI_SIL yazın.");
+        if (typed !== "TUM_VERILERI_SIL") {
+            toast.warning("Silme işlemi iptal edildi. Onay metni eşleşmedi.");
+            return;
+        }
+
+        setIsDeletingAllData(true);
+        const loadingToast = toast.loading("Tüm veriler siliniyor, lütfen bekleyin...");
+        try {
+            const response = await fetch("/api/excel/bulk", {
+                method: "DELETE",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ confirm: "TUM_VERILERI_SIL" }),
+            });
+            const result = await response.json().catch(() => null);
+            if (!response.ok) {
+                throw new Error(result?.error || "Tüm veriler silinemedi.");
+            }
+
+            toast.success("Tüm veriler silindi. Bu ekran açıkken Mac yedeğini içe aktarabilirsiniz.");
+        } catch (error) {
+            toast.error("Tüm veri silme başarısız.", {
+                description: error instanceof Error ? error.message : "Beklenmeyen bir hata oluştu.",
+            });
+        } finally {
+            toast.dismiss(loadingToast);
+            setIsDeletingAllData(false);
         }
     };
 
@@ -810,14 +852,14 @@ export default function OnayMerkeziClient({
                             <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-bold text-rose-700 tracking-wider">ADMIN</span>
                         </div>
                         <p className="text-sm text-slate-600 leading-relaxed">
-                            Sistemdeki tüm tabloları (Şirketler, Personel, Araçlar, Yakıt ve Servis kayıtları vb.) tek bir Excel dosyası olarak indirip yedekleyebilir veya bu dosyayı kullanarak toplu veri aktarımı yapabilirsiniz.
+                            Sistemdeki operasyon tablolarını, giriş hesaplarını ve yakıt tanklarını tek bir Excel dosyası olarak indirip başka ortama aktarabilirsiniz. Temiz aktarım için önce tüm verileri silin.
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-3 shrink-0">
                         <button
                             onClick={handleBulkExport}
-                            disabled={isBulkExporting}
+                            disabled={isBulkExporting || isDeletingAllData}
                             className="group flex h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-bold text-slate-700 shadow-sm transition-all hover:border-indigo-200 hover:text-indigo-600 disabled:opacity-50"
                         >
                             {isBulkExporting ? (
@@ -826,6 +868,20 @@ export default function OnayMerkeziClient({
                                 <Download size={18} className="transition-transform group-hover:-translate-y-0.5" />
                             )}
                             <span>Sistem Yedeği İndir (Excel)</span>
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleDeleteAllData}
+                            disabled={isDeletingAllData || isBulkExporting || isBulkImporting}
+                            className="group flex h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-5 text-sm font-bold text-red-700 shadow-sm transition-all hover:border-red-300 hover:bg-red-50 disabled:opacity-50"
+                        >
+                            {isDeletingAllData ? (
+                                <Loader2 size={18} className="animate-spin text-red-600" />
+                            ) : (
+                                <Trash2 size={18} className="transition-transform group-hover:-translate-y-0.5" />
+                            )}
+                            <span>Tüm Verileri Sil</span>
                         </button>
 
                         <label className={`group flex h-11 cursor-pointer items-center gap-2 rounded-xl bg-slate-900 px-5 text-sm font-bold text-white shadow-lg transition-all hover:bg-slate-800 disabled:opacity-50 ${isBulkImporting ? "pointer-events-none opacity-50" : ""}`}>
@@ -840,7 +896,7 @@ export default function OnayMerkeziClient({
                                 accept=".xlsx,.xls"
                                 className="hidden"
                                 onChange={handleBulkImport}
-                                disabled={isBulkImporting}
+                                disabled={isBulkImporting || isDeletingAllData}
                             />
                         </label>
                     </div>
@@ -849,7 +905,7 @@ export default function OnayMerkeziClient({
                 <div className="mt-4 flex items-start gap-2 rounded-lg bg-white/60 border border-slate-200/50 p-3 relative z-10">
                     <ShieldCheck size={16} className="mt-0.5 shrink-0 text-amber-600" />
                     <p className="text-[11px] font-medium text-slate-500">
-                        <strong className="text-slate-700 uppercase">Önemli:</strong> Geri yükleme işlemi sırasında Excel dosyasındaki sekmelerin (Şirketler, Personel, Araçlar vb.) isimlerini değiştirmeyiniz. Sistem ilişkileri korumak için verileri belirli bir sırayla işler.
+                        <strong className="text-slate-700 uppercase">Önemli:</strong> Excel aktarımı dosyada olmayan eski kayıtları temizlemez. Mac yedeğini Windows'a temiz aktarmak için önce tüm verileri silin, ardından yedek dosyasını içe aktarın.
                     </p>
                 </div>
             </section>

@@ -34,7 +34,9 @@ const getSirketNameById = cache(async (sirketId?: string | null) => {
 
 function getRequestedCompanyId(value?: string | null) {
     const trimmed = value?.trim();
-    return trimmed ? trimmed : null;
+    const normalized = trimmed?.toLowerCase();
+    if (!trimmed || normalized === "all" || normalized === "__all__") return null;
+    return trimmed;
 }
 
 /**

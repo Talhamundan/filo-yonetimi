@@ -57,6 +57,25 @@ npm run start
 
 `npm install` also runs `prisma generate`, so the generated Prisma client stays in sync with `prisma/schema.prisma`.
 
+## Move Data Between Mac And Windows
+Excel import is a merge tool: it updates matching rows and adds missing rows, but it does not delete rows that are absent from the file. For an exact Mac -> Windows copy, use a PostgreSQL database backup.
+
+On the Mac, while the app is stopped:
+```bash
+npm run db:backup -- ./filo-db.dump
+```
+
+Copy `filo-db.dump` to the Windows project folder, stop the app there, set `.env` to the Windows database, then run:
+```bash
+npm install
+npm run db:restore -- ./filo-db.dump --yes
+npm run db:deploy
+npm run build
+npm run start
+```
+
+The restore command replaces objects in the target database. Use it only when the Mac database is the source of truth.
+
 ## Run
 ### Development
 ```bash

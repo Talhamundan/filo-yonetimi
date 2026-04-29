@@ -4,10 +4,13 @@ import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getModelFilter, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
-import { Rol, type Prisma } from "@prisma/client";
+import { Prisma, Rol } from "@prisma/client";
 
 const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
-    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId")
+    (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId") ||
+    Prisma.dmmf.datamodel.models
+        .find((model) => model.name === "YakitTank")
+        ?.fields.some((field) => field.name === "sirketId")
 );
 
 export default async function OnayMerkeziPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
