@@ -1335,6 +1335,23 @@ export function getRelationImportHeaderAliases(modelName: string, foreignKeyFiel
             "Arac Sahibi Dis Firma",
         ];
     }
+    if (modelName === "kullanici" && foreignKeyFieldName === "disFirmaId") {
+        return [
+            "disFirma",
+            "Dış Firma",
+            "Dis Firma",
+            "Dış Firma (Taşeron / Kiralık)",
+            "Dis Firma (Taseron / Kiralik)",
+            "Kiralık Firma",
+            "Kiralik Firma",
+            "Taşeron Firma",
+            "Taseron Firma",
+            "Personel Firması",
+            "Personel Firmasi",
+            "Çalıştığı Dış Firma",
+            "Calistigi Dis Firma",
+        ];
+    }
     if (modelName === "yakit" && foreignKeyFieldName === "sirketId") {
         return [
             "Bağlı Şirket",
@@ -1942,6 +1959,23 @@ function normalizeDisFirmaLookupName(value: unknown) {
     return text
         .replace(/\s*\((kiralık|kiralik|taşeron|taseron)\)\s*$/i, "")
         .trim() || null;
+}
+
+function getRawExternalVendorImportValue(
+    modelName: string,
+    profileKey: string,
+    record: Record<string, unknown>,
+    availableHeaders: Set<string>,
+    normalizedHeaderIndex: Map<string, string>
+) {
+    const header = resolveImportHeaderForRecord(
+        availableHeaders,
+        normalizedHeaderIndex,
+        availableHeaders,
+        normalizedHeaderIndex,
+        getHeaderCandidates(profileKey, "disFirma", getRelationImportHeaderAliases(modelName, "disFirmaId"))
+    );
+    return readRecordCellValue(record, header, normalizedHeaderIndex);
 }
 
 async function findSirketIdByNameForImport(tx: unknown, value: unknown) {
@@ -3176,6 +3210,22 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
 
             if (skipRow) { skipped++; continue; }
 
+            const rawExternalVendor = getRawExternalVendorImportValue(
+                config.prismaModel,
+                profileKey,
+                record,
+                availableHeaders,
+                normalizedHeaderIndex
+            );
+            if (
+                importScope.forceInternal &&
+                (entityKey === "arac" || entityKey === "personel") &&
+                (normalizeLookupString(parsedRow.disFirmaId) || normalizeDisFirmaLookupName(rawExternalVendor))
+            ) {
+                skipped++;
+                continue;
+            }
+
             if (config.prismaModel === "disFirma" && fixedDisFirmaTuru) {
                 parsedRow.tur = fixedDisFirmaTuru;
             }
@@ -3191,6 +3241,11 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                 );
                 const rawRuhsatSahibi = ruhsatHeader ? record[ruhsatHeader] : null;
                 const ruhsatKiralikMi = isKiralikImportText(rawRuhsatSahibi);
+
+                if (entityKey === "arac" && ruhsatKiralikMi) {
+                    skipped++;
+                    continue;
+                }
 
                 if (ruhsatKiralikMi) {
                     parsedRow.sirketId = await ensureKiralikSirketIdForImport(tx);

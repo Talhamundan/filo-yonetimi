@@ -76,6 +76,7 @@ export default async function OnayMerkeziPage(props: { searchParams?: Promise<Da
             orderBy: { ad: "asc" },
         }),
     ]);
+    const canDisplayTankCompanyField = YAKIT_TANK_HAS_SIRKET_FIELD || Boolean(selectedSirketId) || sirketler.length > 0;
     const assignableOptions = assignablePersoneller.map((row) => ({
         id: row.id,
         adSoyad: `${row.ad} ${row.soyad}`.trim(),
@@ -90,7 +91,7 @@ export default async function OnayMerkeziPage(props: { searchParams?: Promise<Da
             yakitTanklar={yakitTanklar}
             sirketler={sirketler as Array<{ id: string; ad: string }>}
             selectedScopeSirketId={selectedSirketId || null}
-            canScopeTankByCompany={YAKIT_TANK_HAS_SIRKET_FIELD}
+            canScopeTankByCompany={canDisplayTankCompanyField}
         />
     );
 }
