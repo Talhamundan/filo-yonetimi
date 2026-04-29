@@ -1826,7 +1826,10 @@ export function buildCreateData(fields: PrismaField[], parsedRow: Record<string,
     for (const field of fields) {
         if (field.isUpdatedAt) continue;
 
-        const value = parsedRow[field.name];
+        const rawValue = parsedRow[field.name];
+        const value = (field as PrismaField & { isList?: boolean }).isList && field.type === "String"
+            ? parseStringListCellValue(rawValue)
+            : rawValue;
         if (value === undefined) {
             continue;
         }
@@ -1849,7 +1852,10 @@ export function buildUpdateData(
 
     for (const field of fields) {
         if (field.isId || field.isUpdatedAt || field.name === uniqueFieldName) continue;
-        const value = parsedRow[field.name];
+        const rawValue = parsedRow[field.name];
+        const value = (field as PrismaField & { isList?: boolean }).isList && field.type === "String"
+            ? parseStringListCellValue(rawValue)
+            : rawValue;
         if (value === undefined) continue;
         if (value === null && field.hasDefaultValue) continue;
         data[field.name] = value;
