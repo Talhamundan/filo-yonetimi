@@ -1,7 +1,8 @@
 import { prisma } from "../../../lib/prisma";
 import FinansClient from "./FinansClient";
 import { getModelFilter } from "@/lib/auth-utils";
-import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, type DashboardSearchParams } from "@/lib/company-scope";
+import { getSelectedAy, getSelectedSirketId, getSelectedYil, withAyDateFilter, getAyDateRange, type DashboardSearchParams } from "@/lib/company-scope";
+import { buildFuelIntervalMetrics, getFuelConsumptionUnitByAltKategori } from "@/lib/fuel-metrics";
 
 export default async function FinansPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
     const [selectedSirketId, selectedYil, selectedAy] = await Promise.all([
@@ -16,11 +17,12 @@ export default async function FinansPage(props: { searchParams?: Promise<Dashboa
     const yakitWhere = withAyDateFilter((yakitFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
     const masrafWhere = withAyDateFilter((masrafFilter || {}) as Record<string, unknown>, "tarih", selectedYil, selectedAy);
     const muayeneWhere = withAyDateFilter((muayeneFilter || {}) as Record<string, unknown>, "muayeneTarihi", selectedYil, selectedAy);
+    const { start: periodStart } = getAyDateRange(selectedYil, selectedAy);
 
     const [yakitlar, masraflar, muayenelerResult] = await Promise.all([
         (prisma as any).yakit.findMany({
             where: yakitWhere as any,
-            include: { arac: { select: { plaka: true, sirket: { select: { ad: true } } } } },
+            include: { arac: { select: { plaka: true, altKategori: true, sirket: { select: { ad: true } } } } },
             orderBy: { tarih: 'desc' }
         }),
         (prisma as any).masraf.findMany({
@@ -58,19 +60,40 @@ export default async function FinansPage(props: { searchParams?: Promise<Dashboa
     // Enriching yakitGroup with Arac data and calculations
     const araclar = await (prisma as any).arac.findMany({
         where: { id: { in: baseYakitGroup.map((g: any) => g.aracId) }, ...(aracFilter as any) },
-        select: { id: true, plaka: true, sirket: { select: { ad: true } } }
+        select: { id: true, plaka: true, altKategori: true, sirket: { select: { ad: true } } }
     });
+    const periodVehicleIds = Array.from(new Set((yakitlar as any[]).map((row) => row.aracId).filter(Boolean)));
+    const boundaryRows = periodVehicleIds.length
+        ? await (prisma as any).yakit.findMany({
+            where: {
+                ...(yakitFilter as any),
+                aracId: { in: periodVehicleIds },
+                tarih: { lt: periodStart },
+            },
+            distinct: ['aracId'],
+            orderBy: [{ aracId: 'asc' }, { tarih: 'desc' }, { id: 'desc' }],
+            include: { arac: { select: { altKategori: true } } },
+        })
+        : [];
+    const fuelMetricByVehicleId = buildFuelIntervalMetrics(
+        [...boundaryRows, ...(yakitlar as any[])].map((row: any) => ({
+            id: row.id,
+            aracId: row.aracId,
+            tarih: row.tarih,
+            km: row.km,
+            litre: Number(row.litre || 0),
+            tutar: Number(row.tutar || 0),
+            soforId: row.soforId || null,
+            consumptionUnit: getFuelConsumptionUnitByAltKategori(row.arac?.altKategori),
+        }))
+    ).byVehicleId;
 
     const metricsData = baseYakitGroup.map((group: any) => {
         const arac = araclar.find((a: any) => a.id === group.aracId);
-        const yapilanKm = (group._max.km || 0) - (group._min.km || 0);
         const toplamLitre = group._sum.litre || 0;
         const toplamTutar = group._sum.tutar || 0;
-        
-        let tuketim100Km = 0;
-        if (yapilanKm > 0 && toplamLitre > 0) {
-            tuketim100Km = (toplamLitre / yapilanKm) * 100;
-        }
+        const metric = fuelMetricByVehicleId.get(group.aracId);
+        const tuketim100Km = metric?.averageLitresPer100Km || 0;
 
         let litreMaliyet = 0;
         if (toplamLitre > 0) {

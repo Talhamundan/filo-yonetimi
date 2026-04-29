@@ -156,14 +156,14 @@ export function buildFuelIntervalMetrics(records: FuelMetricRecord[]) {
 
             if (distanceKm <= 0) continue;
 
-            const litreUsed = toSafeNumber(previous.litre);
-            const amountUsed = toSafeNumber(previous.tutar);
+            const litreUsed = toSafeNumber(current.litre);
+            const amountUsed = toSafeNumber(current.tutar);
             const factor = getConsumptionFactor(consumptionUnit);
             const averageLitresPerUnit = litreUsed > 0 ? (litreUsed / distanceKm) * factor : 0;
             const averageCostPerUnit = amountUsed > 0 ? amountUsed / distanceKm : 0;
             const averageCostPer100Km =
                 consumptionUnit === "LITRE_PER_100_KM" ? averageCostPerUnit * 100 : averageCostPerUnit;
-            const soforId = previous.soforId?.trim() || null;
+            const soforId = current.soforId?.trim() || null;
 
             byCurrentRecordId.set(current.id, {
                 recordId: current.id,
