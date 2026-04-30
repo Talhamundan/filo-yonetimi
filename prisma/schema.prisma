@@ -7,17 +7,17 @@ datasource db {
 }
 
 model Sirket {
-  id              String      @id @default(cuid())
-  ad              String
-  vergiNo         String?
-  olusturmaTarihi DateTime    @default(now())
-  bulunduguIl     String      @default("BURSA")
-  santiyeler      String[]    @default([])
-  araclar         Arac[]
-  kullanicilar    Kullanici[]
+  id                  String                   @id @default(cuid())
+  ad                  String
+  vergiNo             String?
+  olusturmaTarihi     DateTime                 @default(now())
+  bulunduguIl         String                   @default("BURSA")
+  santiyeler          String[]                 @default([])
+  araclar             Arac[]
   yetkiliKullanicilar KullaniciYetkiliSirket[]
-  stokKalemleri   StokKalem[]
-  yakitTanklari   YakitTank[]
+  kullanicilar        Kullanici[]
+  stokKalemleri       StokKalem[]
+  yakitTanklari       YakitTank[]
 }
 
 model DisFirma {
@@ -61,9 +61,9 @@ model Arac {
   calistigiKurum       String?
   motorNo              String?
   bulunduguIl          String             @default("BURSA")
+  disFirma             DisFirma?          @relation(fields: [disFirmaId], references: [id])
   kullanici            Kullanici?         @relation(fields: [kullaniciId], references: [id])
   sirket               Sirket?            @relation(fields: [sirketId], references: [id])
-  disFirma             DisFirma?          @relation(fields: [disFirmaId], references: [id], onDelete: SetNull)
   arizaKayitlari       ArizaKaydi[]
   bakimlar             Bakim[]
   cezalar              Ceza[]
@@ -73,6 +73,7 @@ model Arac {
   masraflar            Masraf[]
   muayene              Muayene[]
   kullaniciGecmisi     KullaniciZimmet[]
+  SigortaTeklif        SigortaTeklif[]
   trafikSigortasi      TrafikSigortasi[]
   yakitlar             Yakit[]
   yakitTankHareketleri YakitTankHareket[]
@@ -85,31 +86,31 @@ model Arac {
 }
 
 model Kullanici {
-  id                   String             @id @default(cuid())
+  id                   String                   @id @default(cuid())
   ad                   String
   soyad                String
   telefon              String?
-  tcNo                 String?            @unique
+  tcNo                 String?                  @unique
   calistigiKurum       String?
   santiye              String?
-  eposta               String?            @unique
+  eposta               String?                  @unique
   sifre                String?
-  rol                  Rol                @default(PERSONEL)
+  rol                  Rol                      @default(PERSONEL)
   sirketId             String?
   disFirmaId           String?
-  onayDurumu           OnayDurumu         @default(BEKLIYOR)
+  onayDurumu           OnayDurumu               @default(BEKLIYOR)
   deletedAt            DateTime?
   deletedBy            String?
   arac                 Arac?
-  arizaKayitlari       ArizaKaydi[]       @relation("ArizaSoforRelation")
-  bakimKayitlari       Bakim[]            @relation("BakimSoforRelation")
-  cezalar              Ceza[]             @relation("CezaSoforRelation")
+  arizaKayitlari       ArizaKaydi[]             @relation("ArizaSoforRelation")
+  bakimKayitlari       Bakim[]                  @relation("BakimSoforRelation")
+  cezalar              Ceza[]                   @relation("CezaSoforRelation")
   hesap                Hesap?
-  sirket               Sirket?            @relation(fields: [sirketId], references: [id])
-  disFirma             DisFirma?          @relation(fields: [disFirmaId], references: [id], onDelete: SetNull)
   yetkiliSirketler     KullaniciYetkiliSirket[]
+  disFirma             DisFirma?                @relation(fields: [disFirmaId], references: [id])
+  sirket               Sirket?                  @relation(fields: [sirketId], references: [id])
   zimmetler            KullaniciZimmet[]
-  yakitKayitlari       Yakit[]            @relation("YakitSoforRelation")
+  yakitKayitlari       Yakit[]                  @relation("YakitSoforRelation")
   yakitTankHareketleri YakitTankHareket[]
 
   @@index([sirketId])
@@ -119,12 +120,12 @@ model Kullanici {
 }
 
 model KullaniciYetkiliSirket {
-  id          String    @id @default(cuid())
-  kullaniciId String
-  sirketId    String
-  olusturmaTarihi DateTime @default(now())
-  kullanici   Kullanici @relation(fields: [kullaniciId], references: [id], onDelete: Cascade)
-  sirket      Sirket    @relation(fields: [sirketId], references: [id], onDelete: Cascade)
+  id              String    @id @default(cuid())
+  kullaniciId     String
+  sirketId        String
+  olusturmaTarihi DateTime  @default(now())
+  kullanici       Kullanici @relation(fields: [kullaniciId], references: [id], onDelete: Cascade)
+  sirket          Sirket    @relation(fields: [sirketId], references: [id], onDelete: Cascade)
 
   @@unique([kullaniciId, sirketId])
   @@index([kullaniciId])
@@ -355,13 +356,13 @@ model Yakit {
 model YakitTank {
   id               String             @id @default(cuid())
   ad               String
-  sirketId         String?
   kapasiteLitre    Float
   mevcutLitre      Float              @default(0)
   birimMaliyet     Float              @default(0)
   aktifMi          Boolean            @default(true)
   olusturmaTarihi  DateTime           @default(now())
   guncellemeTarihi DateTime           @default(now()) @updatedAt
+  sirketId         String?
   sirket           Sirket?            @relation(fields: [sirketId], references: [id])
   hedefHareketler  YakitTankHareket[] @relation("YakitTankHedef")
   hareketler       YakitTankHareket[] @relation("YakitTankKaynak")
@@ -466,10 +467,38 @@ model StokKalem {
   sirketId         String?
   olusturmaTarihi  DateTime @default(now())
   guncellemeTarihi DateTime @default(now()) @updatedAt
-  sirket           Sirket?  @relation(fields: [sirketId], references: [id], onDelete: SetNull)
+  sirket           Sirket?  @relation(fields: [sirketId], references: [id])
 
   @@index([sirketId])
   @@index([ad])
+}
+
+model SigortaTeklif {
+  id                  String    @id
+  aracId              String
+  tur                 String
+  acente              String?
+  sigortaSirketi      String?
+  policeNo            String?
+  baslangicTarihi     DateTime
+  bitisTarihi         DateTime
+  teklifTutar         Float     @default(0)
+  durum               String    @default("BEKLIYOR")
+  notlar              String?
+  sirketId            String?
+  createdBy           String?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @default(now())
+  olusturulanKayitId  String?
+  olusturulanKayitTur String?
+  olusturulmaTarihi   DateTime?
+  Arac                Arac      @relation(fields: [aracId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([aracId])
+  @@index([bitisTarihi])
+  @@index([durum])
+  @@index([olusturulanKayitId])
+  @@index([sirketId])
 }
 
 enum Rol {
