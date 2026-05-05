@@ -54,6 +54,13 @@ async function getScopeOptions() {
     const session = await auth();
     const u = session?.user as any;
     const userName = `${u?.ad || ""} ${u?.soyad || ""}`.trim() || u?.name || u?.email || "Kullanıcı";
+    const authorizedSirketIds = Array.from(
+        new Set<string>(
+            (Array.isArray(u?.yetkiliSirketIds) ? u.yetkiliSirketIds : [])
+                .map((id: unknown) => String(id || "").trim())
+                .filter(Boolean)
+        )
+    );
 
     const [hasGlobalCompanyAccess, currentUserRole, currentSirketId, quickVehicleSearch] = await Promise.all([
         canAccessAllCompanies(),
@@ -78,13 +85,24 @@ async function getScopeOptions() {
 
     if (!hasGlobalCompanyAccess) {
         let sirketler: { id: string; ad: string }[] = [];
-        if (currentCompany) {
+        if (authorizedSirketIds.length > 0) {
+            try {
+                sirketler = await prisma.sirket.findMany({
+                    where: { id: { in: authorizedSirketIds } },
+                    select: { id: true, ad: true },
+                    orderBy: { ad: "asc" },
+                });
+            } catch (error) {
+                console.warn("Yetkili sirket listesi getirilemedi, bos liste ile devam ediliyor.", error);
+            }
+        } else if (currentCompany) {
             sirketler = [currentCompany];
         }
 
         return {
             canAccessAllCompanies: false,
             isAdmin: currentUserRole === "ADMIN",
+            canSelectCompanyScope: authorizedSirketIds.length > 0,
             canAssignIndependentRecords,
             isIndependentUser,
             role: currentUserRole,
@@ -108,6 +126,7 @@ async function getScopeOptions() {
     return {
         canAccessAllCompanies: true,
         isAdmin: currentUserRole === "ADMIN",
+        canSelectCompanyScope: true,
         canAssignIndependentRecords,
         isIndependentUser,
         role: currentUserRole,

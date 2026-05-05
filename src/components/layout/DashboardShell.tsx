@@ -25,6 +25,7 @@ type DashboardShellProps = {
     scopeOptions: {
         canAccessAllCompanies: boolean;
         isAdmin: boolean;
+        canSelectCompanyScope: boolean;
         canAssignIndependentRecords: boolean;
         isIndependentUser: boolean;
         sirketler: { id: string; ad: string }[];
@@ -151,7 +152,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const closeMobileSidebar = React.useCallback(() => setIsMobileSidebarOpen(false), []);
 
     const scopedQuery = searchParams.toString();
-    const shouldShowCompanySwitcher = scopeOptions.isIndependentUser && scopeOptions.sirketler.length > 0;
+    const shouldShowCompanySwitcher = scopeOptions.canSelectCompanyScope && scopeOptions.sirketler.length > 0;
     const dashboardHref = scopedQuery ? `/dashboard?${scopedQuery}` : "/dashboard";
     const adminHref = scopedQuery ? `/dashboard/yetkilendirme-paneli?${scopedQuery}` : "/dashboard/yetkilendirme-paneli";
     const activityHref = scopedQuery ? `/dashboard/aktivite-gecmisi?${scopedQuery}` : "/dashboard/aktivite-gecmisi";
@@ -230,7 +231,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                 {shouldShowCompanySwitcher ? (
                                     <CompanyScopeSwitcher
                                         sirketler={scopeOptions.sirketler}
-                                        allowAllOption={scopeOptions.canAccessAllCompanies}
+                                        allowAllOption
                                     />
                                 ) : null}
 
@@ -448,7 +449,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                         {shouldShowCompanySwitcher ? (
                                             <CompanyScopeSwitcher
                                                 sirketler={scopeOptions.sirketler}
-                                                allowAllOption={scopeOptions.canAccessAllCompanies}
+                                                allowAllOption
                                             />
                                         ) : null}
                                     </div>
