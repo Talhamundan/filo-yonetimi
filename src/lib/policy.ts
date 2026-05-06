@@ -18,6 +18,7 @@ export type PolicyModelName =
     | "kullaniciZimmet"
     | "zimmet"
     | "stokKalem"
+    | "yakitTank"
     | string;
 
 const GLOBAL_SCOPE_ROLES = new Set<Rol>(["ADMIN"]);
@@ -258,6 +259,8 @@ function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | nu
         case "zimmet":
             return { arac: getVehicleUsageCompanyFilterWithName(sirketId, sirketName) };
         case "stokKalem":
+            return { sirketId };
+        case "yakitTank":
             return { sirketId };
         default:
             return { sirketId };

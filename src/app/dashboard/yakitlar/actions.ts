@@ -79,7 +79,9 @@ function getTankScopeForActor(actor: { rol?: string | null; sirketId?: string | 
     if (authorizedSirketIds.length > 0) {
         return { sirketId: { in: authorizedSirketIds } } as Record<string, unknown>;
     }
-    return actorSirketId ? ({ sirketId: actorSirketId } as Record<string, unknown>) : ({ id: "blocked" } as Record<string, unknown>);
+    return actorSirketId
+        ? ({ sirketId: actorSirketId } as Record<string, unknown>)
+        : ({ id: "blocked" } as Record<string, unknown>);
 }
 
 function getTankScopeForCompany(sirketId: string | null | undefined, fallbackScope: Record<string, unknown>) {
