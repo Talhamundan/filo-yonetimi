@@ -38,9 +38,8 @@ type RegisteredUserRow = {
     adSoyad: string;
     kullaniciAdi: string;
     rol: Rol;
-    sirketAdi: string;
+    sirketler: string;
     yetkiliSirketIds: string[];
-    yetkiliSirketAdlari: string;
 };
 
 type TankRow = {
@@ -322,12 +321,12 @@ export default function OnayMerkeziClient({
         adSoyad: `${user.ad} ${user.soyad}`.trim(),
         kullaniciAdi: user.hesap?.kullaniciAdi || "-",
         rol: user.rol,
-        sirketAdi: user.sirket?.ad || "Bağımsız",
         yetkiliSirketIds: (user.yetkiliSirketler || []).map((item) => item.sirketId),
-        yetkiliSirketAdlari: (user.yetkiliSirketler || [])
-            .map((item) => item.sirket?.ad)
-            .filter(Boolean)
-            .join(", "),
+        sirketler:
+            (user.yetkiliSirketler || [])
+                .map((item) => item.sirket?.ad)
+                .filter(Boolean)
+                .join(", ") || user.sirket?.ad || "Bağımsız",
     }));
 
     const openUserEdit = (row: RegisteredUserRow) => {
@@ -476,13 +475,9 @@ export default function OnayMerkeziClient({
             ),
         },
         {
-            accessorKey: "sirketAdi",
-            header: "Ana Şirket",
-        },
-        {
-            accessorKey: "yetkiliSirketAdlari",
-            header: "Yetkili Olduğu Şirketler",
-            cell: ({ row }) => row.original.yetkiliSirketAdlari || "-",
+            accessorKey: "sirketler",
+            header: "Şirketler",
+            cell: ({ row }) => row.original.sirketler || "-",
         },
         {
             id: "actions",
@@ -693,7 +688,7 @@ export default function OnayMerkeziClient({
                         </div>
                         {(editForm.rol === "YETKILI" || editForm.rol === "TEKNIK") && (
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-slate-600">Görebileceği Şirketler</label>
+                                <label className="text-xs font-semibold text-slate-600">Şirketler</label>
                                 <div className="max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-white p-2">
                                     {sirketler.map((sirket) => {
                                         const checked = editForm.yetkiliSirketIds.includes(sirket.id);
