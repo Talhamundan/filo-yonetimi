@@ -19,7 +19,7 @@ import { formatAracOptionLabel } from "@/lib/arac-option-label";
 const EMPTY = {
     ad: "",
     aracId: "",
-    tur: "RUHSAT" as "RUHSAT" | "SIGORTA" | "KASKO" | "SERVIS_FATURA" | "DIGER",
+    tur: "RUHSAT" as "RUHSAT" | "SIGORTA" | "KASKO" | "MUAYENE" | "CEZA_MAKBUZU" | "SERVIS_FATURA" | "DIGER",
     dosya: null as File | null
 };
 
@@ -42,15 +42,17 @@ export default function DokumanlarClient({
         if (!formData.aracId || !formData.ad) {
             return toast.warning("Eksik Bilgi", { description: "Lütfen Araç ve Dosya Adı alanlarını doldurun." });
         }
+        if (!formData.dosya) {
+            return toast.warning("Dosya Eksik", { description: "Lütfen PDF, JPG, JPEG veya PNG dosyası seçin." });
+        }
 
         setLoading(true);
-        // Simulating upload by using filename as URL for now
-        const res = await createDokuman({
-            ad: formData.ad,
-            aracId: formData.aracId,
-            tur: formData.tur,
-            dosyaUrl: formData.dosya ? `/uploads/${formData.dosya.name}` : "https://example.com/mock-file.pdf"
-        });
+        const uploadForm = new FormData();
+        uploadForm.append("ad", formData.ad);
+        uploadForm.append("aracId", formData.aracId);
+        uploadForm.append("tur", formData.tur);
+        uploadForm.append("file", formData.dosya);
+        const res = await createDokuman(uploadForm);
 
         if (res.success) {
             setCreateOpen(false);
@@ -83,7 +85,7 @@ export default function DokumanlarClient({
             cell: ({ row }: any) => (
                 <div className="flex justify-end items-center gap-2">
                     <a
-                        href={row.original.dosyaUrl}
+                        href={`/api/dokumanlar/${row.original.id}/file?download=1`}
                         target="_blank"
                         rel="noreferrer"
                         className="p-1.5 rounded-md hover:bg-indigo-50 text-indigo-600 transition-colors"
@@ -167,6 +169,8 @@ export default function DokumanlarClient({
                                         <option value="RUHSAT">Ruhsat</option>
                                         <option value="SIGORTA">Trafik Sigortası</option>
                                         <option value="KASKO">Kasko Poliçesi</option>
+                                        <option value="MUAYENE">Muayene Evrakı</option>
+                                        <option value="CEZA_MAKBUZU">Ceza Makbuzu</option>
                                         <option value="SERVIS_FATURA">Servis & Fatura</option>
                                         <option value="DIGER">Diğer Belgeler</option>
                                     </select>
@@ -175,6 +179,7 @@ export default function DokumanlarClient({
                                     <label className="text-sm font-medium">Dosya Seç</label>
                                     <Input 
                                         type="file" 
+                                        accept=".pdf,.jpg,.jpeg,.png"
                                         className="h-9" 
                                         onChange={(e) => setFormData({...formData, dosya: e.target.files?.[0] || null})}
                                     />
@@ -205,6 +210,8 @@ export default function DokumanlarClient({
                         { value: "RUHSAT", label: "Ruhsat" },
                         { value: "SIGORTA", label: "Sigorta" },
                         { value: "KASKO", label: "Kasko" },
+                        { value: "MUAYENE", label: "Muayene Evrakı" },
+                        { value: "CEZA_MAKBUZU", label: "Ceza Makbuzu" },
                         { value: "SERVIS_FATURA", label: "Servis / Fatura" },
                         { value: "DIGER", label: "Diğer" },
                     ],

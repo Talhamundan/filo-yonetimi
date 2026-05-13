@@ -1,23 +1,18 @@
-{\rtf1\ansi\ansicpg1254\cocoartf2869
-\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
-{\colortbl;\red255\green255\blue255;}
-{\*\expandedcolortbl;;}
-\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
-\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+FROM node:20-alpine
 
-\f0\fs24 \cf0 FROM node:20-alpine\
-\
-WORKDIR /app\
-\
-COPY package*.json ./\
-RUN npm install\
-\
-COPY . .\
-\
-RUN npx prisma generate\
-\
-RUN npm run build\
-\
-EXPOSE 3001\
-\
-CMD ["npm", "run", "start"]}
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+COPY . .
+
+RUN npx prisma generate
+RUN npm run build
+
+ENV PORT=3001
+ENV UPLOADS_DIR=/uploads
+
+EXPOSE 3001
+
+CMD ["npm", "run", "start"]

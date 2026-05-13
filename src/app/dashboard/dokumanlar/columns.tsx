@@ -67,7 +67,7 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<DokumanRow>[] => 
             return (
                 <div className="flex justify-end">
                     <a
-                        href={row.original.dosyaUrl}
+                        href={`/api/dokumanlar/${row.original.id}/file?download=1`}
                         target="_blank"
                         rel="noreferrer"
                         className="flex items-center gap-1.5 text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-md text-sm font-semibold transition-colors"

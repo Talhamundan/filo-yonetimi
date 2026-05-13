@@ -15,5 +15,21 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  app:
+    build: .
+    container_name: filo_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: postgresql://admin:filo_sifre_2026@db:5432/filo_db?schema=public
+      UPLOADS_DIR: /uploads
+      PORT: 3001
+    ports:
+      - "3001:3001"
+    volumes:
+      - uploads_data:/uploads
+
 volumes:
   db_data:
+  uploads_data:

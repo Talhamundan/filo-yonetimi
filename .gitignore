@@ -54,3 +54,4 @@ lint_errors.txt
 current_lint_errors.txt
 .DS_Store
 *.local
+/uploads/

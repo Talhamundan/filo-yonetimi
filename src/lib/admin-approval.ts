@@ -5,6 +5,7 @@ import prisma from "@/lib/prisma";
 import { logActivity } from "@/lib/activity-log";
 import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { deleteStoredDocumentFile } from "@/lib/document-storage";
 
 export type AdminApprovalAction = "UPDATE" | "DELETE";
 export type AdminApprovalStatus = "PENDING" | "APPROVED" | "REJECTED";
@@ -47,7 +48,7 @@ const APPROVABLE_MODELS = new Set([
     "stokKalem",
     "yakitTank",
 ]);
-const SOFT_DELETE_MODELS = new Set(["arac", "kullanici", "bakim", "masraf", "ceza", "dokuman"]);
+const SOFT_DELETE_MODELS = new Set(["arac", "kullanici", "bakim", "masraf", "ceza"]);
 
 function toJson(value: unknown) {
     if (value === undefined) return null;
@@ -229,7 +230,11 @@ export async function approveAdminApprovalRequest(id: string) {
     if (request.action === "UPDATE") {
         await model.update({ where: { id: request.entityId }, data: request.payload || {} });
     } else if (request.action === "DELETE") {
-        if (SOFT_DELETE_MODELS.has(request.prismaModel)) {
+        if (request.prismaModel === "dokuman") {
+            const dokuman = await model.findUnique({ where: { id: request.entityId }, select: { path: true } });
+            await deleteStoredDocumentFile(dokuman?.path || null);
+            await model.delete({ where: { id: request.entityId } });
+        } else if (SOFT_DELETE_MODELS.has(request.prismaModel)) {
             await model.update({ where: { id: request.entityId }, data: { deletedAt: new Date(), deletedBy: actor.id || null } });
         } else {
             await model.delete({ where: { id: request.entityId } });

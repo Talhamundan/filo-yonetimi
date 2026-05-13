@@ -5,9 +5,9 @@ import { revalidatePath } from "next/cache";
 import { ActivityActionType, ActivityEntityType } from "@prisma/client";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { logEntityActivity } from "@/lib/activity-log";
-import { softDeleteEntity } from "@/lib/soft-delete";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
+import { deleteStoredDocumentFile, saveDocumentFile } from "@/lib/document-storage";
 
 const PATH = '/dashboard/dokumanlar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -18,14 +18,37 @@ function revalidateDokumanPages(aracId?: string) {
     if (aracId) revalidatePath(`${ARACLAR_PATH}/${aracId}`);
 }
 
-export async function createDokuman(data: {
+type DokumanInput = {
     ad: string;
-    dosyaUrl: string;
+    dosyaUrl?: string;
     tur: any;
     aracId: string;
-}) {
+    file?: File | null;
+};
+
+function getTextFromFormData(formData: FormData, key: string) {
+    const value = formData.get(key);
+    return typeof value === "string" ? value : "";
+}
+
+function normalizeDokumanInput(input: DokumanInput | FormData): DokumanInput {
+    if (input instanceof FormData) {
+        const file = input.get("file");
+        return {
+            ad: getTextFromFormData(input, "ad"),
+            aracId: getTextFromFormData(input, "aracId"),
+            tur: getTextFromFormData(input, "tur"),
+            dosyaUrl: getTextFromFormData(input, "dosyaUrl"),
+            file: file instanceof File ? file : null,
+        };
+    }
+    return input;
+}
+
+export async function createDokuman(input: DokumanInput | FormData) {
     try {
         const actor = await assertAuthenticatedUser();
+        const data = normalizeDokumanInput(input);
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             plaka: true,
@@ -34,16 +57,39 @@ export async function createDokuman(data: {
         const usageSirketId = await resolveVehicleUsageCompanyId({
             aracId: arac.id
         });
+        const storedFile = data.file
+            ? await saveDocumentFile({
+                file: data.file,
+                plaka: arac.plaka,
+                tur: data.tur,
+                ad: data.ad,
+            })
+            : null;
+        const dosyaUrl = storedFile ? `/api/dokumanlar/__PENDING__/file` : (data.dosyaUrl || "").trim();
+        if (!storedFile && !dosyaUrl) {
+            return { success: false, error: "Lütfen PDF, JPG veya PNG dosyası seçin." };
+        }
 
         const created = await prisma.dokuman.create({
             data: {
                 ad: data.ad,
-                dosyaUrl: data.dosyaUrl,
+                dosyaUrl,
+                originalName: storedFile?.originalName || null,
+                fileName: storedFile?.fileName || null,
+                mimeType: storedFile?.mimeType || null,
+                size: storedFile?.size || null,
+                path: storedFile?.path || null,
                 tur: data.tur,
                 aracId: arac.id,
                 sirketId: usageSirketId,
             }
         });
+        if (storedFile) {
+            await prisma.dokuman.update({
+                where: { id: created.id },
+                data: { dosyaUrl: `/api/dokumanlar/${created.id}/file` },
+            });
+        }
 
         await logEntityActivity({
             actionType: ActivityActionType.CREATE,
@@ -56,6 +102,9 @@ export async function createDokuman(data: {
                 ad: created.ad,
                 tur: created.tur,
                 aracId: created.aracId,
+                originalName: storedFile?.originalName || null,
+                fileName: storedFile?.fileName || null,
+                size: storedFile?.size || null,
             },
         });
 
@@ -63,7 +112,8 @@ export async function createDokuman(data: {
         return { success: true };
     } catch (error) {
         console.error("Doküman eklenirken hata:", error);
-        return { success: false, error: "Doküman eklenirken bir hata oluştu." };
+        const message = error instanceof Error ? error.message : "";
+        return { success: false, error: message || "Doküman eklenirken bir hata oluştu." };
     }
 }
 export async function updateDokuman(id: string, data: {
@@ -78,7 +128,7 @@ export async function updateDokuman(id: string, data: {
             prismaModel: "dokuman",
             filterModel: "dokuman",
             id,
-            select: { aracId: true, sirketId: true, ad: true, tur: true },
+            select: { aracId: true, sirketId: true, ad: true, tur: true, dosyaUrl: true, originalName: true, fileName: true, mimeType: true, size: true, path: true },
             errorMessage: "Doküman bulunamadı veya yetkiniz yok.",
         });
 
@@ -144,7 +194,7 @@ export async function deleteDokuman(id: string) {
             prismaModel: "dokuman",
             filterModel: "dokuman",
             id,
-            select: { aracId: true, sirketId: true, ad: true, tur: true },
+            select: { aracId: true, sirketId: true, ad: true, tur: true, path: true },
             errorMessage: "Dokuman bulunamadi veya yetkiniz yok.",
         });
 
@@ -159,7 +209,8 @@ export async function deleteDokuman(id: string) {
         });
         if (approval) return approval;
 
-        await softDeleteEntity("dokuman", id, actor.id);
+        await deleteStoredDocumentFile((kayit as any).path || null);
+        await prisma.dokuman.delete({ where: { id } });
         revalidateDokumanPages((kayit as { aracId?: string } | null)?.aracId);
         return { success: true };
     } catch (error) {

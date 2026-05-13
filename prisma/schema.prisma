@@ -467,8 +467,14 @@ model Dokuman {
   id            String      @id @default(cuid())
   ad            String
   dosyaUrl      String
+  originalName  String?
+  fileName      String?
+  mimeType      String?
+  size          Int?
+  path          String?
   tur           DokumanTuru
   yuklemeTarihi DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
   aracId        String
   sirketId      String?
   saseNo        String?
@@ -580,6 +586,8 @@ enum DokumanTuru {
   RUHSAT
   SIGORTA
   KASKO
+  MUAYENE
+  CEZA_MAKBUZU
   SERVIS_FATURA
   DIGER
 }

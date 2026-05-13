@@ -61,6 +61,8 @@ const DOKUMAN_TURLERI = [
     { label: "Ruhsat", value: "RUHSAT" },
     { label: "Trafik Sigortası", value: "SIGORTA" },
     { label: "Kasko Poliçesi", value: "KASKO" },
+    { label: "Muayene Evrakı", value: "MUAYENE" },
+    { label: "Ceza Makbuzu", value: "CEZA_MAKBUZU" },
     { label: "Servis & Fatura", value: "SERVIS_FATURA" },
     { label: "Diğer", value: "DIGER" },
 ];
@@ -142,6 +144,7 @@ export default function AracDetailClient({
     const [ruhsatDokumanForm, setRuhsatDokumanForm] = React.useState({
         ad: "",
         dosyaUrl: "",
+        file: null as File | null,
     });
     const [bakimForm, setBakimForm] = React.useState({
         bakimTarihi: todayDate(),
@@ -191,8 +194,9 @@ export default function AracDetailClient({
     });
     const [dokumanForm, setDokumanForm] = React.useState({
         ad: "",
-        tur: "DIGER" as "RUHSAT" | "SIGORTA" | "KASKO" | "SERVIS_FATURA" | "DIGER",
+        tur: "DIGER" as "RUHSAT" | "SIGORTA" | "KASKO" | "MUAYENE" | "CEZA_MAKBUZU" | "SERVIS_FATURA" | "DIGER",
         dosyaUrl: "",
+        file: null as File | null,
     });
     const [soforAtamaOpen, setSoforAtamaOpen] = React.useState(false);
     const [soforAtamaForm, setSoforAtamaForm] = React.useState({
@@ -283,7 +287,7 @@ export default function AracDetailClient({
     const [editDokumanRow, setEditDokumanRow] = React.useState<AracDetaySaaS | null>(null);
     const [dokumanEditForm, setDokumanEditForm] = React.useState({
         ad: "",
-        tur: "DIGER" as "RUHSAT" | "SIGORTA" | "KASKO" | "SERVIS_FATURA" | "DIGER",
+        tur: "DIGER" as "RUHSAT" | "SIGORTA" | "KASKO" | "MUAYENE" | "CEZA_MAKBUZU" | "SERVIS_FATURA" | "DIGER",
         dosyaUrl: "",
     });
 
@@ -1118,6 +1122,21 @@ export default function AracDetailClient({
 
     const formatDate = (date: string | Date | null | undefined) => date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
 
+    const buildDokumanUploadForm = (params: {
+        ad: string;
+        tur: string;
+        file?: File | null;
+        dosyaUrl?: string;
+    }) => {
+        const formData = new FormData();
+        formData.append("ad", params.ad);
+        formData.append("aracId", arac.id);
+        formData.append("tur", params.tur);
+        if (params.file) formData.append("file", params.file);
+        if (params.dosyaUrl) formData.append("dosyaUrl", params.dosyaUrl);
+        return formData;
+    };
+
     const resetFormForTab = (tab: string) => {
         if (tab === "soforGecmisi") {
             setZimmetForm({
@@ -1127,7 +1146,7 @@ export default function AracDetailClient({
                 notlar: "",
             });
         } else if (tab === "ruhsat") {
-            setRuhsatDokumanForm({ ad: "", dosyaUrl: "" });
+            setRuhsatDokumanForm({ ad: "", dosyaUrl: "", file: null });
         } else if (tab === "bakim") {
             setBakimForm({
                 bakimTarihi: todayDate(),
@@ -1185,6 +1204,7 @@ export default function AracDetailClient({
                 ad: "",
                 tur: "DIGER",
                 dosyaUrl: "",
+                file: null,
             });
         }
     };
@@ -1212,12 +1232,16 @@ export default function AracDetailClient({
                     toast.warning("Eksik Bilgi", { description: "Belge adı zorunludur." });
                     return;
                 }
-                const res = await createDokuman({
+                if (!ruhsatDokumanForm.file && !ruhsatDokumanForm.dosyaUrl.trim()) {
+                    toast.warning("Dosya Eksik", { description: "Lütfen PDF, JPG, JPEG veya PNG dosyası seçin." });
+                    return;
+                }
+                const res = await createDokuman(buildDokumanUploadForm({
                     ad: ruhsatDokumanForm.ad.trim(),
-                    aracId: arac.id,
                     tur: "RUHSAT",
-                    dosyaUrl: ruhsatDokumanForm.dosyaUrl.trim() || "https://example.com/mock-file.pdf",
-                });
+                    file: ruhsatDokumanForm.file,
+                    dosyaUrl: ruhsatDokumanForm.dosyaUrl.trim(),
+                }));
                 if (!res.success) throw new Error(res.error || "Ruhsat belgesi oluşturulamadı.");
                 toast.success("Ruhsat belgesi eklendi.");
             } else if (activeTab === "bakim") {
@@ -1325,12 +1349,16 @@ export default function AracDetailClient({
                     toast.warning("Eksik Bilgi", { description: "Doküman adı zorunludur." });
                     return;
                 }
-                const res = await createDokuman({
+                if (!dokumanForm.file && !dokumanForm.dosyaUrl.trim()) {
+                    toast.warning("Dosya Eksik", { description: "Lütfen PDF, JPG, JPEG veya PNG dosyası seçin." });
+                    return;
+                }
+                const res = await createDokuman(buildDokumanUploadForm({
                     ad: dokumanForm.ad.trim(),
-                    aracId: arac.id,
                     tur: dokumanForm.tur,
-                    dosyaUrl: dokumanForm.dosyaUrl.trim() || "https://example.com/mock-file.pdf",
-                });
+                    file: dokumanForm.file,
+                    dosyaUrl: dokumanForm.dosyaUrl.trim(),
+                }));
                 if (!res.success) throw new Error(res.error || "Doküman kaydı oluşturulamadı.");
                 toast.success("Doküman kaydı eklendi.");
             }
@@ -1392,8 +1420,13 @@ export default function AracDetailClient({
                         <Input value={ruhsatDokumanForm.ad} onChange={e => setRuhsatDokumanForm({ ...ruhsatDokumanForm, ad: e.target.value })} className="h-9" placeholder="Örn: Ruhsat Ön Yüz" />
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Dosya URL (Opsiyonel)</label>
-                        <Input value={ruhsatDokumanForm.dosyaUrl} onChange={e => setRuhsatDokumanForm({ ...ruhsatDokumanForm, dosyaUrl: e.target.value })} className="h-9" placeholder="https://..." />
+                        <label className="text-sm font-medium">Dosya Seç</label>
+                        <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={e => setRuhsatDokumanForm({ ...ruhsatDokumanForm, file: e.target.files?.[0] || null })}
+                            className="h-9"
+                        />
                     </div>
                 </div>
             );
@@ -1649,8 +1682,13 @@ export default function AracDetailClient({
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-sm font-medium">Dosya URL (Opsiyonel)</label>
-                        <Input value={dokumanForm.dosyaUrl} onChange={e => setDokumanForm({ ...dokumanForm, dosyaUrl: e.target.value })} className="h-9" placeholder="https://..." />
+                        <label className="text-sm font-medium">Dosya Seç</label>
+                        <Input
+                            type="file"
+                            accept=".pdf,.jpg,.jpeg,.png"
+                            onChange={e => setDokumanForm({ ...dokumanForm, file: e.target.files?.[0] || null })}
+                            className="h-9"
+                        />
                     </div>
                 </div>
             );
@@ -2711,8 +2749,12 @@ export default function AracDetailClient({
                                                 arac.dokumanlar.filter((d: any) => d.tur === 'RUHSAT').map((d: any) => (
                                                     <TableRow key={d.id}>
                                                         <TableCell className="text-slate-700">{formatDate(d.yuklemeTarihi)}</TableCell>
-                                                        <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer">{d.ad}</TableCell>
-                                                        <TableCell className="text-right"><span className="text-sm font-medium text-slate-500 hover:text-indigo-600 cursor-pointer">Görüntüle</span></TableCell>
+                                                        <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer" onClick={() => window.open(`/api/dokumanlar/${d.id}/file`, "_blank")}>{d.ad}</TableCell>
+                                                        <TableCell className="text-right">
+                                                            <button type="button" onClick={() => window.open(`/api/dokumanlar/${d.id}/file`, "_blank")} className="text-sm font-medium text-slate-500 hover:text-indigo-600">
+                                                                Görüntüle
+                                                            </button>
+                                                        </TableCell>
                                                     </TableRow>
                                                 ))
                                             ) : (
@@ -3238,7 +3280,7 @@ export default function AracDetailClient({
                                             arac.dokumanlar.map((d: AracDetaySaaS) => (
                                                 <TableRow key={d.id}>
                                                     <TableCell className="text-slate-700">{formatDate(d.yuklemeTarihi)}</TableCell>
-                                                    <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer" onClick={() => d.dosyaUrl && window.open(d.dosyaUrl, '_blank')}>{d.ad}</TableCell>
+                                                    <TableCell className="font-medium text-indigo-600 hover:underline cursor-pointer" onClick={() => window.open(`/api/dokumanlar/${d.id}/file`, '_blank')}>{d.ad}</TableCell>
                                                     <TableCell className="text-slate-600"><Badge variant="outline">{d.tur}</Badge></TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex items-center justify-end gap-1">
