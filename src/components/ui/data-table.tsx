@@ -19,7 +19,7 @@ import {
     getSortedRowModel,
     useReactTable,
 } from "@tanstack/react-table"
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Download, Filter, FilterX, Loader2, Pin, PinOff, Trash2, Upload } from "lucide-react"
+import { ArrowDown, ArrowUp, ArrowUpDown, BookmarkPlus, Check, Columns3, Download, Filter, FilterX, Loader2, Pin, PinOff, Trash2, Upload } from "lucide-react"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import { toast } from "sonner"
 import { bulkDeleteByExcelEntity } from "@/app/dashboard/_actions/bulk-delete"
@@ -35,6 +35,14 @@ import {
 } from "./table"
 import { Button } from "./button"
 import { Input } from "./input"
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "./dialog"
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -65,6 +73,7 @@ interface DataTableProps<TData, TValue> {
         showDateRange?: boolean
     }
     columnViewPresets?: Array<{ id: string; label: string; columnIds: string[] }>
+    keepStatusColumnFixed?: boolean
 }
 
 type SavedColumnView = {
@@ -250,6 +259,7 @@ export function DataTable<TData, TValue>({
     toolbarLayout = "compact",
     toolbarArrangement = "default",
     columnViewPresets = [],
+    keepStatusColumnFixed = true,
 }: DataTableProps<TData, TValue>) {
     const { isAdmin } = useDashboardScope()
     const pathname = usePathname()
@@ -279,6 +289,8 @@ export function DataTable<TData, TValue>({
     const [hydratedPinningKey, setHydratedPinningKey] = React.useState<string | null>(null)
     const [hydratedViewKey, setHydratedViewKey] = React.useState<string | null>(null)
     const [savedColumnViews, setSavedColumnViews] = React.useState<SavedColumnView[]>([])
+    const [saveViewDialogOpen, setSaveViewDialogOpen] = React.useState(false)
+    const [saveViewName, setSaveViewName] = React.useState("Yeni Görünüm")
     const headerCellRefs = React.useRef(new Map<string, HTMLTableCellElement>())
     const [leftPinnedOffsets, setLeftPinnedOffsets] = React.useState<Record<string, number>>({})
     const canBulkDelete = Boolean(excelEntity) && isAdmin
@@ -388,6 +400,7 @@ export function DataTable<TData, TValue>({
 
     const allLeafColumns = table.getAllLeafColumns()
     const statusColumnId = allLeafColumns.find((column) => !isNonDataColumnId(column.id) && isStatusColumn(column))?.id || null
+    const fixedStatusColumnId = keepStatusColumnFixed ? statusColumnId : null
     const filteredCount = table.getFilteredRowModel().rows.length
     const totalCount = data.length
     const hasActiveFilter = columnFilters.some((filter) => String(filter.value ?? "").trim().length > 0)
@@ -436,19 +449,19 @@ export function DataTable<TData, TValue>({
     const leftPinnedColumnIds = React.useMemo(() => {
         const ordered: string[] = []
 
-        if (statusColumnId && visibleColumnIdSet.has(statusColumnId)) {
-            ordered.push(statusColumnId)
+        if (fixedStatusColumnId && visibleColumnIdSet.has(fixedStatusColumnId)) {
+            ordered.push(fixedStatusColumnId)
         }
 
         pinnedColumnIds.forEach((columnId) => {
-            if (columnId === statusColumnId) return
+            if (columnId === fixedStatusColumnId) return
             if (!visibleColumnIdSet.has(columnId)) return
             if (isNonDataColumnId(columnId)) return
             if (!ordered.includes(columnId)) ordered.push(columnId)
         })
 
         return ordered
-    }, [pinnedColumnIds, statusColumnId, visibleColumnIdSet])
+    }, [fixedStatusColumnId, pinnedColumnIds, visibleColumnIdSet])
     const leftPinnedColumnIdsKey = leftPinnedColumnIds.join("\u001F")
     const leftPinnedColumnIdSet = React.useMemo(() => new Set(leftPinnedColumnIds), [leftPinnedColumnIds])
     const stickyEnabled = isDesktop && visibleColumnCount >= 2
@@ -488,11 +501,11 @@ export function DataTable<TData, TValue>({
                 hideableColumnIds.forEach((columnId) => {
                     next[columnId] = visibleSet.has(columnId)
                 })
-                if (statusColumnId) next[statusColumnId] = true
+                if (fixedStatusColumnId) next[fixedStatusColumnId] = true
                 return next
             })
         },
-        [hideableColumnIds, sanitizeColumnViewIds, statusColumnId]
+        [fixedStatusColumnId, hideableColumnIds, sanitizeColumnViewIds]
     )
 
     const normalizedColumnViewPresets = React.useMemo(
@@ -541,7 +554,7 @@ export function DataTable<TData, TValue>({
             Object.entries(parsed).forEach(([key, value]) => {
                 if (!allowed.has(key)) return
                 if (typeof value !== "boolean") return
-                if (statusColumnId && key === statusColumnId) {
+                if (fixedStatusColumnId && key === fixedStatusColumnId) {
                     nextState[key] = true
                     return
                 }
@@ -554,7 +567,7 @@ export function DataTable<TData, TValue>({
         } finally {
             setHydratedVisibilityKey(visibilityStorageKey)
         }
-    }, [statusColumnId, table, visibilityStorageKey])
+    }, [fixedStatusColumnId, table, visibilityStorageKey])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -563,12 +576,12 @@ export function DataTable<TData, TValue>({
     }, [columnVisibility, hydratedVisibilityKey, visibilityStorageKey])
 
     React.useEffect(() => {
-        if (!statusColumnId) return
+        if (!fixedStatusColumnId) return
         setColumnVisibility((prev) => {
-            if (prev[statusColumnId] !== false) return prev
-            return { ...prev, [statusColumnId]: true }
+            if (prev[fixedStatusColumnId] !== false) return prev
+            return { ...prev, [fixedStatusColumnId]: true }
         })
-    }, [statusColumnId])
+    }, [fixedStatusColumnId])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -591,7 +604,7 @@ export function DataTable<TData, TValue>({
             const allowed = new Set(
                 table
                     .getAllLeafColumns()
-                    .filter((column) => !isNonDataColumnId(column.id) && column.id !== statusColumnId)
+                    .filter((column) => !isNonDataColumnId(column.id) && column.id !== fixedStatusColumnId)
                     .map((column) => column.id)
             )
             const nextPinned = parsed
@@ -604,7 +617,7 @@ export function DataTable<TData, TValue>({
         } finally {
             setHydratedPinningKey(pinningStorageKey)
         }
-    }, [pinningStorageKey, statusColumnId, table])
+    }, [fixedStatusColumnId, pinningStorageKey, table])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -683,9 +696,9 @@ export function DataTable<TData, TValue>({
 
     React.useEffect(() => {
         const allColumnIds = table.getAllLeafColumns().map((column) => column.id)
-        const statusIds = statusColumnId ? [statusColumnId] : []
+        const statusIds = fixedStatusColumnId ? [fixedStatusColumnId] : []
         const pinnedIds = pinnedColumnIds.filter(
-            (columnId) => columnId !== statusColumnId && allColumnIds.includes(columnId) && !isNonDataColumnId(columnId)
+            (columnId) => columnId !== fixedStatusColumnId && allColumnIds.includes(columnId) && !isNonDataColumnId(columnId)
         )
         const reservedIds = new Set([...statusIds, ...pinnedIds])
         const actionsIds = allColumnIds.filter((columnId) => isActionsColumnId(columnId))
@@ -697,7 +710,7 @@ export function DataTable<TData, TValue>({
         const nextOrder = [...statusIds, ...pinnedIds, ...restIds, ...selectionIds, ...actionsIds]
 
         setColumnOrder((prev) => (areStringArraysEqual(prev, nextOrder) ? prev : nextOrder))
-    }, [pinnedColumnIds, statusColumnId, table])
+    }, [fixedStatusColumnId, pinnedColumnIds, table])
 
     React.useLayoutEffect(() => {
         if (!stickyEnabled || leftPinnedColumnIds.length === 0) {
@@ -740,7 +753,7 @@ export function DataTable<TData, TValue>({
     }, [])
 
     const togglePinnedColumn = React.useCallback((columnId: string) => {
-        if (!columnId || columnId === statusColumnId || isNonDataColumnId(columnId)) return
+        if (!columnId || columnId === fixedStatusColumnId || isNonDataColumnId(columnId)) return
 
         setPinnedColumnIds((prev) => {
             if (prev.includes(columnId)) {
@@ -749,21 +762,35 @@ export function DataTable<TData, TValue>({
 
             return [...prev, columnId]
         })
-    }, [statusColumnId])
+    }, [fixedStatusColumnId])
 
-    const handleSaveCurrentColumnView = React.useCallback(() => {
-        const selectedIds = sanitizeColumnViewIds(
+    const getCurrentColumnViewIds = React.useCallback(() => {
+        return sanitizeColumnViewIds(
             hideableColumns
                 .filter((column) => column.getIsVisible())
                 .map((column) => column.id)
         )
+    }, [hideableColumns, sanitizeColumnViewIds])
+
+    const handleSaveCurrentColumnView = React.useCallback(() => {
+        const selectedIds = getCurrentColumnViewIds()
         if (selectedIds.length === 0) {
             toast.warning("Kaydetmek için en az bir sütun görünür olmalı.")
             return
         }
 
-        const rawName = window.prompt("Görünüm adı girin:", "Yeni Görünüm")
-        const viewName = rawName?.trim()
+        setSaveViewName("Yeni Görünüm")
+        setSaveViewDialogOpen(true)
+    }, [getCurrentColumnViewIds])
+
+    const handleConfirmSaveColumnView = React.useCallback(() => {
+        const selectedIds = getCurrentColumnViewIds()
+        if (selectedIds.length === 0) {
+            toast.warning("Kaydetmek için en az bir sütun görünür olmalı.")
+            return
+        }
+
+        const viewName = saveViewName.trim()
         if (!viewName) return
 
         const existing = savedColumnViews.find(
@@ -783,7 +810,8 @@ export function DataTable<TData, TValue>({
         })
 
         toast.success(existing ? "Sütun görünümü güncellendi." : "Sütun görünümü kaydedildi.")
-    }, [hideableColumns, sanitizeColumnViewIds, savedColumnViews])
+        setSaveViewDialogOpen(false)
+    }, [getCurrentColumnViewIds, saveViewName, savedColumnViews])
 
     const handleDeleteSavedColumnView = React.useCallback(() => {
         if (savedColumnViews.length === 0) {
@@ -1029,6 +1057,63 @@ export function DataTable<TData, TValue>({
 
     return (
         <div className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <Dialog open={saveViewDialogOpen} onOpenChange={setSaveViewDialogOpen}>
+                <DialogContent className="gap-5 border-slate-200 bg-white p-0 shadow-2xl sm:max-w-md" showCloseButton={false}>
+                    <form
+                        onSubmit={(event) => {
+                            event.preventDefault()
+                            handleConfirmSaveColumnView()
+                        }}
+                    >
+                        <DialogHeader className="border-b border-slate-100 px-6 pb-4 pt-6">
+                            <div className="flex items-start gap-3">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 ring-1 ring-indigo-100">
+                                    <BookmarkPlus className="h-5 w-5" />
+                                </div>
+                                <div className="min-w-0">
+                                    <DialogTitle className="text-lg font-bold text-slate-950">Görünümü Kaydet</DialogTitle>
+                                    <DialogDescription className="mt-1 text-sm leading-5 text-slate-500">
+                                        Seçili sütun düzenini daha sonra hızlıca uygulamak için bir ad verin.
+                                    </DialogDescription>
+                                </div>
+                            </div>
+                        </DialogHeader>
+
+                        <div className="space-y-2 px-6 py-5">
+                            <label htmlFor="column-view-name" className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                                Görünüm Adı
+                            </label>
+                            <Input
+                                id="column-view-name"
+                                value={saveViewName}
+                                onChange={(event) => setSaveViewName(event.target.value)}
+                                autoFocus
+                                placeholder="Örn. Teknik takip"
+                                className="h-11 rounded-lg border-slate-200 bg-slate-50/70 text-sm font-medium text-slate-900 shadow-none focus-visible:ring-2 focus-visible:ring-indigo-200"
+                            />
+                        </div>
+
+                        <DialogFooter className="-mx-0 -mb-0 rounded-b-xl border-t border-slate-100 bg-slate-50 px-6 py-4">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="h-10 border-slate-200 bg-white text-slate-700 hover:bg-slate-100"
+                                onClick={() => setSaveViewDialogOpen(false)}
+                            >
+                                Vazgeç
+                            </Button>
+                            <Button
+                                type="submit"
+                                className="h-10 bg-indigo-600 text-white shadow-sm hover:bg-indigo-700"
+                                disabled={!saveViewName.trim()}
+                            >
+                                Kaydet
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
             {hasToolbar ? (
                 <div
                     className={
@@ -1090,9 +1175,9 @@ export function DataTable<TData, TValue>({
                                     {hideableColumns.map((column) => {
                                         const checked = column.getIsVisible()
                                         const disableHide = checked && visibleHideableColumnCount <= 1
-                                        const isStatus = statusColumnId === column.id
-                                        const isPinned = isStatus || pinnedColumnIds.includes(column.id)
-                                        const disableVisibilityToggle = isStatus || disableHide
+                                        const isFixedStatus = fixedStatusColumnId === column.id
+                                        const isPinned = isFixedStatus || pinnedColumnIds.includes(column.id)
+                                        const disableVisibilityToggle = isFixedStatus || disableHide
                                         const displayName = getColumnDisplayName(column)
                                         return (
                                             <div
@@ -1101,9 +1186,9 @@ export function DataTable<TData, TValue>({
                                             >
                                                 <button
                                                     type="button"
-                                                    aria-label={isStatus ? `${displayName} zaten sabit` : isPinned ? `${displayName} sabitlemesini kaldır` : `${displayName} sütununu sabitle`}
-                                                    title={isStatus ? "Durum sütunu her zaman sabit kalır" : isPinned ? "Sabitlemeyi kaldır" : "Sola sabitle"}
-                                                    disabled={isStatus}
+                                                    aria-label={isFixedStatus ? `${displayName} zaten sabit` : isPinned ? `${displayName} sabitlemesini kaldır` : `${displayName} sütununu sabitle`}
+                                                    title={isFixedStatus ? "Durum sütunu her zaman sabit kalır" : isPinned ? "Sabitlemeyi kaldır" : "Sola sabitle"}
+                                                    disabled={isFixedStatus}
                                                     onClick={(event) => {
                                                         event.preventDefault()
                                                         event.stopPropagation()
@@ -1114,7 +1199,7 @@ export function DataTable<TData, TValue>({
                                                         isPinned
                                                             ? "border-indigo-200 bg-indigo-50 text-indigo-600"
                                                             : "border-slate-200 bg-white text-slate-400 hover:border-indigo-200 hover:text-indigo-600",
-                                                        isStatus && "cursor-not-allowed opacity-70"
+                                                        isFixedStatus && "cursor-not-allowed opacity-70"
                                                     )}
                                                 >
                                                     {isPinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
@@ -1137,7 +1222,7 @@ export function DataTable<TData, TValue>({
                                                         {checked ? <Check className="h-3 w-3" /> : null}
                                                     </span>
                                                     <span className="min-w-0 flex-1 truncate">{displayName}</span>
-                                                    {isStatus ? (
+                                                    {isFixedStatus ? (
                                                         <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
                                                             Sabit
                                                         </span>
@@ -1177,8 +1262,7 @@ export function DataTable<TData, TValue>({
                                     <DropdownMenuSeparator />
                                     <DropdownMenuLabel>Özel Görünümler</DropdownMenuLabel>
                                     <DropdownMenuItem
-                                        onSelect={(event) => {
-                                            event.preventDefault()
+                                        onSelect={() => {
                                             handleSaveCurrentColumnView()
                                         }}
                                     >
