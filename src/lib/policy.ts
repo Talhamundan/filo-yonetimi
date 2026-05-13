@@ -210,6 +210,17 @@ function getVehicleUsageCompanyFilterWithName(sirketId: string, sirketName: stri
     return { OR: clauses };
 }
 
+function getRentedVehicleUsageCompanyFilterWithName(sirketId: string | null, sirketName: string | null) {
+    if (!sirketId) return null;
+
+    return {
+        AND: [
+            { disFirma: { is: { tur: "KIRALIK" } } },
+            getVehicleUsageCompanyFilterWithName(sirketId, sirketName),
+        ],
+    };
+}
+
 function getCompanyModelFilter(modelName: PolicyModelName, sirketId: string | null, sirketName: string | null) {
     if (modelName === "sirket") {
         return sirketId ? { id: sirketId } : {};
@@ -279,7 +290,12 @@ function getMultiCompanyModelFilter(
     return filters.length === 1 ? filters[0] : { OR: filters };
 }
 
-function getDriverModelFilter(modelName: PolicyModelName, userId: string, sirketId: string | null) {
+function getDriverModelFilter(
+    modelName: PolicyModelName,
+    userId: string,
+    sirketId: string | null,
+    sirketName: string | null
+) {
     const aracRelatedModels = [
         "yakit",
         "ceza",
@@ -293,11 +309,26 @@ function getDriverModelFilter(modelName: PolicyModelName, userId: string, sirket
         "zimmet",
     ] as const;
 
+    const kiralikCompanyVehicleFilter = getRentedVehicleUsageCompanyFilterWithName(sirketId, sirketName);
     if (aracRelatedModels.includes(modelName as (typeof aracRelatedModels)[number])) {
-        return { arac: { kullaniciId: userId, deletedAt: null } };
+        const ownVehicleFilter = { arac: { kullaniciId: userId, deletedAt: null } };
+        if (!kiralikCompanyVehicleFilter) return ownVehicleFilter;
+        return {
+            OR: [
+                ownVehicleFilter,
+                { arac: { ...kiralikCompanyVehicleFilter, deletedAt: null } },
+            ],
+        };
     }
     if (modelName === "arac") {
-        return { kullaniciId: userId, deletedAt: null };
+        const ownVehicleFilter = { kullaniciId: userId, deletedAt: null };
+        if (!kiralikCompanyVehicleFilter) return ownVehicleFilter;
+        return {
+            OR: [
+                ownVehicleFilter,
+                kiralikCompanyVehicleFilter,
+            ],
+        };
     }
     if (modelName === "kullanici" || modelName === "personel") {
         return { id: userId, deletedAt: null };
@@ -426,7 +457,7 @@ export function getModelFilterByPolicy(params: {
             modelName,
             withSoftDeleteFilter(
                 modelName,
-                getDriverModelFilter(modelName, currentUserId, currentSirketId || null),
+                getDriverModelFilter(modelName, currentUserId, currentSirketId || null, currentSirketName || null),
                 includeDeleted
             ),
             includeDeleted
