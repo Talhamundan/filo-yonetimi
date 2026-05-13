@@ -40,11 +40,13 @@ export const FormFields = ({
     isExternalMode?: boolean,
     externalMode?: ExternalVendorMode | null,
 }) => {
+    const sirketList = Array.isArray(sirketler) ? sirketler : [];
+    const disFirmaList = Array.isArray(disFirmalar) ? disFirmalar : [];
     const baseRoleOptions = allowAdminRole ? ROLLER : ROLLER.filter((item) => item !== "ADMIN");
     const roleOptions = baseRoleOptions.includes(formData.rol)
         ? baseRoleOptions
         : [formData.rol, ...baseRoleOptions];
-    const selectedSirket = sirketler.find((item) => item.id === formData.sirketId);
+    const selectedSirket = sirketList.find((item) => item.id === formData.sirketId);
     const santiyeOptions = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
     const santiyeListId = formData.sirketId ? `personel-santiye-${formData.sirketId}` : "personel-santiye-generic";
 
@@ -90,7 +92,7 @@ export const FormFields = ({
                 <label className="text-sm font-medium">Bağlı Şirket</label>
                 <select value={formData.sirketId} onChange={e => {
                     const nextSirketId = e.target.value;
-                    const selectedSirket = sirketler.find((s) => s.id === nextSirketId);
+                    const selectedSirket = sirketList.find((s) => s.id === nextSirketId);
                     const nextSantiyeler = (selectedSirket?.santiyeler || []).filter((item) => String(item || "").trim().length > 0);
                     setFormData({
                         ...formData,
@@ -110,7 +112,7 @@ export const FormFields = ({
                             Şirket Seçiniz
                         </option>
                     )}
-                    {sirketler.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
+                    {sirketList.map(s => <option key={s.id} value={s.id}>{s.ad}</option>)}
                 </select>
             </div>
             <div className="space-y-1.5">
@@ -149,7 +151,7 @@ export const FormFields = ({
                     className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
                 >
                     <option value="">Firma seçiniz</option>
-                    {disFirmalar.map((firma) => (
+                    {disFirmaList.map((firma) => (
                         <option key={firma.id} value={firma.id}>
                             {firma.ad} ({firma.tur === "KIRALIK" ? "Kiralık" : "Taşeron"})
                         </option>

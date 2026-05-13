@@ -35,12 +35,23 @@ export type PersonelRow = {
     ortalamaUstuYakit?: boolean;
 }
 
-function formatCurrency(value: number) {
-    return `₺${Math.round(value || 0).toLocaleString("tr-TR")}`;
+function formatNumber(value: unknown, fallback = "0") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue.toLocaleString("tr-TR") : fallback;
 }
 
-function formatDecimal(value: number, fractionDigits = 2) {
-    return value.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits });
+function formatCurrency(value: unknown) {
+    const numberValue = value === null || value === undefined || value === "" ? 0 : Number(value);
+    return `₺${Math.round(Number.isFinite(numberValue) ? numberValue : 0).toLocaleString("tr-TR")}`;
+}
+
+function formatDecimal(value: unknown, fractionDigits = 2, fallback = "-") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue)
+        ? numberValue.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })
+        : fallback;
 }
 
 function getFuelAverageUnitLabel(unit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" | null) {
@@ -118,12 +129,12 @@ const maliyetColumn: ColumnDef<PersonelRow> = {
     accessorKey: "toplamMaliyet",
     header: "Maliyet Özeti",
     cell: ({ row }) => {
-        const toplam = row.original.toplamMaliyet || 0;
+        const toplam = row.original.toplamMaliyet ?? 0;
         const kalemler = row.original.maliyetKalemleri || { ceza: 0, yakit: 0 };
         const nonZero = [
-            { key: "Ceza", value: kalemler.ceza, className: "bg-rose-50 text-rose-700 border-rose-200" },
-            { key: "Yakıt", value: kalemler.yakit, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-        ].filter((item) => item.value > 0);
+            { key: "Ceza", value: kalemler.ceza ?? 0, className: "bg-rose-50 text-rose-700 border-rose-200" },
+            { key: "Yakıt", value: kalemler.yakit ?? 0, className: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+        ].filter((item) => Number(item.value) > 0);
 
         return (
             <div className="min-w-[180px]">
@@ -153,7 +164,7 @@ const yakitOrtalamaColumn: ColumnDef<PersonelRow> = {
     cell: ({ row }) => {
         const litre100 = row.original.ortalamaYakit100Km;
         const intervalSayisi = row.original.ortalamaYakitIntervalSayisi || 0;
-        const referans = Number(row.original.yakitKarsilastirmaReferans100Km || 0);
+        const referans = Number(row.original.yakitKarsilastirmaReferans100Km ?? 0);
         const ortalamaUstuYakit = Boolean(row.original.ortalamaUstuYakit);
         const unitLabel = getFuelAverageUnitLabel(row.original.yakitTuketimBirimi);
 

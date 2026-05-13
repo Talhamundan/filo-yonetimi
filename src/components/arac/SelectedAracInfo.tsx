@@ -11,12 +11,15 @@ const formatIl = (il?: string | null) => {
     return il.split("_").join(" ");
 };
 
+function formatNumber(value: unknown, fallback = "-") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue.toLocaleString("tr-TR") : fallback;
+}
+
 export default function SelectedAracInfo({ arac }: { arac?: SelectedAracInfoData | null }) {
     if (!arac) return null;
-    const kmText =
-        typeof arac.guncelKm === "number" && Number.isFinite(arac.guncelKm)
-            ? `${arac.guncelKm.toLocaleString("tr-TR")} km`
-            : "-";
+    const kmText = arac.guncelKm != null ? `${formatNumber(arac.guncelKm)} km` : "-";
 
     return (
         <div className="w-full min-w-0 max-w-full overflow-hidden rounded-md border border-slate-200 bg-slate-50 px-3 py-2">

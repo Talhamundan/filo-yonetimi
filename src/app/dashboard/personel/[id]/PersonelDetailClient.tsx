@@ -33,7 +33,45 @@ import { getRoleLabel } from "@/lib/role-label";
 import { formatAracOptionLabel } from "@/lib/arac-option-label";
 import { RowActionButton } from "@/components/ui/row-action-button";
 import { sortByTextValue } from "@/lib/sort-utils";
-import { formatCurrency, formatKm, formatLitres, getFuelKmDelta, getZimmetKmDelta, sumBy } from "@/lib/detail-table-totals";
+import { getFuelKmDelta, getZimmetKmDelta, sumBy } from "@/lib/detail-table-totals";
+
+function formatNumber(value: unknown, fallback = "-") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? numberValue.toLocaleString("tr-TR") : fallback;
+}
+
+function formatCurrency(value: unknown, fallback = "₺0") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue) ? `₺${numberValue.toLocaleString("tr-TR")}` : fallback;
+}
+
+function formatDate(value: unknown) {
+    if (!value) return "-";
+    const date = new Date(value as string | number | Date);
+    return Number.isNaN(date.getTime()) ? "-" : format(date, "dd.MM.yyyy", { locale: tr });
+}
+
+function formatDecimal(value: unknown, fractionDigits = 1, fallback = "-") {
+    if (value === null || value === undefined || value === "") return fallback;
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue)
+        ? numberValue.toLocaleString("tr-TR", { minimumFractionDigits: fractionDigits, maximumFractionDigits: fractionDigits })
+        : fallback;
+}
+
+function formatKm(value: unknown) {
+    return `${formatNumber(value, "0")} km`;
+}
+
+function formatLitres(value: unknown) {
+    if (value === null || value === undefined || value === "") return "0 L";
+    const numberValue = Number(value);
+    return Number.isFinite(numberValue)
+        ? `${numberValue.toLocaleString("tr-TR", { maximumFractionDigits: 2 })} L`
+        : "0 L";
+}
 
 export default function PersonelDetailClient({
     initialPersonel: p,
@@ -164,10 +202,17 @@ export default function PersonelDetailClient({
         aracId: '',
     });
 
+    const zimmetler = Array.isArray(p?.zimmetler) ? p.zimmetler : [];
+    const cezalar = Array.isArray(p?.cezalar) ? p.cezalar : [];
+    const arizalar = Array.isArray(p?.arizalar) ? p.arizalar : [];
+    const bakimKayitlari = Array.isArray(p?.bakimKayitlari) ? p.bakimKayitlari : [];
+    const yakitKayitlari = Array.isArray(p?.yakitKayitlari) ? p.yakitKayitlari : [];
+    const masraflar = Array.isArray(p?.arac?.masraflar) ? p.arac.masraflar : [];
+    const uygunAraclar = Array.isArray(atamayaUygunAraclar) ? atamayaUygunAraclar : [];
+
     const activeZimmet = React.useMemo(() => {
-        const zimmetler = Array.isArray(p.zimmetler) ? p.zimmetler : [];
         return zimmetler.find((z: any) => !z.bitis && z.aracId === p.arac?.id) || zimmetler.find((z: any) => !z.bitis) || null;
-    }, [p.arac?.id, p.zimmetler]);
+    }, [p.arac?.id, zimmetler]);
     const personelYakitOrtalamasi = React.useMemo(() => {
         const raw = Number(p.ortalamaYakit100Km);
         if (!Number.isFinite(raw) || raw <= 0) return null;
@@ -185,15 +230,15 @@ export default function PersonelDetailClient({
     }, [p.yakitKarsilastirmaReferans100Km]);
     const personelOrtalamaUstuYakit = Boolean(p.ortalamaUstuYakit);
     const personelTabloToplamlari = React.useMemo(() => ({
-        zimmetKm: getZimmetKmDelta(p.zimmetler || []),
-        cezaTutar: sumBy(p.cezalar || [], (kayit) => kayit.tutar),
-        arizaTutar: sumBy(p.arizalar || [], (kayit) => kayit.tutar),
-        servisTutar: sumBy(p.bakimKayitlari || [], (kayit) => kayit.tutar),
-        yakitKm: getFuelKmDelta(p.yakitKayitlari || []),
-        yakitLitre: sumBy(p.yakitKayitlari || [], (kayit) => kayit.litre),
-        yakitTutar: sumBy(p.yakitKayitlari || [], (kayit) => kayit.tutar),
-        masrafTutar: sumBy(p.arac?.masraflar || [], (kayit) => kayit.tutar),
-    }), [p]);
+        zimmetKm: getZimmetKmDelta(zimmetler),
+        cezaTutar: sumBy(cezalar, (kayit) => kayit.tutar),
+        arizaTutar: sumBy(arizalar, (kayit) => kayit.tutar),
+        servisTutar: sumBy(bakimKayitlari, (kayit) => kayit.tutar),
+        yakitKm: getFuelKmDelta(yakitKayitlari),
+        yakitLitre: sumBy(yakitKayitlari, (kayit) => kayit.litre),
+        yakitTutar: sumBy(yakitKayitlari, (kayit) => kayit.tutar),
+        masrafTutar: sumBy(masraflar, (kayit) => kayit.tutar),
+    }), [arizalar, bakimKayitlari, cezalar, masraflar, yakitKayitlari, zimmetler]);
 
     const handleUpdate = async () => {
         setLoading(true);
@@ -283,9 +328,9 @@ export default function PersonelDetailClient({
     const openYakitEdit = (row: any) => {
         setYakitData({
             tarih: toDateTimeLocalInput(row.tarih),
-            litre: row.litre.toString(),
-            tutar: row.tutar.toString(),
-            km: row.km != null ? row.km.toString() : "",
+            litre: row.litre != null ? String(row.litre) : "",
+            tutar: row.tutar != null ? String(row.tutar) : "",
+            km: row.km != null ? String(row.km) : "",
             istasyon: row.istasyon || "",
             odemeYontemi: row.odemeYontemi,
             soforId: row.soforId || p.id,
@@ -316,7 +361,7 @@ export default function PersonelDetailClient({
     const openCezaEdit = (row: any) => {
         setCezaData({
             tarih: toDateTimeLocalInput(row.tarih),
-            tutar: row.tutar.toString(),
+            tutar: row.tutar != null ? String(row.tutar) : "",
             cezaMaddesi: row.cezaMaddesi || "",
             aciklama: row.aciklama || "",
             aracId: row.aracId || "",
@@ -350,7 +395,7 @@ export default function PersonelDetailClient({
             bildirimTarihi: toDateTimeLocalInput(row.bildirimTarihi),
             aciklama: row.aciklama || "",
             oncelik: row.oncelik,
-            km: (row.km || "").toString(),
+            km: row.km != null ? String(row.km) : "",
             aracId: row.aracId || "",
             soforId: row.soforId || p.id,
         });
@@ -383,8 +428,8 @@ export default function PersonelDetailClient({
             tip: row.tip,
             servisAdi: row.servisAdi || "",
             yapilanIslemler: row.yapilanIslemler || "",
-            tutar: row.tutar.toString(),
-            km: row.km.toString(),
+            tutar: row.tutar != null ? String(row.tutar) : "",
+            km: row.km != null ? String(row.km) : "",
             aracId: row.aracId || "",
             soforId: row.soforId || p.id,
         });
@@ -415,7 +460,7 @@ export default function PersonelDetailClient({
         setMasrafData({
             tarih: toDateTimeLocalInput(row.tarih),
             tur: row.tur,
-            tutar: row.tutar.toString(),
+            tutar: row.tutar != null ? String(row.tutar) : "",
             aciklama: row.aciklama || "",
             aracId: row.aracId || "",
         });
@@ -482,9 +527,6 @@ export default function PersonelDetailClient({
         setLoading(false);
     };
 
-    const formatDate = (date: string | Date | null | undefined) => 
-        date ? format(new Date(date), "dd.MM.yyyy", { locale: tr }) : '-';
-
     const getRoleBadge = (rol: string) => {
         switch (rol) {
             case 'ADMIN': return <Badge className="bg-red-100 text-red-800 border-0">Admin</Badge>;
@@ -545,14 +587,14 @@ export default function PersonelDetailClient({
                                 <div className="flex items-center gap-1.5">
                                     <Fuel size={16} />
                                     {personelYakitOrtalamasi !== null
-                                        ? `${personelYakitOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} ${personelYakitTuketimBirimiEtiketi}`
+                                        ? `${formatDecimal(personelYakitOrtalamasi, 1)} ${personelYakitTuketimBirimiEtiketi}`
                                         : "Yakıt ortalaması yok"}
                                     {personelYakitOrtalamasi !== null && personelYakitAralikSayisi > 0 ? (
                                         <span className="text-[11px] text-slate-400">({personelYakitAralikSayisi} aralık)</span>
                                     ) : null}
                                     {personelYakitReferansOrtalamasi !== null ? (
                                         <span className="text-[11px] text-slate-500">
-                                            Filo ort: {personelYakitReferansOrtalamasi.toLocaleString("tr-TR", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} {personelYakitTuketimBirimiEtiketi}
+                                            Filo ort: {formatDecimal(personelYakitReferansOrtalamasi, 1)} {personelYakitTuketimBirimiEtiketi}
                                         </span>
                                     ) : null}
                                     {personelOrtalamaUstuYakit ? (
@@ -649,7 +691,7 @@ export default function PersonelDetailClient({
                                                     searchPlaceholder="Plaka / araç ara..."
                                                     options={[
                                                         { value: "", label: "Araç seçiniz..." },
-                                                        ...atamayaUygunAraclar.map((arac) => ({
+                                                        ...uygunAraclar.map((arac) => ({
                                                             value: arac.id,
                                                             label: formatAracOptionLabel(arac),
                                                             searchText: [arac.plaka, arac.marka, arac.model].filter(Boolean).join(" "),
@@ -673,7 +715,7 @@ export default function PersonelDetailClient({
                                             </div>
                                         </div>
                                         <DialogFooter>
-                                            <button onClick={handleAracAta} disabled={loading || atamayaUygunAraclar.length === 0} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
+                                            <button onClick={handleAracAta} disabled={loading || uygunAraclar.length === 0} className="bg-indigo-600 text-white hover:bg-indigo-700 px-4 py-2 rounded-md text-sm font-medium disabled:opacity-50">
                                                 {loading ? "Atanıyor..." : "Araç Ata"}
                                             </button>
                                         </DialogFooter>
@@ -789,18 +831,18 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.zimmetler && p.zimmetler.length > 0 ? (
-                                        p.zimmetler.map((z: any) => (
+                                    {zimmetler.length > 0 ? (
+                                        zimmetler.map((z: any) => (
                                             <TableRow key={z.id}>
                                                 <TableCell 
                                                     className="font-bold text-indigo-600 cursor-pointer uppercase"
-                                                    onClick={() => router.push(scopedHref(`/dashboard/araclar/${z.arac.id}`))}
+                                                    onClick={() => z.arac?.id && router.push(scopedHref(`/dashboard/araclar/${z.arac.id}`))}
                                                 >
                                                     <div className="flex flex-col">
-                                                        <AracLink aracId={z.arac.id} className="hover:underline">
-                                                            {z.arac.plaka}
+                                                        <AracLink aracId={z.arac?.id} className="hover:underline">
+                                                            {z.arac?.plaka || "-"}
                                                         </AracLink>
-                                                        {canAccessAllCompanies && z.arac.sirket?.ad ? (
+                                                        {canAccessAllCompanies && z.arac?.sirket?.ad ? (
                                                             <span className="text-[11px] font-semibold text-indigo-500 normal-case">{z.arac.sirket.ad}</span>
                                                         ) : null}
                                                     </div>
@@ -808,7 +850,7 @@ export default function PersonelDetailClient({
                                                 <TableCell>{formatDate(z.baslangic)}</TableCell>
                                                 <TableCell>{z.bitis ? formatDate(z.bitis) : <Badge variant="outline" className="text-indigo-600 border-indigo-200 bg-indigo-50">Aktif</Badge>}</TableCell>
                                                 <TableCell className="text-right font-mono text-xs">
-                                                    {z.baslangicKm.toLocaleString()} km / {z.bitisKm ? `${z.bitisKm.toLocaleString()} km` : '-'}
+                                                    {formatKm(z.baslangicKm)} / {z.bitisKm != null ? formatKm(z.bitisKm) : "-"}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
@@ -825,7 +867,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.zimmetler && p.zimmetler.length > 0 ? (
+                                {zimmetler.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
@@ -851,8 +893,8 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.cezalar && p.cezalar.length > 0 ? (
-                                        p.cezalar.map((c: any) => (
+                                    {cezalar.length > 0 ? (
+                                        cezalar.map((c: any) => (
                                             <TableRow key={c.id}>
                                                 <TableCell>{formatDate(c.tarih)}</TableCell>
                                                 <TableCell className="font-mono font-bold">
@@ -866,7 +908,7 @@ export default function PersonelDetailClient({
                                                     </div>
                                                 </TableCell>
                                                 <TableCell className="text-slate-600">{c.cezaMaddesi || c.aciklama || '-'}</TableCell>
-                                                <TableCell className="text-right font-bold text-rose-600">₺{c.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right font-bold text-rose-600">{formatCurrency(c.tutar)}</TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
                                                         <RowActionButton variant="edit" onClick={() => openCezaEdit(c)} disabled={actionLoading} />
@@ -883,7 +925,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.cezalar && p.cezalar.length > 0 ? (
+                                {cezalar.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
@@ -911,8 +953,8 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.arizalar && p.arizalar.length > 0 ? (
-                                        p.arizalar.map((a: any) => (
+                                    {arizalar.length > 0 ? (
+                                        arizalar.map((a: any) => (
                                             <TableRow key={a.id}>
                                                 <TableCell>{formatDate(a.bildirimTarihi)}</TableCell>
                                                 <TableCell className="font-mono font-bold">
@@ -949,7 +991,7 @@ export default function PersonelDetailClient({
                                                     {a.aciklama || "-"}
                                                 </TableCell>
                                                 <TableCell className="text-right font-bold text-slate-900">
-                                                    ₺{Number(a.tutar || 0).toLocaleString("tr-TR")}
+                                                    {formatCurrency(a.tutar)}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
@@ -967,7 +1009,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.arizalar && p.arizalar.length > 0 ? (
+                                {arizalar.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={5} className="font-bold text-slate-900">Toplam</TableCell>
@@ -996,8 +1038,8 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.bakimKayitlari && p.bakimKayitlari.length > 0 ? (
-                                        p.bakimKayitlari.map((b: any) => (
+                                    {bakimKayitlari.length > 0 ? (
+                                        bakimKayitlari.map((b: any) => (
                                             <TableRow key={b.id}>
                                                 <TableCell>{formatDate(b.bakimTarihi)}</TableCell>
                                                 <TableCell className="font-mono font-bold">
@@ -1015,7 +1057,7 @@ export default function PersonelDetailClient({
                                                 <TableCell className="text-slate-700 max-w-[220px] truncate" title={b.degisenParca || ""}>{b.degisenParca || "-"}</TableCell>
                                                 <TableCell className="text-slate-700">{b.islemYapanFirma || b.servisAdi || "-"}</TableCell>
                                                 <TableCell className="text-right font-bold text-slate-900">
-                                                    ₺{Number(b.tutar || 0).toLocaleString("tr-TR")}
+                                                    {formatCurrency(b.tutar)}
                                                 </TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
@@ -1033,7 +1075,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.bakimKayitlari && p.bakimKayitlari.length > 0 ? (
+                                {bakimKayitlari.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={6} className="font-bold text-slate-900">Toplam</TableCell>
@@ -1061,8 +1103,8 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {(p.yakitKayitlari && p.yakitKayitlari.length > 0) ? (
-                                        p.yakitKayitlari.map((y: any) => (
+                                    {yakitKayitlari.length > 0 ? (
+                                        yakitKayitlari.map((y: any) => (
                                             <TableRow key={y.id}>
                                                 <TableCell>{formatDate(y.tarih)}</TableCell>
                                                 <TableCell className="font-mono font-bold">
@@ -1076,9 +1118,9 @@ export default function PersonelDetailClient({
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>{y.istasyon || '-'}</TableCell>
-                                                <TableCell className="text-right font-mono text-xs">{y.km.toLocaleString()} km</TableCell>
-                                                <TableCell>{y.litre} L</TableCell>
-                                                <TableCell className="text-right font-bold">₺{y.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right font-mono text-xs">{formatKm(y.km)}</TableCell>
+                                                <TableCell>{formatLitres(y.litre)}</TableCell>
+                                                <TableCell className="text-right font-bold">{formatCurrency(y.tutar)}</TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
                                                         <RowActionButton variant="edit" onClick={() => openYakitEdit(y)} disabled={actionLoading} />
@@ -1095,7 +1137,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.yakitKayitlari && p.yakitKayitlari.length > 0 ? (
+                                {yakitKayitlari.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>
@@ -1123,13 +1165,13 @@ export default function PersonelDetailClient({
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {p.arac?.masraflar && p.arac.masraflar.length > 0 ? (
-                                        p.arac.masraflar.map((m: any) => (
+                                    {masraflar.length > 0 ? (
+                                        masraflar.map((m: any) => (
                                             <TableRow key={m.id}>
                                                 <TableCell>{formatDate(m.tarih)}</TableCell>
                                                 <TableCell><Badge variant="outline">{m.tur}</Badge></TableCell>
                                                 <TableCell className="text-slate-600">{m.aciklama || '-'}</TableCell>
-                                                <TableCell className="text-right font-bold">₺{m.tutar.toLocaleString()}</TableCell>
+                                                <TableCell className="text-right font-bold">{formatCurrency(m.tutar)}</TableCell>
                                                 <TableCell className="text-right">
                                                     <div className="flex items-center justify-end gap-1">
                                                         <RowActionButton variant="edit" onClick={() => openMasrafEdit(m)} disabled={actionLoading} />
@@ -1146,7 +1188,7 @@ export default function PersonelDetailClient({
                                         </TableRow>
                                     )}
                                 </TableBody>
-                                {p.arac?.masraflar && p.arac.masraflar.length > 0 ? (
+                                {masraflar.length > 0 ? (
                                     <TableFooter className="bg-slate-50/90">
                                         <TableRow>
                                             <TableCell colSpan={3} className="font-bold text-slate-900">Toplam</TableCell>

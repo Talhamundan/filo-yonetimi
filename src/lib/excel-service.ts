@@ -1484,6 +1484,14 @@ function parseStringListCellValue(value: unknown) {
     )];
 }
 
+const STRING_LIST_FIELDS = new Set(["sirket.santiyeler", "Sirket.santiyeler"]);
+
+function isStringListField(field: PrismaField, modelName?: string) {
+    if ((field as PrismaField & { isList?: boolean }).isList && field.type === "String") return true;
+    if (!modelName || field.type !== "String") return false;
+    return STRING_LIST_FIELDS.has(`${modelName}.${field.name}`);
+}
+
 export function excelDateToJSDate(value: number) {
     const excelEpochUtc = Date.UTC(1899, 11, 30);
     return new Date(excelEpochUtc + Math.round(value * 86400 * 1000));
@@ -1820,14 +1828,14 @@ export function validateRequiredFields(fields: PrismaField[], parsedRow: Record<
     }
 }
 
-export function buildCreateData(fields: PrismaField[], parsedRow: Record<string, unknown>) {
+export function buildCreateData(fields: PrismaField[], parsedRow: Record<string, unknown>, modelName?: string) {
     const data: Record<string, unknown> = {};
 
     for (const field of fields) {
         if (field.isUpdatedAt) continue;
 
         const rawValue = parsedRow[field.name];
-        const value = (field as PrismaField & { isList?: boolean }).isList && field.type === "String"
+        const value = isStringListField(field, modelName)
             ? parseStringListCellValue(rawValue)
             : rawValue;
         if (value === undefined) {
@@ -1846,14 +1854,15 @@ export function buildCreateData(fields: PrismaField[], parsedRow: Record<string,
 export function buildUpdateData(
     fields: PrismaField[],
     parsedRow: Record<string, unknown>,
-    uniqueFieldName?: string
+    uniqueFieldName?: string,
+    modelName?: string
 ) {
     const data: Record<string, unknown> = {};
 
     for (const field of fields) {
         if (field.isId || field.isUpdatedAt || field.name === uniqueFieldName) continue;
         const rawValue = parsedRow[field.name];
-        const value = (field as PrismaField & { isList?: boolean }).isList && field.type === "String"
+        const value = isStringListField(field, modelName)
             ? parseStringListCellValue(rawValue)
             : rawValue;
         if (value === undefined) continue;
@@ -3561,8 +3570,10 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                 }
             }
 
-            const createData = config.prismaModel === "yakit" ? applyYakitRelationWritesForCreate(buildCreateData(fields, parsedRow)) : buildCreateData(fields, parsedRow);
-            const updateData = config.prismaModel === "yakit" ? applyYakitRelationWritesForUpdate(buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName), parsedRow) : buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName);
+            const baseCreateData = buildCreateData(fields, parsedRow, modelMeta.name);
+            const baseUpdateData = buildUpdateData(fields, parsedRow, whereUnique?.uniqueFieldName, modelMeta.name);
+            const createData = config.prismaModel === "yakit" ? applyYakitRelationWritesForCreate(baseCreateData) : baseCreateData;
+            const updateData = config.prismaModel === "yakit" ? applyYakitRelationWritesForUpdate(baseUpdateData, parsedRow) : baseUpdateData;
 
             if (config.prismaModel === "bakim") {
                 const prunedC = pruneDataByExistingColumns(createData, bakimExistingColumns);
