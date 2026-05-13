@@ -740,7 +740,9 @@ export async function POST(req: NextRequest) {
                 });
 
                 if (records.length > 0) {
-                    results[entityKey] = await importEntity(entityKey, records, tx);
+                    results[entityKey] = await importEntity(entityKey, records, tx, {
+                        allowMixedExternalRows: true,
+                    });
                 }
             }
             const hesapRows = readSheet(workbook, CUSTOM_SHEETS.hesap);

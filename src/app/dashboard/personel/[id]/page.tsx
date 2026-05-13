@@ -31,9 +31,9 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                 arac: {
                     include: {
                         sirket: true,
-                        yakitlar: { orderBy: { tarih: 'desc' }, take: 20 },
-                        bakimlar: { orderBy: { bakimTarihi: 'desc' }, take: 10 },
-                        masraflar: { orderBy: { tarih: 'desc' }, take: 10 }
+                        yakitlar: { orderBy: { tarih: 'desc' } },
+                        bakimlar: { orderBy: { bakimTarihi: 'desc' } },
+                        masraflar: { orderBy: { tarih: 'desc' } }
                     }
                 },
                 zimmetler: {
@@ -57,9 +57,9 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                     arac: {
                         include: {
                             sirket: true,
-                            yakitlar: { orderBy: { tarih: 'desc' }, take: 20 },
-                            bakimlar: { orderBy: { bakimTarihi: 'desc' }, take: 10 },
-                            masraflar: { orderBy: { tarih: 'desc' }, take: 10 }
+                            yakitlar: { orderBy: { tarih: 'desc' } },
+                            bakimlar: { orderBy: { bakimTarihi: 'desc' } },
+                            masraflar: { orderBy: { tarih: 'desc' } }
                         }
                     },
                     zimmetler: {
@@ -122,7 +122,6 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                     },
                 },
                 orderBy: [{ durum: "asc" }, { bildirimTarihi: "desc" }],
-                take: 100,
             })
             .catch((error: any) => {
                 console.warn("Personel arıza kayıtları alınamadı.", error);
@@ -148,7 +147,6 @@ export default async function PersonelDetailPage(props: { params: Promise<{ id: 
                     },
                 },
                 orderBy: { tarih: "desc" },
-                take: 100,
             })
             .catch((error: any) => {
                 console.warn("Personel yakıt kayıtları alınamadı.", error);

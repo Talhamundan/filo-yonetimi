@@ -129,6 +129,7 @@ export default function Sidebar({
     const searchParams = useSearchParams()
     const effectiveCollapsed = mobile ? false : collapsed
     const canManageCompanies = isAdmin || (role === "YETKILI" && canAccessAllCompanies)
+    const isTechnicalPersonnel = role === "TEKNIK"
     const scopedQuery = React.useMemo(() => {
         const selectedSirketId = searchParams.get("sirket")
         const selectedYil = searchParams.get("yil")
@@ -179,25 +180,29 @@ export default function Sidebar({
                     <NavItem href="/dashboard" scopedHref={buildScopedHref("/dashboard")} icon={LayoutDashboard} label="Dashboard" active={isActivePath("/dashboard")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                 </nav>
 
-                {/* Organization Management */}
-                <SectionTitle title="Sistem Yönetimi" collapsed={effectiveCollapsed} />
-                <nav className="flex flex-col gap-0.5 mb-4">
-                    {canManageCompanies ? (
-                        <>
+                {canManageCompanies ? (
+                    <>
+                        {/* Organization Management */}
+                        <SectionTitle title="Sistem Yönetimi" collapsed={effectiveCollapsed} />
+                        <nav className="flex flex-col gap-0.5 mb-4">
                             <NavItem href="/dashboard/sirketler" scopedHref={buildScopedHref("/dashboard/sirketler")} icon={Building2} label="Şirket Yönetimi" active={isActivePath("/dashboard/sirketler")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                             <NavItem href="/dashboard/taseronlar" scopedHref={buildScopedHref("/dashboard/taseronlar")} icon={Handshake} label="Taşeron Yönetimi" active={isActivePath("/dashboard/taseronlar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
                             <NavItem href="/dashboard/kiraliklar" scopedHref={buildScopedHref("/dashboard/kiraliklar")} icon={Truck} label="Kiralıklar" active={isActivePath("/dashboard/kiraliklar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                        </>
-                    ) : null}
-                </nav>
+                        </nav>
+                    </>
+                ) : null}
 
-                {/* Fleet Management */}
-                <SectionTitle title="Filo Yönetimi" collapsed={effectiveCollapsed} />
-                <nav className="flex flex-col gap-0.5 mb-4">
-                    <NavItem href="/dashboard/araclar" scopedHref={buildScopedHref("/dashboard/araclar")} icon={Car} label="Araçlar" active={isActivePath("/dashboard/araclar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/personel" scopedHref={buildScopedHref("/dashboard/personel")} icon={Users} label="Personeller" active={isActivePath("/dashboard/personel")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                    <NavItem href="/dashboard/zimmetler" scopedHref={buildScopedHref("/dashboard/zimmetler")} icon={ClipboardList} label="Zimmet Kayıtları" active={isActivePath("/dashboard/zimmetler")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
-                </nav>
+                {!isTechnicalPersonnel ? (
+                    <>
+                        {/* Fleet Management */}
+                        <SectionTitle title="Filo Yönetimi" collapsed={effectiveCollapsed} />
+                        <nav className="flex flex-col gap-0.5 mb-4">
+                            <NavItem href="/dashboard/araclar" scopedHref={buildScopedHref("/dashboard/araclar")} icon={Car} label="Araçlar" active={isActivePath("/dashboard/araclar")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                            <NavItem href="/dashboard/personel" scopedHref={buildScopedHref("/dashboard/personel")} icon={Users} label="Personeller" active={isActivePath("/dashboard/personel")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                            <NavItem href="/dashboard/zimmetler" scopedHref={buildScopedHref("/dashboard/zimmetler")} icon={ClipboardList} label="Zimmet Kayıtları" active={isActivePath("/dashboard/zimmetler")} collapsed={effectiveCollapsed} onNavigate={mobile ? onMobileClose : undefined} />
+                        </nav>
+                    </>
+                ) : null}
 
                 {/* Operations */}
                 <SectionTitle title="Operasyonlar" collapsed={effectiveCollapsed} />

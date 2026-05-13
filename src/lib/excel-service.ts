@@ -58,6 +58,7 @@ export type ExcelModelProfile = {
 export type ImportEntityOptions = {
     selectedDisFirmaId?: string | null;
     selectedExternalMode?: ExternalVendorMode | null;
+    allowMixedExternalRows?: boolean;
 };
 
 export type ExportEntityOptions = {
@@ -3240,6 +3241,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
     const profileKey = getExcelProfileKey(config.prismaModel, entityKey);
     const importScope = getEntityImportScope(entityKey, options);
     const forcedDisFirmaId = normalizeOptionalId(options?.selectedDisFirmaId);
+    const allowMixedExternalRows = Boolean(options?.allowMixedExternalRows);
 
     const modelMeta = getModelMeta(config.prismaModel);
     if (!modelMeta) throw new Error("Model metadata bulunamadi.");
@@ -3332,6 +3334,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
             );
             if (
                 importScope.forceInternal &&
+                !allowMixedExternalRows &&
                 (entityKey === "arac" || entityKey === "personel") &&
                 (normalizeLookupString(parsedRow.disFirmaId) || normalizeDisFirmaLookupName(rawExternalVendor))
             ) {
@@ -3402,7 +3405,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
             }
 
             if (config.prismaModel === "arac" || config.prismaModel === "kullanici") {
-                if (importScope.forceInternal) {
+                if (importScope.forceInternal && !allowMixedExternalRows) {
                     parsedRow.disFirmaId = null;
                 } else {
                     if (forcedDisFirmaId) {

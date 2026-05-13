@@ -1,5 +1,5 @@
 import { ActivityActionType, ActivityEntityType } from "@prisma/client";
-import { getCurrentUserRole, getModelFilterWithOptions, getSirketListFilter } from "@/lib/auth-utils";
+import { getCurrentUserRole, getModelFilterWithOptions } from "@/lib/auth-utils";
 import { getActivityLogs } from "@/lib/activity-log";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import prisma from "@/lib/prisma";
@@ -26,12 +26,17 @@ function parseDateValue(value: string | null, endOfDay = false) {
     return Number.isNaN(date.getTime()) ? null : date;
 }
 
+function getMetadataUsername(metadata: unknown) {
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return "";
+    const value = (metadata as Record<string, unknown>).username;
+    return typeof value === "string" ? value.trim().toLocaleLowerCase("tr-TR") : "";
+}
+
 export default async function AktiviteGecmisiPage(props: { searchParams?: Promise<DashboardSearchParams> }) {
-    const [role, selectedSirketId, resolvedSearchParams, sirketFilter] = await Promise.all([
+    const [role, selectedSirketId, resolvedSearchParams] = await Promise.all([
         getCurrentUserRole(),
         getSelectedSirketId(props.searchParams),
         props.searchParams ? props.searchParams : Promise.resolve({} as DashboardSearchParams),
-        getSirketListFilter(),
     ]);
 
     if (role !== "ADMIN" && role !== "YETKILI") {
@@ -69,19 +74,73 @@ export default async function AktiviteGecmisiPage(props: { searchParams?: Promis
         pageSize: 30,
     });
 
-    const sirketler = await prisma.sirket.findMany({
-        where: sirketFilter as never,
-        select: { id: true, ad: true },
-        orderBy: { ad: "asc" },
+    const userIds = Array.from(
+        new Set(
+            result.rows
+                .map((row) => (typeof row.userId === "string" ? row.userId.trim() : ""))
+                .filter((id) => id.length > 0 && id !== "0000")
+        )
+    );
+    const usernames = Array.from(
+        new Set(
+            result.rows
+                .map((row) => getMetadataUsername(row.metadata))
+                .filter((username) => username.length > 0)
+        )
+    );
+    const kullanicilar = userIds.length > 0 ? await prisma.kullanici.findMany({
+        where: { id: { in: userIds } },
+        select: { id: true, ad: true, soyad: true },
+    }) : [];
+    const hesaplar = userIds.length > 0 || usernames.length > 0 ? await prisma.hesap.findMany({
+        where: {
+            OR: [
+                ...(userIds.length > 0 ? [{ id: { in: userIds } }, { personelId: { in: userIds } }] : []),
+                ...(usernames.length > 0 ? [{ kullaniciAdi: { in: usernames } }] : []),
+            ],
+        },
+        select: {
+            id: true,
+            personelId: true,
+            kullaniciAdi: true,
+            personel: { select: { ad: true, soyad: true } },
+        },
+    }) : [];
+    const getPersonelName = (personel: { ad?: string | null; soyad?: string | null } | null | undefined) =>
+        `${personel?.ad || ""} ${personel?.soyad || ""}`.trim();
+    const userNameById = new Map(
+        kullanicilar.map((user) => [user.id, `${user.ad || ""} ${user.soyad || ""}`.trim()])
+    );
+    const userNameByHesapId = new Map(
+        hesaplar.map((hesap) => [hesap.id, getPersonelName(hesap.personel) || hesap.kullaniciAdi])
+    );
+    const userNameByPersonelId = new Map(
+        hesaplar.map((hesap) => [hesap.personelId, getPersonelName(hesap.personel) || hesap.kullaniciAdi])
+    );
+    const userNameByUsername = new Map(
+        hesaplar.map((hesap) => [hesap.kullaniciAdi.trim().toLocaleLowerCase("tr-TR"), getPersonelName(hesap.personel) || hesap.kullaniciAdi])
+    );
+    const rows = result.rows.map((row) => {
+        const userId = typeof row.userId === "string" ? row.userId.trim() : "";
+        const username = getMetadataUsername(row.metadata);
+        return {
+            ...row,
+            userDisplayName: userId === "0000"
+                ? "Sistem"
+                : userId
+                    ? userNameById.get(userId) || userNameByPersonelId.get(userId) || userNameByHesapId.get(userId) || (username ? userNameByUsername.get(username) : null) || userId
+                    : username
+                        ? userNameByUsername.get(username) || username
+                        : "-",
+        };
     });
 
     return (
         <ActivityLogClient
-            rows={result.rows}
+            rows={rows}
             total={result.total}
             page={result.page}
             totalPages={result.totalPages}
-            sirketler={sirketler}
         />
     );
 }

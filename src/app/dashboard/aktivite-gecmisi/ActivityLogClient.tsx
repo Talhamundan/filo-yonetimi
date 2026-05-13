@@ -7,6 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
+type ActivityLogRow = ActivityLog & {
+    userDisplayName?: string;
+};
+
 const ACTION_LABELS: Record<ActivityActionType, string> = {
     CREATE: "Oluşturma",
     UPDATE: "Güncelleme",
@@ -36,13 +40,11 @@ export default function ActivityLogClient({
     total,
     page,
     totalPages,
-    sirketler,
 }: {
-    rows: ActivityLog[];
+    rows: ActivityLogRow[];
     total: number;
     page: number;
     totalPages: number;
-    sirketler: Array<{ id: string; ad: string }>;
 }) {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -50,7 +52,6 @@ export default function ActivityLogClient({
     const q = searchParams.get("q") || "";
     const action = searchParams.get("action") || "";
     const entity = searchParams.get("entity") || "";
-    const sirket = searchParams.get("sirket") || "";
     const from = searchParams.get("from") || "";
     const to = searchParams.get("to") || "";
 
@@ -74,7 +75,6 @@ export default function ActivityLogClient({
         params.delete("q");
         params.delete("action");
         params.delete("entity");
-        params.delete("sirket");
         params.delete("from");
         params.delete("to");
         params.delete("page");
@@ -89,7 +89,7 @@ export default function ActivityLogClient({
             </div>
 
             <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-7 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-6 gap-3">
                     <div className="md:col-span-2 relative">
                         <Search className="h-4 w-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
                         <Input
@@ -123,18 +123,6 @@ export default function ActivityLogClient({
                             </option>
                         ))}
                     </select>
-                    <select
-                        className="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm"
-                        value={sirket}
-                        onChange={(e) => setParam("sirket", e.target.value)}
-                    >
-                        <option value="">Tüm Şirketler</option>
-                        {sirketler.map((item) => (
-                            <option key={item.id} value={item.id}>
-                                {item.ad}
-                            </option>
-                        ))}
-                    </select>
                     <Input type="date" value={from} onChange={(e) => setParam("from", e.target.value)} />
                     <Input type="date" value={to} onChange={(e) => setParam("to", e.target.value)} />
                 </div>
@@ -156,7 +144,6 @@ export default function ActivityLogClient({
                             <th className="text-left p-3 font-semibold text-slate-600">Varlık</th>
                             <th className="text-left p-3 font-semibold text-slate-600">Özet</th>
                             <th className="text-left p-3 font-semibold text-slate-600">Kullanıcı</th>
-                            <th className="text-left p-3 font-semibold text-slate-600">Şirket</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -183,15 +170,12 @@ export default function ActivityLogClient({
                                             </details>
                                         ) : null}
                                     </td>
-                                    <td className="p-3 text-slate-500 font-mono text-xs">{row.userId || "-"}</td>
-                                    <td className="p-3 text-slate-500 text-xs">
-                                        {row.companyId ? sirketler.find((s) => s.id === row.companyId)?.ad || row.companyId : "-"}
-                                    </td>
+                                    <td className="p-3 text-slate-500 text-xs">{row.userDisplayName || "-"}</td>
                                 </tr>
                             ))
                         ) : (
                             <tr>
-                                <td colSpan={6} className="p-12 text-center text-slate-500">
+                                <td colSpan={5} className="p-12 text-center text-slate-500">
                                     Filtrelere uygun aktivite kaydı bulunamadı.
                                 </td>
                             </tr>

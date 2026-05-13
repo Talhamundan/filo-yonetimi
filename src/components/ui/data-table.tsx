@@ -133,12 +133,6 @@ function getFilterPlaceholder(header: unknown) {
     return "Filtrele..."
 }
 
-function parsePageIndexFromSearchParam(value: string | null) {
-    const pageNumber = Number(value)
-    if (!Number.isInteger(pageNumber) || pageNumber < 1) return 0
-    return pageNumber - 1
-}
-
 function normalizeColumnId(value: string) {
     return value
         .trim()
@@ -261,11 +255,6 @@ export function DataTable<TData, TValue>({
     const pathname = usePathname()
     const router = useRouter()
     const searchParams = useSearchParams()
-    const pageParamKey = React.useMemo(() => (excelEntity ? `${excelEntity}Page` : "tablePage"), [excelEntity])
-    const urlPageIndex = React.useMemo(
-        () => parsePageIndexFromSearchParam(searchParams.get(pageParamKey)),
-        [pageParamKey, searchParams]
-    )
     const fileInputRef = React.useRef<HTMLInputElement>(null)
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>([])
@@ -273,9 +262,10 @@ export function DataTable<TData, TValue>({
     const [columnOrder, setColumnOrder] = React.useState<ColumnOrderState>([])
     const [pinnedColumnIds, setPinnedColumnIds] = React.useState<string[]>([])
     const [rowSelection, setRowSelection] = React.useState({})
+    const allRowsPageSize = Math.max(data.length, 1)
     const [pagination, setPagination] = React.useState<PaginationState>({
-        pageIndex: urlPageIndex,
-        pageSize: 10,
+        pageIndex: 0,
+        pageSize: allRowsPageSize,
     })
     const [showColumnFilters, setShowColumnFilters] = React.useState(false)
     const [isExporting, setIsExporting] = React.useState(false)
@@ -400,10 +390,6 @@ export function DataTable<TData, TValue>({
     const statusColumnId = allLeafColumns.find((column) => !isNonDataColumnId(column.id) && isStatusColumn(column))?.id || null
     const filteredCount = table.getFilteredRowModel().rows.length
     const totalCount = data.length
-    const pageIndex = table.getState().pagination.pageIndex
-    const pageSize = table.getState().pagination.pageSize
-    const pageStart = filteredCount === 0 ? 0 : pageIndex * pageSize + 1
-    const pageEnd = Math.min((pageIndex + 1) * pageSize, filteredCount)
     const hasActiveFilter = columnFilters.some((filter) => String(filter.value ?? "").trim().length > 0)
     const hasAnyFilterableColumn = table.getAllLeafColumns().some((column) => column.getCanFilter())
     const hideableColumns = React.useMemo(
@@ -522,42 +508,15 @@ export function DataTable<TData, TValue>({
 
     React.useEffect(() => {
         setPagination((prev) => {
-            if (prev.pageIndex === urlPageIndex) return prev
-            return { ...prev, pageIndex: urlPageIndex }
+            if (prev.pageIndex === 0 && prev.pageSize === allRowsPageSize) return prev
+            return { pageIndex: 0, pageSize: allRowsPageSize }
         })
-    }, [urlPageIndex])
+    }, [allRowsPageSize])
 
     React.useEffect(() => {
-        // Filtre değiştiğinde mevcut sayfada kalmak boş ekran oluşturabiliyor (örn. ?...Page=4).
-        // Bu yüzden filtreleme anında ilk sayfaya dön.
+        // Listelerde sayfalama kullanılmıyor; filtre değişse de tüm eşleşen satırlar görünür kalmalı.
         setPagination((prev) => (prev.pageIndex === 0 ? prev : { ...prev, pageIndex: 0 }))
     }, [columnFilters])
-
-    React.useEffect(() => {
-        const pageCount = table.getPageCount()
-        if (pageCount <= 0) return
-        if (pagination.pageIndex < pageCount) return
-        setPagination((prev) => ({
-            ...prev,
-            pageIndex: Math.max(pageCount - 1, 0),
-        }))
-    }, [pagination.pageIndex, table, filteredCount])
-
-    React.useEffect(() => {
-        const nextPageNumber = pagination.pageIndex + 1
-        const currentPageNumber = Number(searchParams.get(pageParamKey) || "1")
-        if (currentPageNumber === nextPageNumber) return
-
-        const params = new URLSearchParams(searchParams.toString())
-        if (nextPageNumber <= 1) {
-            params.delete(pageParamKey)
-        } else {
-            params.set(pageParamKey, String(nextPageNumber))
-        }
-
-        const query = params.toString()
-        router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false })
-    }, [pageParamKey, pagination.pageIndex, pathname, router, searchParams])
 
     React.useEffect(() => {
         if (typeof window === "undefined") return
@@ -1054,12 +1013,8 @@ export function DataTable<TData, TValue>({
             const updatedCount = Number(payload?.updated ?? 0)
             const skippedCount = Number(payload?.skipped ?? 0)
             const totalCount = Number(payload?.total ?? 0)
-            const paginationHint =
-                excelEntity === "arac" && createdCount + updatedCount > 10
-                    ? " • Not: Araç listesi sayfalıdır; altta Sonraki ile devam edebilirsiniz."
-                    : ""
             toast.success("Excel içe aktarma tamamlandı.", {
-                description: `Toplam ${totalCount} satır işlendi • ${createdCount} eklendi • ${updatedCount} güncellendi • ${skippedCount} atlandı${paginationHint}`,
+                description: `Toplam ${totalCount} satır işlendi • ${createdCount} eklendi • ${updatedCount} güncellendi • ${skippedCount} atlandı`,
             })
             router.refresh()
         } catch (error) {
@@ -1488,11 +1443,6 @@ export function DataTable<TData, TValue>({
                 <div className="text-[11px] text-slate-500">
                     Toplam adet: <span className="font-semibold text-slate-700">{filteredCount}</span>
                     {hasActiveFilter ? <span className="ml-1 text-slate-400">/ {totalCount} kayıt</span> : null}
-                    {table.getPageCount() > 1 ? (
-                        <span className="ml-2 text-slate-400">
-                            ({pageStart}-{pageEnd} arası)
-                        </span>
-                    ) : null}
                 </div>
                 {table.getPageCount() > 1 ? (
                     <div className="flex items-center space-x-2">
