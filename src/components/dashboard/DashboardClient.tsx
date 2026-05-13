@@ -89,7 +89,7 @@ const COST_CATEGORY_LEGEND = [
     { key: "bakim", label: "Servis", color: "#F59E0B" },
     { key: "muayene", label: "Muayene", color: "#0EA5E9" },
     { key: "ceza", label: "Ceza", color: "#EF4444" },
-    { key: "kasko", label: "Kasko", color: "#6366F1" },
+    { key: "kasko", label: "Kasko", color: "#059669" },
     { key: "trafik", label: "Trafik", color: "#06B6D4" },
     { key: "diger", label: "Diğer", color: "#94A3B8" },
 ] as const;

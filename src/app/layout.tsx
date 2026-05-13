@@ -16,8 +16,8 @@ const montserrat = Montserrat({
 });
 
 export const metadata: Metadata = {
-  title: "Bera Filo - Filo Yönetim Sistemi",
-  description: "Filo Yönetim Sistemi",
+  title: "BeraERP",
+  description: "BeraERP Yönetim Sistemi",
   manifest: "/manifest.json",
   icons: {
     icon: "/icon.png?v=2",

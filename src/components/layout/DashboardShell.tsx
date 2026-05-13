@@ -220,9 +220,9 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                             </div>
 
                              <Link href={dashboardHref} className="mx-auto flex items-center gap-3 shrink-0">
-                                <img src="/icon.png" alt="Bera Filo" className="h-9 md:h-11 w-auto rounded-lg shadow-sm" />
+                                <img src="/icon.png" alt="BeraERP" className="h-9 md:h-11 w-auto rounded-lg shadow-sm" />
                                 <h1 className="text-[2rem] font-bold tracking-tight text-slate-900 md:text-[2.15rem]">
-                                    Bera <span className="text-[#6366F1]">Filo</span>
+                                    Bera<span className="text-emerald-600">ERP</span>
                                 </h1>
                             </Link>
 
@@ -330,9 +330,9 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                 </button>
 
                                 <Link href={dashboardHref} className="flex min-w-0 items-center gap-2">
-                                    <img src="/icon.png" alt="Bera Filo" className="h-7 w-7 rounded-md border border-slate-200 bg-white p-1 shadow-sm" />
+                                    <img src="/icon.png" alt="BeraERP" className="h-7 w-7 rounded-md border border-slate-200 bg-white p-1 shadow-sm" />
                                     <h1 className="truncate text-[1.05rem] font-bold tracking-tight text-slate-900">
-                                        Bera <span className="text-[#6366F1]">Filo</span>
+                                        Bera<span className="text-emerald-600">ERP</span>
                                     </h1>
                                 </Link>
 
