@@ -244,7 +244,7 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
         const res = await updateSigorta(editRow.id, { ...formData, tutar: formData.tutar ? parseFloat(formData.tutar) : undefined });
         if (res.success) {
             setEditRow(null);
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                 description: (res as any).message || "Sigorta poliçesi güncellendi.",
             });
             router.refresh();
@@ -259,7 +259,7 @@ export default function TrafikSigortasiClient({ initialSigortalar, araclar }: { 
         if (!confirmed) return;
         const res = await deleteSigorta(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Kayıt Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Kayıt Silindi", {
                 description: (res as any).message || "Trafik sigortası kaydı kaldırıldı.",
             });
             router.refresh();

@@ -483,7 +483,7 @@ export default function AraclarClient({
             const res = await updateArac(editRow.id, { ...formData, yil, guncelKm });
             if (res?.success) {
                 setEditRow(null);
-                toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+                toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                     description: (res as any).message || "Araç bilgileri başarıyla güncellendi.",
                 });
                 if (res.info) {
@@ -528,7 +528,7 @@ export default function AraclarClient({
         if (!confirmed) return;
         const res = await deleteArac(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Araç Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Araç Silindi", {
                 description: (res as any).message || "Araç kaydı sistemden kalıcı olarak kaldırıldı.",
             });
             router.refresh();

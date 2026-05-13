@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma"
 import { canAccessAllCompanies, getAracUsageFilter, getCurrentSirketId, getCurrentUserRole } from "@/lib/auth-utils"
 import DashboardShell from "@/components/layout/DashboardShell"
 import { canRoleAssignIndependentRecords } from "@/lib/policy"
+import { getPendingAdminApprovalRequestCount } from "@/lib/admin-approval"
 
 export default async function DashboardLayout({
     children,
@@ -68,6 +69,13 @@ async function getScopeOptions() {
         getCurrentSirketId(),
         getQuickVehicleSearchItems(),
     ]);
+    const pendingAdminApprovalCount =
+        currentUserRole === "ADMIN"
+            ? await getPendingAdminApprovalRequestCount().catch((error) => {
+                console.warn("Bekleyen admin onay sayisi getirilemedi.", error);
+                return 0;
+            })
+            : 0;
     const canAssignIndependentRecords = canRoleAssignIndependentRecords(currentUserRole, currentSirketId);
     const isIndependentUser = !currentSirketId;
     let currentCompany: { id: string; ad: string } | null = null;
@@ -109,6 +117,7 @@ async function getScopeOptions() {
             sirketler,
             userName,
             userCompanyName,
+            pendingAdminApprovalCount,
             quickVehicleSearch,
         };
     }
@@ -133,6 +142,7 @@ async function getScopeOptions() {
         sirketler,
         userName,
         userCompanyName,
+        pendingAdminApprovalCount,
         quickVehicleSearch,
     };
 }

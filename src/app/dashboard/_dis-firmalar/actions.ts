@@ -68,6 +68,9 @@ export async function updateDisFirma(id: string, data: DisFirmaFormValues) {
         const actor = await assertVendorManager();
         const parsed = disFirmaFormSchema.parse(data);
         const updateData = normalizePayload(parsed);
+        const beforeData = await (prisma as any).disFirma.findUnique({
+            where: { id },
+        });
         const approval = await maybeCreateAdminApprovalRequest({
             action: "UPDATE",
             prismaModel: "disFirma",
@@ -75,6 +78,7 @@ export async function updateDisFirma(id: string, data: DisFirmaFormValues) {
             entityId: id,
             summary: `${updateData.ad} dış firması için düzenleme talebi.`,
             payload: updateData,
+            beforeData,
             companyId: actor?.sirketId || null,
         });
         if (approval) return approval;

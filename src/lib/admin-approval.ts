@@ -58,10 +58,39 @@ function toJson(value: unknown) {
     }
 }
 
+function valuesEqual(left: unknown, right: unknown) {
+    return JSON.stringify(toJson(left)) === JSON.stringify(toJson(right));
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasMeaningfulObjectData(value: unknown) {
+    return isPlainObject(value) && Object.keys(value).length > 0;
+}
+
+function buildApprovalChanges(beforeData: unknown, payload: unknown) {
+    if (!payload || typeof payload !== "object" || Array.isArray(payload)) return [];
+    if (!hasMeaningfulObjectData(beforeData)) return [];
+    const before = beforeData && typeof beforeData === "object" && !Array.isArray(beforeData)
+        ? beforeData as Record<string, unknown>
+        : {};
+
+    return Object.entries(payload as Record<string, unknown>)
+        .filter(([key]) => key !== "updatedAt" && key !== "olusturmaTarihi")
+        .filter(([key, value]) => !valuesEqual(before[key], value))
+        .map(([field, value]) => ({
+            field,
+            before: toJson(before[field]),
+            after: toJson(value),
+        }));
+}
+
 function approvalMessage(action: AdminApprovalAction) {
     return action === "DELETE"
-        ? "Silme talebi admine iletildi. Admin onayı sonrası silme işlemi geçerli olacaktır."
-        : "Değişiklik talebi admine iletildi. Admin onayı sonrası değişiklik geçerli olacaktır.";
+        ? "Silme talebin admin onayına gönderildi. Admin onaylayana kadar kayıt silinmeyecek."
+        : "Değişiklik talebin admin onayına gönderildi. Admin onaylayana kadar mevcut kayıt değişmeden kalacak.";
 }
 
 async function getCurrentActor() {
@@ -86,6 +115,7 @@ export async function maybeCreateAdminApprovalRequest(params: {
     const requestId = randomUUID();
     const payload = JSON.stringify(toJson(params.payload));
     const beforeData = JSON.stringify(toJson(params.beforeData));
+    const changes = buildApprovalChanges(params.beforeData, params.payload);
     const requestedById = actor.id || null;
     const companyId = params.companyId || actor.sirketId || null;
 
@@ -105,9 +135,13 @@ export async function maybeCreateAdminApprovalRequest(params: {
         companyId,
         metadata: {
             approvalPending: true,
+            approvalId: requestId,
             action: params.action,
             entityType: params.entityType,
             prismaModel: params.prismaModel,
+            changes,
+            beforeData: toJson(params.beforeData),
+            payload: toJson(params.payload),
         },
     });
 
@@ -121,7 +155,7 @@ export async function maybeCreateAdminApprovalRequest(params: {
 }
 
 export async function getPendingAdminApprovalRequests() {
-    const rows = await (prisma as any).$queryRaw<AdminApprovalRow[]>`
+    const rows: AdminApprovalRow[] = await (prisma as any).$queryRaw<AdminApprovalRow[]>`
         SELECT
             r.*,
             NULLIF(TRIM(CONCAT(k."ad", ' ', k."soyad")), '') AS "requestedByName",
@@ -132,7 +166,30 @@ export async function getPendingAdminApprovalRequests() {
         WHERE r."status" = 'PENDING'
         ORDER BY r."createdAt" DESC
     `;
-    return rows;
+    return Promise.all(rows.map(async (row) => {
+        if (row.action !== "UPDATE" || hasMeaningfulObjectData(row.beforeData)) {
+            return row;
+        }
+
+        const model = (prisma as any)[row.prismaModel];
+        if (!model?.findUnique) return row;
+
+        try {
+            const currentData = await model.findUnique({ where: { id: row.entityId } });
+            return currentData ? { ...row, beforeData: currentData } : row;
+        } catch {
+            return row;
+        }
+    }));
+}
+
+export async function getPendingAdminApprovalRequestCount() {
+    const rows = await (prisma as any).$queryRaw<Array<{ count: bigint | number }>>`
+        SELECT COUNT(*) AS "count"
+        FROM "AdminApprovalRequest"
+        WHERE "status" = 'PENDING'
+    `;
+    return Number(rows[0]?.count || 0);
 }
 
 async function getApprovalRequest(id: string) {

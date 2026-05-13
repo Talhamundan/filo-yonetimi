@@ -127,7 +127,7 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
         const res = await updateMasraf(editRow.id, { ...formData, tutar: parseFloat(formData.tutar) });
         if (res.success) {
             setEditRow(null);
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                 description: (res as any).message || "Masraf kaydı güncellendi.",
             });
             router.refresh();
@@ -142,7 +142,7 @@ export default function MasraflarClient({ initialMasraflar, araclar }: { initial
         if (!confirmed) return;
         const res = await deleteMasraf(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Kayıt Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Kayıt Silindi", {
                 description: (res as any).message || "Masraf kaydı sistemden kaldırıldı.",
             });
             router.refresh();

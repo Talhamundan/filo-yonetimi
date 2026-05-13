@@ -120,7 +120,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
         } as any);
         if (res.success) {
             setEditRow(null);
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                 description: (res as any).message || "Muayene bilgileri güncellendi.",
             });
             router.refresh();
@@ -135,7 +135,7 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
         if (!confirmed) return;
         const res = await deleteMuayene(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Kaydı Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Kaydı Silindi", {
                 description: (res as any).message || "Muayene kaydı başarıyla kaldırıldı.",
             });
             router.refresh();

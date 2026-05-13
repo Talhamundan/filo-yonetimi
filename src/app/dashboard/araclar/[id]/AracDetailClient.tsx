@@ -527,7 +527,13 @@ export default function AracDetailClient({
 
         if (res.success) {
             setEditAracOpen(false);
-            toast.success("Araç bilgileri güncellendi.");
+            if ((res as any).pendingApproval) {
+                toast.info("Talep Admin Onayına Gönderildi", {
+                    description: (res as any).message || "Admin onaylayana kadar mevcut araç bilgileri değişmeden kalacak.",
+                });
+            } else {
+                toast.success("Araç bilgileri güncellendi.");
+            }
             if (res.info) {
                 toast.info(res.info);
             }

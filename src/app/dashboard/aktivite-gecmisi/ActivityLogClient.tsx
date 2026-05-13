@@ -11,6 +11,12 @@ type ActivityLogRow = ActivityLog & {
     userDisplayName?: string;
 };
 
+type ChangeRow = {
+    field: string;
+    before: unknown;
+    after: unknown;
+};
+
 const ACTION_LABELS: Record<ActivityActionType, string> = {
     CREATE: "Oluşturma",
     UPDATE: "Güncelleme",
@@ -34,6 +40,65 @@ const ENTITY_LABELS: Record<string, string> = {
     OTURUM: "Oturum",
     DIGER: "Diğer",
 };
+
+const FIELD_LABELS: Record<string, string> = {
+    plaka: "Plaka",
+    marka: "Marka",
+    model: "Model",
+    yil: "Model Yılı",
+    guncelKm: "Güncel KM",
+    bulunduguIl: "Bulunduğu İl",
+    calistigiKurum: "Çalıştığı Kurum",
+    sirketId: "Şirket",
+    kullaniciId: "Kullanıcı",
+    ad: "Ad",
+    soyad: "Soyad",
+    tutar: "Tutar",
+    tarih: "Tarih",
+    aciklama: "Açıklama",
+    aktifMi: "Aktif",
+    kapasiteLitre: "Kapasite",
+    mevcutLitre: "Mevcut Litre",
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function formatFieldLabel(field: string) {
+    if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+    return field
+        .replace(/Id$/, "")
+        .replace(/([a-zğüşöçı])([A-ZĞÜŞÖÇİ])/g, "$1 $2")
+        .replace(/^./, (char) => char.toLocaleUpperCase("tr-TR"));
+}
+
+function formatChangeValue(value: unknown): string {
+    if (value === null || typeof value === "undefined" || value === "") return "-";
+    if (typeof value === "boolean") return value ? "Evet" : "Hayır";
+    if (value instanceof Date) return value.toLocaleString("tr-TR");
+    if (typeof value === "string") {
+        const date = /^\d{4}-\d{2}-\d{2}T/.test(value) ? new Date(value) : null;
+        if (date && !Number.isNaN(date.getTime())) return date.toLocaleString("tr-TR");
+        return value;
+    }
+    if (Array.isArray(value)) return value.length ? value.map(formatChangeValue).join(", ") : "-";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+}
+
+function getMetadataChanges(metadata: unknown): ChangeRow[] {
+    if (!isPlainObject(metadata)) return [];
+    const changes = metadata.changes;
+    if (!Array.isArray(changes)) return [];
+    return changes
+        .filter((item): item is ChangeRow => isPlainObject(item) && typeof item.field === "string")
+        .filter((item) => item.field !== "updatedAt" && item.field !== "olusturmaTarihi");
+}
+
+function isApprovalPendingMetadata(metadata: unknown) {
+    return isPlainObject(metadata) && metadata.approvalPending === true;
+}
 
 export default function ActivityLogClient({
     rows,
@@ -164,9 +229,31 @@ export default function ActivityLogClient({
                                         {row.metadata ? (
                                             <details className="mt-1 text-xs text-slate-500">
                                                 <summary className="cursor-pointer">Detay</summary>
-                                                <pre className="mt-1 whitespace-pre-wrap break-all bg-slate-50 border border-slate-200 rounded p-2">
-                                                    {JSON.stringify(row.metadata, null, 2)}
-                                                </pre>
+                                                {getMetadataChanges(row.metadata).length > 0 ? (
+                                                    <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 p-2">
+                                                        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-500">Yapılan değişiklikler</p>
+                                                        <div className="grid gap-1.5">
+                                                            {getMetadataChanges(row.metadata).map((change) => (
+                                                                <div key={change.field} className="grid gap-1 md:grid-cols-[150px_1fr]">
+                                                                    <span className="font-semibold text-slate-600">{formatFieldLabel(change.field)}</span>
+                                                                    <span className="text-slate-600">
+                                                                        <span className="line-through decoration-slate-400">{formatChangeValue(change.before)}</span>
+                                                                        <span className="px-2 text-slate-400">→</span>
+                                                                        <span className="font-semibold text-slate-900">{formatChangeValue(change.after)}</span>
+                                                                    </span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                ) : isApprovalPendingMetadata(row.metadata) ? (
+                                                    <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/60 p-2 text-slate-600">
+                                                        Bu eski onay kaydında karşılaştırılabilir değişiklik detayı yok.
+                                                    </div>
+                                                ) : (
+                                                    <pre className="mt-1 whitespace-pre-wrap break-all bg-slate-50 border border-slate-200 rounded p-2">
+                                                        {JSON.stringify(row.metadata, null, 2)}
+                                                    </pre>
+                                                )}
                                             </details>
                                         ) : null}
                                     </td>

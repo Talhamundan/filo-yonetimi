@@ -61,6 +61,10 @@ export async function updateSirket(id: string, data: { ad: string; bulunduguIl: 
             vergiNo: data.vergiNo || null,
             santiyeler: resolvedSantiyeler,
         };
+        const beforeData = await (prisma as any).sirket.findUnique({
+            where: { id },
+            select: { id: true, ad: true, bulunduguIl: true, vergiNo: true, santiyeler: true },
+        });
         const approval = await maybeCreateAdminApprovalRequest({
             action: "UPDATE",
             prismaModel: "sirket",
@@ -68,6 +72,7 @@ export async function updateSirket(id: string, data: { ad: string; bulunduguIl: 
             entityId: id,
             summary: `${data.ad} şirketi için düzenleme talebi.`,
             payload: updateData,
+            beforeData,
             companyId: id,
         });
         if (approval) return approval;

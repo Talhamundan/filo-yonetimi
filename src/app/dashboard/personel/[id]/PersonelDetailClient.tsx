@@ -244,7 +244,7 @@ export default function PersonelDetailClient({
         setLoading(true);
         const res = await updatePersonel(p.id, formData);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Personel bilgileri güncellendi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Personel bilgileri güncellendi", {
                 description: (res as any).message,
             });
             setEditOpen(false);
@@ -261,7 +261,7 @@ export default function PersonelDetailClient({
         setLoading(true);
         const res = await deletePersonel(p.id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Personel silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Personel silindi", {
                 description: (res as any).message,
             });
             router.push(scopedHref('/dashboard/personel'));

@@ -32,6 +32,7 @@ type DashboardShellProps = {
         userName?: string;
         role?: string | null;
         userCompanyName?: string | null;
+        pendingAdminApprovalCount?: number;
         quickVehicleSearch: Array<{
             id: string;
             plaka: string;
@@ -163,6 +164,8 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
     const companyText = (scopeOptions.userCompanyName || "Bağımsız").trim();
     const roleAndCompanyText = `${roleText} • Şirket: ${companyText}`;
     const shouldUseCompactIdentityText = identityName.length > 16 || roleAndCompanyText.length > 28;
+    const pendingAdminApprovalCount = Math.max(0, Number(scopeOptions.pendingAdminApprovalCount || 0));
+    const hasPendingAdminApprovals = pendingAdminApprovalCount > 0;
 
     return (
         <DashboardScopeProvider
@@ -265,7 +268,12 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                     role="menuitem"
                                                 >
                                                     <ShieldCheck size={16} className="text-indigo-500" />
-                                                    Admin Panel
+                                                    <span className="min-w-0 flex-1">Admin Panel</span>
+                                                    {hasPendingAdminApprovals ? (
+                                                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                                            {pendingAdminApprovalCount}
+                                                        </span>
+                                                    ) : null}
                                                 </Link>
                                                 <Link
                                                     href={activityHref}
@@ -363,7 +371,7 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                 </div>
 
                                 {scopeOptions.isAdmin ? (
-                                    <div ref={mobileAdminMenuRef} className="relative z-30 shrink-0">
+                                    <div ref={mobileAdminMenuRef} className="relative z-30 flex shrink-0 items-center gap-2">
                                         <button
                                             type="button"
                                             onClick={() => setIsAdminMenuOpen((current) => !current)}
@@ -392,7 +400,12 @@ export default function DashboardShell({ children, scopeOptions }: DashboardShel
                                                     role="menuitem"
                                                 >
                                                     <ShieldCheck size={16} className="text-indigo-500" />
-                                                    Admin Panel
+                                                    <span className="min-w-0 flex-1">Admin Panel</span>
+                                                    {hasPendingAdminApprovals ? (
+                                                        <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-700">
+                                                            {pendingAdminApprovalCount}
+                                                        </span>
+                                                    ) : null}
                                                 </Link>
                                                 <Link
                                                     href={activityHref}

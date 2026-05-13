@@ -77,7 +77,7 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
         const res = await updateSirket(editRow.id, formData);
         if (res.success) {
             setEditRow(null);
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                 description: (res as any).message || "Şirket bilgileri başarıyla güncellendi.",
             });
             router.refresh();
@@ -92,7 +92,7 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
         if (!confirmed) return;
         const res = await deleteSirket(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Şirket Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Şirket Silindi", {
                 description: (res as any).message || "Şirket başarıyla kaldırıldı.",
             });
             router.refresh();

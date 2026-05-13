@@ -67,11 +67,96 @@ type PendingApprovalRequest = {
     entityType: string;
     entityId: string;
     summary: string;
+    payload?: unknown;
+    beforeData?: unknown;
     requestedById?: string | null;
     requestedByName?: string | null;
     companyName?: string | null;
     createdAt: Date | string;
 };
+
+type ChangeRow = {
+    field: string;
+    before: unknown;
+    after: unknown;
+};
+
+const FIELD_LABELS: Record<string, string> = {
+    plaka: "Plaka",
+    marka: "Marka",
+    model: "Model",
+    yil: "Model Yılı",
+    guncelKm: "Güncel KM",
+    bulunduguIl: "Bulunduğu İl",
+    calistigiKurum: "Çalıştığı Kurum",
+    sirketId: "Şirket",
+    kullaniciId: "Kullanıcı",
+    ad: "Ad",
+    soyad: "Soyad",
+    tutar: "Tutar",
+    tarih: "Tarih",
+    aciklama: "Açıklama",
+    aktifMi: "Aktif",
+    kapasiteLitre: "Kapasite",
+    mevcutLitre: "Mevcut Litre",
+};
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+    return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function valuesEqual(left: unknown, right: unknown) {
+    return JSON.stringify(left ?? null) === JSON.stringify(right ?? null);
+}
+
+function formatFieldLabel(field: string) {
+    if (FIELD_LABELS[field]) return FIELD_LABELS[field];
+    return field
+        .replace(/Id$/, "")
+        .replace(/([a-zğüşöçı])([A-ZĞÜŞÖÇİ])/g, "$1 $2")
+        .replace(/^./, (char) => char.toLocaleUpperCase("tr-TR"));
+}
+
+function formatChangeValue(value: unknown): string {
+    if (value === null || typeof value === "undefined" || value === "") return "-";
+    if (typeof value === "boolean") return value ? "Evet" : "Hayır";
+    if (value instanceof Date) return value.toLocaleString("tr-TR");
+    if (typeof value === "string") {
+        const date = /^\d{4}-\d{2}-\d{2}T/.test(value) ? new Date(value) : null;
+        if (date && !Number.isNaN(date.getTime())) return date.toLocaleString("tr-TR");
+        return value;
+    }
+    if (Array.isArray(value)) return value.length ? value.map(formatChangeValue).join(", ") : "-";
+    if (typeof value === "object") return JSON.stringify(value);
+    return String(value);
+}
+
+function getApprovalChanges(request: PendingApprovalRequest): ChangeRow[] {
+    const payload = isPlainObject(request.payload) ? request.payload : {};
+    const before = isPlainObject(request.beforeData) ? request.beforeData : {};
+    const entries = Object.entries(payload).filter(([key]) => key !== "updatedAt" && key !== "olusturmaTarihi");
+    if (!entries.length || !Object.keys(before).length) return [];
+
+    return entries
+        .filter(([key, value]) => !valuesEqual(before[key], value))
+        .map(([field, value]) => ({
+            field,
+            before: before[field],
+            after: value,
+        }));
+}
+
+function getDeletePreview(request: PendingApprovalRequest) {
+    if (!isPlainObject(request.beforeData)) return [];
+    const preferredFields = ["plaka", "ad", "soyad", "model", "marka", "tarih", "tutar", "aciklama"];
+    return preferredFields
+        .filter((field) => field in (request.beforeData as Record<string, unknown>))
+        .map((field) => ({
+            field,
+            value: (request.beforeData as Record<string, unknown>)[field],
+        }))
+        .filter((item) => item.value !== null && typeof item.value !== "undefined" && item.value !== "");
+}
 
 export default function OnayMerkeziClient({
     registeredUsers,
@@ -586,6 +671,46 @@ export default function OnayMerkeziClient({
                                         Talep eden: {request.requestedByName || request.requestedById || "Bilinmiyor"}
                                         {request.companyName ? ` · Şirket: ${request.companyName}` : ""}
                                     </p>
+                                    {request.action === "UPDATE" ? (
+                                        <details className="mt-3 max-w-[520px] rounded-lg border border-slate-200 bg-slate-50/70 p-3 text-xs">
+                                            <summary className="cursor-pointer select-none font-bold uppercase tracking-wide text-slate-500">
+                                                Yapılan değişiklikler ({getApprovalChanges(request).length})
+                                            </summary>
+                                            <div className="mt-2">
+                                                {getApprovalChanges(request).length > 0 ? (
+                                                    <div className="grid gap-1.5">
+                                                        {getApprovalChanges(request).map((change) => (
+                                                            <div key={change.field} className="grid gap-1 md:grid-cols-[150px_1fr]">
+                                                                <span className="font-semibold text-slate-600">{formatFieldLabel(change.field)}</span>
+                                                                <span className="text-slate-600">
+                                                                    <span className="line-through decoration-slate-400">{formatChangeValue(change.before)}</span>
+                                                                    <span className="px-2 text-slate-400">→</span>
+                                                                    <span className="font-semibold text-slate-900">{formatChangeValue(change.after)}</span>
+                                                                </span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-slate-500">Bu talep için karşılaştırılabilir değişiklik detayı bulunamadı.</p>
+                                                )}
+                                            </div>
+                                        </details>
+                                    ) : (
+                                        <div className="mt-3 rounded-lg border border-rose-100 bg-rose-50/60 p-3">
+                                            <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-rose-600">Silinecek kayıt</p>
+                                            {getDeletePreview(request).length > 0 ? (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {getDeletePreview(request).map((item) => (
+                                                        <span key={item.field} className="rounded-full bg-white px-2 py-1 text-xs font-medium text-slate-700 ring-1 ring-rose-100">
+                                                            {formatFieldLabel(item.field)}: {formatChangeValue(item.value)}
+                                                        </span>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-xs text-slate-500">Kayıt detayı bulunamadı.</p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                                 <div className="flex shrink-0 items-center gap-2">
                                     <button

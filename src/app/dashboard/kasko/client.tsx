@@ -243,7 +243,7 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
         const res = await updateKasko(editRow.id, { ...formData, tutar: formData.tutar ? parseFloat(formData.tutar) : undefined });
         if (res.success) {
             setEditRow(null);
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Güncelleme Başarılı", {
                 description: (res as any).message || "Kasko poliçesi bilgileri güncellendi.",
             });
             router.refresh();
@@ -258,7 +258,7 @@ export default function KaskoClient({ initialKaskolar, araclar }: { initialKasko
         if (!confirmed) return;
         const res = await deleteKasko(id);
         if (res.success) {
-            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Kayıt Silindi", {
+            toast.success((res as any).pendingApproval ? "Talep Admin Onayına Gönderildi" : "Kayıt Silindi", {
                 description: (res as any).message || "Kasko poliçesi sistemden kaldırıldı.",
             });
             router.refresh();
