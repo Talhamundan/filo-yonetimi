@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/auth";
 import { canRoleAccessAllCompanies, normalizeRole } from "@/lib/policy";
 import { disFirmaFormSchema, type DisFirmaFormValues } from "./schema";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATHS = ["/dashboard/taseronlar", "/dashboard/kiraliklar", "/dashboard/araclar", "/dashboard/personel"];
 
@@ -18,6 +19,7 @@ async function assertVendorManager() {
     if (!canManage) {
         throw new Error("Bu işlem için yetkiniz yok.");
     }
+    return user;
 }
 
 function normalizePayload(data: DisFirmaFormValues) {
@@ -63,11 +65,23 @@ export async function createDisFirma(data: DisFirmaFormValues) {
 
 export async function updateDisFirma(id: string, data: DisFirmaFormValues) {
     try {
-        await assertVendorManager();
+        const actor = await assertVendorManager();
         const parsed = disFirmaFormSchema.parse(data);
+        const updateData = normalizePayload(parsed);
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "disFirma",
+            entityType: "Dış Firma",
+            entityId: id,
+            summary: `${updateData.ad} dış firması için düzenleme talebi.`,
+            payload: updateData,
+            companyId: actor?.sirketId || null,
+        });
+        if (approval) return approval;
+
         await (prisma as any).disFirma.update({
             where: { id },
-            data: normalizePayload(parsed),
+            data: updateData,
         });
         revalidateVendorPaths(id);
         return { success: true };
@@ -82,7 +96,20 @@ export async function updateDisFirma(id: string, data: DisFirmaFormValues) {
 
 export async function deleteDisFirma(id: string) {
     try {
-        await assertVendorManager();
+        const actor = await assertVendorManager();
+        const firma = await (prisma as any).disFirma.findUnique({ where: { id }, select: { id: true, ad: true, tur: true } });
+        if (!firma) return { success: false, error: "Dış firma bulunamadı." };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "disFirma",
+            entityType: "Dış Firma",
+            entityId: id,
+            summary: `${firma.ad} dış firması için silme talebi.`,
+            beforeData: firma,
+            companyId: actor?.sirketId || null,
+        });
+        if (approval) return approval;
+
         await (prisma as any).disFirma.delete({ where: { id } });
         revalidateVendorPaths(id);
         return { success: true };

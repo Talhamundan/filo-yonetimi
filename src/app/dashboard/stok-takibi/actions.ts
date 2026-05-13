@@ -6,6 +6,7 @@ import { getModelFilter } from "@/lib/auth-utils";
 import { canRoleAccessAllCompanies, normalizeRole } from "@/lib/policy";
 import { revalidatePath } from "next/cache";
 import { stokKalemFormSchema, type StokKalemFormValues } from "./schema";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATHS_TO_REVALIDATE = ["/dashboard/stok-takibi", "/dashboard/evrak-takip", "/dashboard"];
 
@@ -71,12 +72,13 @@ async function assertCanMutateStockKalem(id: string) {
             id,
             ...(scopeFilter as any),
         },
-        select: { id: true },
+        select: { id: true, ad: true, sirketId: true },
     });
 
     if (!record) {
         throw new Error("Bu stok kalemi için yetkiniz yok.");
     }
+    return { user, record };
 }
 
 function buildPayload(data: StokKalemFormValues, sirketId: string) {
@@ -114,13 +116,26 @@ export async function createStokKalem(data: StokKalemFormValues) {
 
 export async function updateStokKalem(id: string, data: StokKalemFormValues) {
     try {
-        await assertCanMutateStockKalem(id);
+        const { user, record } = await assertCanMutateStockKalem(id);
         const parsed = stokKalemFormSchema.parse(data);
         const sirketId = await getCreateScope(parsed.sirketId || null);
+        const updateData = buildPayload(parsed, sirketId);
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "stokKalem",
+            entityType: "Stok Kalemi",
+            entityId: id,
+            summary: `${record.ad} stok kalemi için düzenleme talebi.`,
+            payload: updateData,
+            beforeData: record,
+            companyId: updateData.sirketId || user?.sirketId || null,
+        });
+        if (approval) return approval;
 
         await (prisma as any).stokKalem.update({
             where: { id },
-            data: buildPayload(parsed, sirketId),
+            data: updateData,
         });
 
         revalidateStockPaths();
@@ -136,7 +151,18 @@ export async function updateStokKalem(id: string, data: StokKalemFormValues) {
 
 export async function deleteStokKalem(id: string) {
     try {
-        await assertCanMutateStockKalem(id);
+        const { user, record } = await assertCanMutateStockKalem(id);
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "stokKalem",
+            entityType: "Stok Kalemi",
+            entityId: id,
+            summary: `${record.ad} stok kalemi için silme talebi.`,
+            beforeData: record,
+            companyId: record.sirketId || user?.sirketId || null,
+        });
+        if (approval) return approval;
 
         await (prisma as any).stokKalem.delete({
             where: { id },

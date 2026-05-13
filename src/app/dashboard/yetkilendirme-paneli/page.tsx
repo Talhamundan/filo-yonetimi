@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getModelFilter, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getSelectedSirketId, type DashboardSearchParams } from "@/lib/company-scope";
 import { Prisma, Rol } from "@prisma/client";
+import { getPendingAdminApprovalRequests } from "@/lib/admin-approval";
 
 const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
     (prisma as any)?._runtimeDataModel?.models?.YakitTank?.fields?.some((field: any) => field?.name === "sirketId") ||
@@ -21,10 +22,11 @@ export default async function OnayMerkeziPage(props: { searchParams?: Promise<Da
     }
 
     const selectedSirketId = await getSelectedSirketId(props.searchParams);
-    const [kullaniciFilter, yakitTankFilter, sirketListFilter] = await Promise.all([
+    const [kullaniciFilter, yakitTankFilter, sirketListFilter, pendingApprovalRequests] = await Promise.all([
         getPersonnelSelectFilter(),
         YAKIT_TANK_HAS_SIRKET_FIELD ? getModelFilter("yakitTank", selectedSirketId) : Promise.resolve({}),
         getSirketListFilter(),
+        getPendingAdminApprovalRequests(),
     ]);
     const baseKullaniciFilter = kullaniciFilter as Prisma.KullaniciWhereInput;
 
@@ -92,6 +94,7 @@ export default async function OnayMerkeziPage(props: { searchParams?: Promise<Da
             sirketler={sirketler as Array<{ id: string; ad: string }>}
             selectedScopeSirketId={selectedSirketId || null}
             canScopeTankByCompany={canDisplayTankCompanyField}
+            pendingApprovalRequests={pendingApprovalRequests}
         />
     );
 }

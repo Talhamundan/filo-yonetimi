@@ -75,10 +75,12 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
         }
         setLoading(true);
         const res = await updateSirket(editRow.id, formData);
-        if (res.success) { 
-            setEditRow(null); 
-            toast.success("Güncelleme Başarılı", { description: "Şirket bilgileri başarıyla güncellendi." });
-            router.refresh(); 
+        if (res.success) {
+            setEditRow(null);
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+                description: (res as any).message || "Şirket bilgileri başarıyla güncellendi.",
+            });
+            router.refresh();
         } else {
             toast.error("Güncelleme Hatası", { description: res.error });
         }
@@ -90,7 +92,9 @@ export default function SirketlerClient({ initialData }: { initialData: SirketRo
         if (!confirmed) return;
         const res = await deleteSirket(id);
         if (res.success) {
-            toast.success("Şirket Silindi", { description: "Şirket başarıyla kaldırıldı." });
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Şirket Silindi", {
+                description: (res as any).message || "Şirket başarıyla kaldırıldı.",
+            });
             router.refresh();
         } else {
             toast.error("Silme İşlemi Başarısız", { description: res.error });

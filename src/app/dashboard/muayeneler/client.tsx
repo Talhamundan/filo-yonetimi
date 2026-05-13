@@ -120,7 +120,9 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
         } as any);
         if (res.success) {
             setEditRow(null);
-            toast.success("Güncelleme Başarılı", { description: "Muayene bilgileri güncellendi." });
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+                description: (res as any).message || "Muayene bilgileri güncellendi.",
+            });
             router.refresh();
         } else {
             toast.error("Güncelleme Hatası", { description: res.error });
@@ -133,7 +135,9 @@ export default function MuayenelerClient({ initialMuayeneler, araclar }: { initi
         if (!confirmed) return;
         const res = await deleteMuayene(id);
         if (res.success) {
-            toast.success("Kaydı Silindi", { description: "Muayene kaydı başarıyla kaldırıldı." });
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Kaydı Silindi", {
+                description: (res as any).message || "Muayene kaydı başarıyla kaldırıldı.",
+            });
             router.refresh();
         } else {
             toast.error("Silme Başarısız", { description: res.error });

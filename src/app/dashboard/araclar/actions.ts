@@ -13,6 +13,7 @@ import { softDeleteEntity } from "@/lib/soft-delete";
 import { KIRALIK_SIRKET_ADI, KIRALIK_SIRKET_OPTION_VALUE } from "@/lib/ruhsat-sahibi";
 import { canRoleAssignIndependentRecords } from "@/lib/policy";
 import { resolveAracKategoriFields } from "@/lib/arac-kategori";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = "/dashboard/araclar";
 const toUpperTr = (value: string) => value.toLocaleUpperCase("tr-TR");
@@ -334,27 +335,40 @@ export async function updateArac(id: string, data: any) {
                 ? `Guncel KM, arac gecmisindeki daha yuksek deger (${resolvedGuncelKm}) ile otomatik senkronlandi.`
                 : null;
 
+        const updateData = {
+            plaka: normalizedPlaka,
+            marka: data.marka ? toUpperTr(data.marka) : undefined,
+            model: data.model ? toUpperTr(data.model) : undefined,
+            yil: data.yil ? Number(data.yil) : undefined,
+            bulunduguIl: data.bulunduguIl ? normalizeSantiyeValue(data.bulunduguIl) : undefined,
+            guncelKm: resolvedGuncelKm,
+            bedel: data.bedel !== undefined ? normalizeBedelInput(data.bedel) : undefined,
+            aciklama: data.aciklama !== undefined ? (data.aciklama?.trim() || null) : undefined,
+            calistigiKurum: resolvedCalistigiKurum,
+            sirketId: nextSirketId,
+            disFirmaId: data.disFirmaId !== undefined ? (data.disFirmaId?.trim() || null) : undefined,
+            kullaniciId: kullanici?.id || null,
+            ruhsatSeriNo: data.ruhsatSeriNo || null,
+            saseNo: data.saseNo || null,
+            motorNo: data.motorNo || null,
+            kategori: resolvedKategoriFields?.kategori,
+            altKategori: resolvedKategoriFields?.altKategori,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "arac",
+            entityType: "Araç",
+            entityId: id,
+            summary: `${oldArac.plaka || normalizedPlaka || id} plakalı araç için düzenleme talebi.`,
+            payload: updateData,
+            beforeData: oldArac,
+            companyId: nextSirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
+
         await prisma.arac.update({
             where: { id },
-            data: {
-                plaka: normalizedPlaka,
-                marka: data.marka ? toUpperTr(data.marka) : undefined,
-                model: data.model ? toUpperTr(data.model) : undefined,
-                yil: data.yil ? Number(data.yil) : undefined,
-                bulunduguIl: data.bulunduguIl ? normalizeSantiyeValue(data.bulunduguIl) : undefined,
-                guncelKm: resolvedGuncelKm,
-                bedel: data.bedel !== undefined ? normalizeBedelInput(data.bedel) : undefined,
-                aciklama: data.aciklama !== undefined ? (data.aciklama?.trim() || null) : undefined,
-                calistigiKurum: resolvedCalistigiKurum,
-                sirketId: nextSirketId,
-                disFirmaId: data.disFirmaId !== undefined ? (data.disFirmaId?.trim() || null) : undefined,
-                kullaniciId: kullanici?.id || null,
-                ruhsatSeriNo: data.ruhsatSeriNo || null,
-                saseNo: data.saseNo || null,
-                motorNo: data.motorNo || null,
-                kategori: resolvedKategoriFields?.kategori,
-                altKategori: resolvedKategoriFields?.altKategori,
-            }
+            data: updateData
         });
 
         // Zimmet mantığı: kullaniciId değişmişse veya ilk defa atanıyorsa
@@ -537,7 +551,6 @@ export async function deleteArac(id: string) {
         if (!arac) {
             return { success: false, error: "Araç bulunamadı veya yetkiniz yok." };
         }
-
         const aktifZimmetSayisi = await (prisma as any).kullaniciZimmet.count({
             where: { aracId: id, bitis: null },
         });
@@ -555,6 +568,17 @@ export async function deleteArac(id: string) {
                 error: `${arac.plaka} plakalı araç aktif kullanımda. ${detay} Silmeden önce şoförü araçtan ayırın.`,
             };
         }
+
+        const deleteApproval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "arac",
+            entityType: "Araç",
+            entityId: id,
+            summary: `${arac.plaka || id} plakalı araç için silme talebi.`,
+            beforeData: arac,
+            companyId: arac.sirketId || actor.sirketId || null,
+        });
+        if (deleteApproval) return deleteApproval;
 
         await softDeleteEntity("arac", id, actor.id);
 

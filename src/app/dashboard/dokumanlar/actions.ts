@@ -7,6 +7,7 @@ import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow }
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = '/dashboard/dokumanlar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -77,7 +78,7 @@ export async function updateDokuman(id: string, data: {
             prismaModel: "dokuman",
             filterModel: "dokuman",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true, ad: true, tur: true },
             errorMessage: "Doküman bulunamadı veya yetkiniz yok.",
         });
 
@@ -89,15 +90,28 @@ export async function updateDokuman(id: string, data: {
             aracId: arac.id
         });
 
+        const updateData = {
+            ad: data.ad !== undefined ? data.ad : undefined,
+            tur: data.tur !== undefined ? data.tur : undefined,
+            dosyaUrl: data.dosyaUrl !== undefined ? data.dosyaUrl : undefined,
+            aracId: arac.id,
+            sirketId: usageSirketId,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "dokuman",
+            entityType: "Doküman",
+            entityId: id,
+            summary: `${(mevcutKayit as any).ad || "Doküman"} için düzenleme talebi.`,
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: usageSirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
+
         const updated = await prisma.dokuman.update({
             where: { id },
-            data: {
-                ad: data.ad !== undefined ? data.ad : undefined,
-                tur: data.tur !== undefined ? data.tur : undefined,
-                dosyaUrl: data.dosyaUrl !== undefined ? data.dosyaUrl : undefined,
-                aracId: arac.id,
-                sirketId: usageSirketId,
-            }
+            data: updateData
         });
 
         await logEntityActivity({
@@ -133,6 +147,17 @@ export async function deleteDokuman(id: string) {
             select: { aracId: true, sirketId: true, ad: true, tur: true },
             errorMessage: "Dokuman bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "dokuman",
+            entityType: "Doküman",
+            entityId: id,
+            summary: `${(kayit as any).ad || "Doküman"} için silme talebi.`,
+            beforeData: kayit,
+            companyId: (kayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await softDeleteEntity("dokuman", id, actor.id);
         revalidateDokumanPages((kayit as { aracId?: string } | null)?.aracId);

@@ -8,6 +8,7 @@ import { ensureCezaFineTrackingColumns, isCezaSchemaCompatibilityError } from "@
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = "/dashboard/cezalar";
 const DASHBOARD_PATH = "/dashboard";
@@ -162,6 +163,18 @@ export async function updateCeza(id: string, data: Partial<CezaPayload>) {
             sirketId: usageSirketId,
         };
 
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "ceza",
+            entityType: "Ceza",
+            entityId: id,
+            summary: `${arac.plaka || "Bilinmeyen plaka"} için ceza kaydı düzenleme talebi.`,
+            payload: updateData,
+            beforeData: ceza,
+            companyId: usageSirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
+
         try {
             updated = await prisma.ceza.update({
                 where: { id: ceza.id },
@@ -215,6 +228,17 @@ export async function deleteCeza(id: string) {
             select: { aracId: true, sirketId: true, plaka: true, cezaMaddesi: true, tutar: true, tarih: true },
             errorMessage: "Ceza kaydı bulunamadı veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "ceza",
+            entityType: "Ceza",
+            entityId: id,
+            summary: `${(mevcutKayit as any).plaka || "Bilinmeyen plaka"} için ceza kaydı silme talebi.`,
+            beforeData: mevcutKayit,
+            companyId: (mevcutKayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await softDeleteEntity("ceza", id, actor.id);
         revalidateCezaRelatedPaths([(mevcutKayit as { aracId?: string } | null)?.aracId]);

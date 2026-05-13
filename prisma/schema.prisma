@@ -437,6 +437,32 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+model AdminApprovalRequest {
+  id            String   @id @default(cuid())
+  action        String
+  entityType    String
+  prismaModel   String
+  entityId      String
+  summary       String
+  status        String   @default("PENDING")
+  payload       Json?
+  beforeData    Json?
+  requestedById String?
+  companyId     String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([status])
+  @@index([action])
+  @@index([entityType])
+  @@index([entityId])
+  @@index([companyId])
+  @@index([requestedById])
+  @@index([createdAt])
+}
+
 model Dokuman {
   id            String      @id @default(cuid())
   ad            String

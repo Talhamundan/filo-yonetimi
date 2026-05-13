@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { ensureSigortaAcenteColumns, getExistingSigortaColumns, isSigortaOptionalFieldCompatibilityError } from "@/lib/sigorta-schema-compat";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = '/dashboard/kasko';
 const EVRAK_PATH = "/dashboard/stok-takibi";
@@ -30,7 +31,7 @@ export async function createKasko(data: {
     aktifMi?: boolean;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             sirketId: true,
@@ -187,7 +188,7 @@ export async function renewKasko(id: string, data: {
 
 export async function updateKasko(id: string, data: any) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const columns = await getExistingSigortaColumns("Kasko");
         const selectShape: any = { aracId: true };
         if (columns.has("sirketId")) selectShape.sirketId = true;
@@ -216,6 +217,18 @@ export async function updateKasko(id: string, data: any) {
         };
         if (columns.has("sirketId")) updateData.sirketId = usageSirketId || (mevcutKayit as any).sirketId || null;
         if (columns.has("acente")) updateData.acente = data.acente ?? undefined;
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "kasko",
+            entityType: "Kasko",
+            entityId: id,
+            summary: "Kasko kaydı için düzenleme talebi.",
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: updateData.sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         try {
             await prisma.kasko.update({
@@ -270,14 +283,25 @@ export async function updateKasko(id: string, data: any) {
 
 export async function deleteKasko(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "kasko",
             filterModel: "kasko",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true },
             errorMessage: "Kasko kaydi bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "kasko",
+            entityType: "Kasko",
+            entityId: id,
+            summary: "Kasko kaydı için silme talebi.",
+            beforeData: mevcutKayit,
+            companyId: (mevcutKayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await prisma.kasko.delete({ where: { id } });
         revalidateKaskoRelatedPaths((mevcutKayit as { aracId?: string } | null)?.aracId);

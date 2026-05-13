@@ -7,6 +7,7 @@ import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow }
 import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = '/dashboard/masraflar';
 const ARACLAR_PATH = '/dashboard/araclar';
@@ -88,16 +89,29 @@ export async function updateMasraf(id: string, data: any) {
             aracId: arac.id
         });
 
+        const updateData = {
+            aracId: arac.id,
+            sirketId: usageSirketId || mevcutKayit.sirketId,
+            tur: data.tur !== undefined ? (data.tur as any) : undefined,
+            tarih: data.tarih !== undefined ? new Date(data.tarih) : undefined,
+            tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
+            aciklama: data.aciklama !== undefined ? data.aciklama || null : undefined,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "masraf",
+            entityType: "Masraf",
+            entityId: id,
+            summary: "Masraf kaydı için düzenleme talebi.",
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: updateData.sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
+
         const updated = await prisma.masraf.update({
             where: { id },
-            data: {
-                aracId: arac.id,
-                sirketId: usageSirketId || mevcutKayit.sirketId,
-                tur: data.tur !== undefined ? (data.tur as any) : undefined,
-                tarih: data.tarih !== undefined ? new Date(data.tarih) : undefined,
-                tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
-                aciklama: data.aciklama !== undefined ? data.aciklama || null : undefined,
-            }
+            data: updateData
         });
 
         await logEntityActivity({
@@ -133,6 +147,17 @@ export async function deleteMasraf(id: string) {
             select: { aracId: true, sirketId: true, tur: true, tutar: true, tarih: true },
             errorMessage: "Masraf kaydi bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "masraf",
+            entityType: "Masraf",
+            entityId: id,
+            summary: "Masraf kaydı için silme talebi.",
+            beforeData: kayit,
+            companyId: (kayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await softDeleteEntity("masraf", id, actor.id);
         revalidateMasrafPages((kayit as { aracId?: string } | null)?.aracId);

@@ -173,7 +173,9 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         if (res.success) {
             setEditRow(null);
             resetForm();
-            toast.success(`${getDisFirmaTurLabel(parsed.tur)} firma güncellendi.`);
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : `${getDisFirmaTurLabel(parsed.tur)} firma güncellendi.`, {
+                description: (res as any).message,
+            });
             router.refresh();
             return;
         }
@@ -191,7 +193,9 @@ export default function DisFirmalarClient({ title, description, tur, initialData
         if (!confirmed) return;
         const res = await deleteDisFirma(row.id);
         if (res.success) {
-            toast.success("Firma silindi.");
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Firma silindi.", {
+                description: (res as any).message,
+            });
             router.refresh();
             return;
         }

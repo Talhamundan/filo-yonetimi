@@ -7,6 +7,7 @@ import { auth } from "@/auth"
 import { logEntityActivity } from "@/lib/activity-log"
 import bcrypt from "bcryptjs"
 import { resolveActionSirketId } from "@/lib/action-scope"
+import { approveAdminApprovalRequest, rejectAdminApprovalRequest } from "@/lib/admin-approval"
 
 type ActorUser = {
   id: string
@@ -29,6 +30,23 @@ const YAKIT_TANK_HAS_SIRKET_FIELD = Boolean(
     .find((model) => model.name === "YakitTank")
     ?.fields.some((field) => field.name === "sirketId")
 )
+
+export async function approvePendingMutationRequest(id: string) {
+  const result = await approveAdminApprovalRequest(id)
+  if (result.success) {
+    revalidatePath("/dashboard/yetkilendirme-paneli")
+    revalidatePath("/dashboard")
+  }
+  return result
+}
+
+export async function rejectPendingMutationRequest(id: string) {
+  const result = await rejectAdminApprovalRequest(id)
+  if (result.success) {
+    revalidatePath("/dashboard/yetkilendirme-paneli")
+  }
+  return result
+}
 
 export async function createUserAccount(data: {
   personelId: string

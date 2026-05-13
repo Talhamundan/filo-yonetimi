@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { ensureSigortaAcenteColumns, getExistingSigortaColumns, isSigortaOptionalFieldCompatibilityError } from "@/lib/sigorta-schema-compat";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = '/dashboard/trafik-sigortasi';
 const EVRAK_PATH = "/dashboard/stok-takibi";
@@ -30,7 +31,7 @@ export async function createSigorta(data: {
     aktifMi?: boolean;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
             sirketId: true,
@@ -187,7 +188,7 @@ export async function renewSigorta(id: string, data: {
 
 export async function updateSigorta(id: string, data: any) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const columns = await getExistingSigortaColumns("TrafikSigortasi");
         const selectShape: any = { aracId: true };
         if (columns.has("sirketId")) selectShape.sirketId = true;
@@ -216,6 +217,18 @@ export async function updateSigorta(id: string, data: any) {
         };
         if (columns.has("sirketId")) updateData.sirketId = usageSirketId || (mevcutKayit as any).sirketId || null;
         if (columns.has("acente")) updateData.acente = data.acente ?? undefined;
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "trafikSigortasi",
+            entityType: "Trafik Sigortası",
+            entityId: id,
+            summary: "Trafik sigortası kaydı için düzenleme talebi.",
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: updateData.sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         try {
             await prisma.trafikSigortasi.update({
@@ -270,14 +283,25 @@ export async function updateSigorta(id: string, data: any) {
 
 export async function deleteSigorta(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "trafikSigortasi",
             filterModel: "trafikSigortasi",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true },
             errorMessage: "Sigorta kaydi bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "trafikSigortasi",
+            entityType: "Trafik Sigortası",
+            entityId: id,
+            summary: "Trafik sigortası kaydı için silme talebi.",
+            beforeData: mevcutKayit,
+            companyId: (mevcutKayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await prisma.trafikSigortasi.delete({ where: { id } });
         revalidateSigortaRelatedPaths((mevcutKayit as { aracId?: string } | null)?.aracId);

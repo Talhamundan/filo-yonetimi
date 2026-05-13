@@ -8,6 +8,7 @@ import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { resolveActionSirketId } from "@/lib/action-scope";
 import { syncAracDurumu } from "@/lib/arac-durum";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = "/dashboard/personel";
 const SIRKETLER_PATH = "/dashboard/sirketler";
@@ -212,16 +213,39 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
         }
         const oncekiKayit = await prisma.kullanici.findUnique({
             where: { id },
-            select: { rol: true, ad: true, soyad: true, sirketId: true },
+            select: { id: true, rol: true, ad: true, soyad: true, sirketId: true },
         });
+
+        const updateData = {
+            ad: forceUppercase(data.ad || ""),
+            soyad: forceUppercase(data.soyad || ""),
+            telefon: data.telefon || null,
+            rol: data.rol,
+            sirketId,
+            disFirmaId,
+            ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
+            ...(canWriteSantiye ? { santiye: data.santiye?.trim() || null } : {}),
+            tcNo: data.tcNo || null,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "kullanici",
+            entityType: "Personel",
+            entityId: id,
+            summary: `${oncekiKayit?.ad || ""} ${oncekiKayit?.soyad || ""} personeli için düzenleme talebi.`.trim(),
+            payload: updateData,
+            beforeData: oncekiKayit,
+            companyId: sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         const updated = (await prisma.kullanici.update({
             where: { id },
             data: {
-                ad: forceUppercase(data.ad || ""),
-                soyad: forceUppercase(data.soyad || ""),
-                telefon: data.telefon || null,
-                rol: data.rol,
+                ad: updateData.ad,
+                soyad: updateData.soyad,
+                telefon: updateData.telefon,
+                rol: updateData.rol,
                 ...(sirketId
                     ? { sirket: { connect: { id: sirketId } } }
                     : { sirket: { disconnect: true } }),
@@ -230,7 +254,7 @@ export async function updatePersonel(id: string, data: { ad: string; soyad: stri
                     : { disFirma: { disconnect: true } }),
                 ...(canWriteCalistigiKurum ? { calistigiKurum: data.calistigiKurum?.trim() || null } : {}),
                 ...(canWriteSantiye ? { santiye: data.santiye?.trim() || null } : {}),
-                tcNo: data.tcNo || null,
+                tcNo: updateData.tcNo,
             },
             select: personelWriteSelect,
         })) as any;
@@ -326,6 +350,17 @@ export async function deletePersonel(id: string) {
                 error: `${personel.ad} ${personel.soyad} üzerinde ${aktifZimmet.plaka} plakalı aktif araç zimmeti var. Önce aracı personelden ayırın.`,
             };
         }
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "kullanici",
+            entityType: "Personel",
+            entityId: id,
+            summary: `${personel.ad} ${personel.soyad} personeli için silme talebi.`,
+            beforeData: personel,
+            companyId: actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await softDeleteEntity("kullanici", id, actor.id);
         revalidatePath(PATH);

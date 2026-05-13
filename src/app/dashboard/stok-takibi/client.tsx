@@ -254,7 +254,9 @@ export default function StokTakibiClient({
         setLoading(false);
 
         if (response.success) {
-            toast.success("Stok kalemi güncellendi.");
+            toast.success((response as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Stok kalemi güncellendi.", {
+                description: (response as any).message,
+            });
             setEditRow(null);
             resetForm();
             router.refresh();
@@ -275,7 +277,9 @@ export default function StokTakibiClient({
 
         const response = await deleteStokKalem(row.id);
         if (response.success) {
-            toast.success("Stok kalemi silindi.");
+            toast.success((response as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Stok kalemi silindi.", {
+                description: (response as any).message,
+            });
             router.refresh();
             return;
         }

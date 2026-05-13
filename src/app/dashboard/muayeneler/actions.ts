@@ -6,6 +6,7 @@ import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedRecordOrThrow }
 import { normalizeKmInput, syncAracGuncelKm } from "@/lib/km-consistency";
 import { ensureMuayeneColumns, isMuayeneOptionalFieldCompatibilityError } from "@/lib/muayene-schema-compat";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = '/dashboard/muayeneler';
 const EVRAK_PATH = "/dashboard/stok-takibi";
@@ -126,7 +127,7 @@ export async function createMuayene(data: {
     aktifMi?: boolean;
 }) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         await ensureMuayeneColumns();
         const arac = await getScopedAracOrThrow(data.aracId, {
             id: true,
@@ -195,7 +196,7 @@ export async function createMuayene(data: {
 
 export async function updateMuayene(id: string, data: any) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         await ensureMuayeneColumns();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "muayene",
@@ -230,6 +231,22 @@ export async function updateMuayene(id: string, data: any) {
             km: data.km !== undefined ? normalizedKm : undefined,
             aktifMi: data.aktifMi !== undefined ? Boolean(data.aktifMi) : undefined,
         };
+        const updateData = {
+            ...baseUpdateData,
+            tutar: data.tutar !== undefined ? Number(data.tutar) : undefined,
+            gectiMi: data.gectiMi !== undefined ? Boolean(data.gectiMi) : undefined,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "muayene",
+            entityType: "Muayene",
+            entityId: id,
+            summary: "Muayene kaydı için düzenleme talebi.",
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: updateData.sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         try {
             await tryUpdateMuayeneWithFallback(id, baseUpdateData as Record<string, unknown>, {
@@ -272,14 +289,25 @@ export async function updateMuayene(id: string, data: any) {
 
 export async function deleteMuayene(id: string) {
     try {
-        await assertAuthenticatedUser();
+        const actor = await assertAuthenticatedUser();
         const mevcutKayit = await getScopedRecordOrThrow({
             prismaModel: "muayene",
             filterModel: "muayene",
             id,
-            select: { aracId: true },
+            select: { aracId: true, sirketId: true },
             errorMessage: "Muayene kaydi bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "muayene",
+            entityType: "Muayene",
+            entityId: id,
+            summary: "Muayene kaydı için silme talebi.",
+            beforeData: mevcutKayit,
+            companyId: (mevcutKayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await prisma.muayene.delete({ where: { id } });
         revalidateMuayeneRelatedPaths([(mevcutKayit as { aracId?: string } | null)?.aracId]);

@@ -90,7 +90,9 @@ export default function PersonelClient({
         const res = await updatePersonel(editRow.id, formData);
         if (res.success) {
             setEditRow(null);
-            toast.success("Güncelleme Başarılı", { description: "Personel bilgileri güncellendi." });
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Güncelleme Başarılı", {
+                description: (res as any).message || "Personel bilgileri güncellendi.",
+            });
             router.refresh();
         } else {
             toast.error("Güncelleme Hatası", { description: res.error });
@@ -103,7 +105,9 @@ export default function PersonelClient({
         if (!confirmed) return;
         const res = await deletePersonel(id);
         if (res.success) {
-            toast.success("Personel Silindi", { description: "Personel kaydı başarıyla kaldırıldı." });
+            toast.success((res as any).pendingApproval ? "Admin Onayı Bekleniyor" : "Personel Silindi", {
+                description: (res as any).message || "Personel kaydı başarıyla kaldırıldı.",
+            });
             router.refresh();
         } else {
             toast.error("Silme İşlemi Başarısız", { description: res.error });

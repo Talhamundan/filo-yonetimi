@@ -3,9 +3,18 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { createUserAccount, deleteUserAccount, updateUserAccount, createYakitTank, updateYakitTank, deleteYakitTank } from "./actions";
+import {
+    approvePendingMutationRequest,
+    createUserAccount,
+    deleteUserAccount,
+    deleteYakitTank,
+    rejectPendingMutationRequest,
+    updateUserAccount,
+    createYakitTank,
+    updateYakitTank,
+} from "./actions";
 import { toast } from "sonner";
-import { ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2, Fuel, Trash2 } from "lucide-react";
+import { CheckCircle2, ShieldCheck, UserPlus, Lock, User, Eye, EyeOff, Database, Download, Upload, Loader2, Fuel, Trash2, XCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Rol } from "@prisma/client";
 import ExcelTransferToolbar from "@/components/ui/excel-transfer-toolbar";
@@ -52,6 +61,18 @@ type TankRow = {
     sirket?: { id: string; ad: string } | null;
 };
 
+type PendingApprovalRequest = {
+    id: string;
+    action: "UPDATE" | "DELETE";
+    entityType: string;
+    entityId: string;
+    summary: string;
+    requestedById?: string | null;
+    requestedByName?: string | null;
+    companyName?: string | null;
+    createdAt: Date | string;
+};
+
 export default function OnayMerkeziClient({
     registeredUsers,
     assignablePersoneller,
@@ -59,6 +80,7 @@ export default function OnayMerkeziClient({
     sirketler,
     selectedScopeSirketId,
     canScopeTankByCompany,
+    pendingApprovalRequests,
 }: {
     registeredUsers: RegisteredUser[];
     assignablePersoneller: AssignablePersonel[];
@@ -66,6 +88,7 @@ export default function OnayMerkeziClient({
     sirketler: Array<{ id: string; ad: string }>;
     selectedScopeSirketId: string | null;
     canScopeTankByCompany: boolean;
+    pendingApprovalRequests: PendingApprovalRequest[];
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const router = useRouter();
@@ -85,6 +108,7 @@ export default function OnayMerkeziClient({
     const [isBulkExporting, setIsBulkExporting] = useState(false);
     const [isBulkImporting, setIsBulkImporting] = useState(false);
     const [isDeletingAllData, setIsDeletingAllData] = useState(false);
+    const [approvalBusyId, setApprovalBusyId] = useState<string | null>(null);
     
     // Yakit Tank States
     const defaultTankSirketId = canScopeTankByCompany ? (selectedScopeSirketId || "") : "";
@@ -284,6 +308,30 @@ export default function OnayMerkeziClient({
     const createFieldControlClass =
         "h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm leading-5 outline-none focus:border-indigo-500";
     const scopedQuery = searchParams.toString();
+
+    const handleApproveRequest = async (id: string) => {
+        setApprovalBusyId(id);
+        const result = await approvePendingMutationRequest(id);
+        if (result.success) {
+            toast.success("Talep onaylandı ve değişiklik uygulandı.");
+            router.refresh();
+        } else {
+            toast.error(result.error || "Talep onaylanamadı.");
+        }
+        setApprovalBusyId(null);
+    };
+
+    const handleRejectRequest = async (id: string) => {
+        setApprovalBusyId(id);
+        const result = await rejectPendingMutationRequest(id);
+        if (result.success) {
+            toast.success("Talep reddedildi.");
+            router.refresh();
+        } else {
+            toast.error(result.error || "Talep reddedilemedi.");
+        }
+        setApprovalBusyId(null);
+    };
 
     const handleCreateUser = async (event: React.FormEvent<HTMLFormElement>) => {
         event.preventDefault();
@@ -504,6 +552,70 @@ export default function OnayMerkeziClient({
                 </div>
                 <ExcelTransferToolbar options={[{ entity: "personel", label: "Personel" }]} hideEntitySelect />
             </header>
+            <section className="mb-6 rounded-2xl border border-amber-200 bg-amber-50/40 p-5">
+                <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <h2 className="text-lg font-bold text-slate-900">Admin Onayı Bekleyen İşlemler</h2>
+                        <p className="mt-1 text-sm text-slate-600">
+                            Yetkili kullanıcıların düzenleme ve silme talepleri burada onay bekler.
+                        </p>
+                    </div>
+                    <span className="inline-flex w-fit rounded-full bg-amber-100 px-3 py-1 text-xs font-bold text-amber-800">
+                        {pendingApprovalRequests.length} bekleyen talep
+                    </span>
+                </div>
+                {pendingApprovalRequests.length > 0 ? (
+                    <div className="overflow-hidden rounded-xl border border-amber-100 bg-white">
+                        {pendingApprovalRequests.map((request) => (
+                            <div key={request.id} className="flex flex-col gap-3 border-b border-slate-100 p-4 last:border-b-0 lg:flex-row lg:items-center lg:justify-between">
+                                <div className="min-w-0">
+                                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                                        <span className={cn(
+                                            "rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide",
+                                            request.action === "DELETE" ? "bg-rose-100 text-rose-700" : "bg-indigo-100 text-indigo-700"
+                                        )}>
+                                            {request.action === "DELETE" ? "Silme" : "Düzenleme"}
+                                        </span>
+                                        <span className="text-xs font-semibold text-slate-500">{request.entityType}</span>
+                                        <span className="text-xs text-slate-400">
+                                            {new Date(request.createdAt).toLocaleString("tr-TR")}
+                                        </span>
+                                    </div>
+                                    <p className="font-semibold text-slate-900">{request.summary}</p>
+                                    <p className="mt-1 text-xs text-slate-500">
+                                        Talep eden: {request.requestedByName || request.requestedById || "Bilinmiyor"}
+                                        {request.companyName ? ` · Şirket: ${request.companyName}` : ""}
+                                    </p>
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2">
+                                    <button
+                                        type="button"
+                                        disabled={approvalBusyId === request.id}
+                                        onClick={() => handleRejectRequest(request.id)}
+                                        className="inline-flex h-9 items-center gap-2 rounded-lg border border-rose-200 bg-white px-3 text-xs font-bold text-rose-700 hover:bg-rose-50 disabled:opacity-50"
+                                    >
+                                        <XCircle size={15} />
+                                        Reddet
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={approvalBusyId === request.id}
+                                        onClick={() => handleApproveRequest(request.id)}
+                                        className="inline-flex h-9 items-center gap-2 rounded-lg bg-emerald-600 px-3 text-xs font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
+                                    >
+                                        <CheckCircle2 size={15} />
+                                        Onayla
+                                    </button>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="rounded-xl border border-dashed border-amber-200 bg-white/70 p-5 text-sm font-medium text-slate-500">
+                        Şu anda onay bekleyen düzenleme veya silme talebi yok.
+                    </div>
+                )}
+            </section>
             <section className="mb-6 rounded-2xl border border-indigo-100 bg-indigo-50/40 p-5">
                 <div className="mb-3 flex items-center gap-2">
                     <UserPlus size={18} className="text-indigo-600" />

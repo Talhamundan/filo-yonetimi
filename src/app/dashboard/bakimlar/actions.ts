@@ -15,6 +15,7 @@ import { logEntityActivity } from "@/lib/activity-log";
 import { softDeleteEntity } from "@/lib/soft-delete";
 import { normalizePlate } from "@/lib/validation";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
+import { maybeCreateAdminApprovalRequest } from "@/lib/admin-approval";
 
 const PATH = "/dashboard/servis-kayitlari";
 const LEGACY_PATH = "/dashboard/bakimlar";
@@ -271,24 +272,37 @@ export async function updateBakim(id: string, data: {
             : normalizeOptionalText((mevcutKayit as any).sirketId) || (await resolveActionSirketId());
         const summaryPlaka = plaka || "araçsız kayıt";
 
+        const updateData = {
+            aracId: nextAracId,
+            plaka,
+            sirketId: resolvedSirketId,
+            ...(BAKIM_HAS_SOFOR_ID ? { soforId: null } : {}),
+            bakimTarihi: data.bakimTarihi,
+            yapilanKm: Number(yapilanKm),
+            kategori: effectiveKategori,
+            tur: effectiveTur,
+            arizaSikayet,
+            degisenParca,
+            islemYapanFirma,
+            servisAdi: islemYapanFirma,
+            yapilanIslemler,
+            tutar: data.tutar,
+        };
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "UPDATE",
+            prismaModel: "bakim",
+            entityType: "Bakım",
+            entityId: id,
+            summary: `${summaryPlaka} için bakım kaydı düzenleme talebi.`,
+            payload: updateData,
+            beforeData: mevcutKayit,
+            companyId: resolvedSirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
+
         const updated = await (prisma as any).bakim.update({
             where: { id },
-            data: {
-                aracId: nextAracId,
-                plaka,
-                sirketId: resolvedSirketId,
-                ...(BAKIM_HAS_SOFOR_ID ? { soforId: null } : {}),
-                bakimTarihi: data.bakimTarihi,
-                yapilanKm: Number(yapilanKm),
-                kategori: effectiveKategori,
-                tur: effectiveTur,
-                arizaSikayet,
-                degisenParca,
-                islemYapanFirma,
-                servisAdi: islemYapanFirma,
-                yapilanIslemler,
-                tutar: data.tutar,
-            }
+            data: updateData
         });
 
         if (oldAracId && oldAracId !== nextAracId) {
@@ -341,6 +355,17 @@ export async function deleteBakim(id: string) {
             select: { aracId: true, sirketId: true, kategori: true, tur: true, tutar: true, bakimTarihi: true },
             errorMessage: "Bakim kaydi bulunamadi veya yetkiniz yok.",
         });
+
+        const approval = await maybeCreateAdminApprovalRequest({
+            action: "DELETE",
+            prismaModel: "bakim",
+            entityType: "Bakım",
+            entityId: id,
+            summary: "Bakım kaydı için silme talebi.",
+            beforeData: kayit,
+            companyId: (kayit as any).sirketId || actor.sirketId || null,
+        });
+        if (approval) return approval;
 
         await softDeleteEntity("bakim", id, actor.id);
         revalidateBakimPages((kayit as { aracId?: string } | null)?.aracId);
