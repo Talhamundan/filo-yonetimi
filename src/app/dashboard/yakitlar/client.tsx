@@ -22,6 +22,7 @@ import { GaugeChart } from "@/components/ui/gauge-chart";
 const EMPTY = {
     aracId: '',
     soforId: '',
+    sirketId: '',
     tarih: new Date().toISOString().slice(0, 10),
     litre: '',
     km: '',
@@ -93,6 +94,7 @@ type AracOption = {
     durum?: string | null;
     bulunduguIl?: string | null;
     calistigiKurum?: string | null;
+    sirketId?: string | null;
     sirketAd?: string | null;
     kullaniciId?: string | null;
     kullanici?: { id: string; ad: string; soyad: string } | null;
@@ -112,11 +114,17 @@ type PersonelOption = {
     calistigiKurum?: string | null;
 };
 
+type SirketOption = {
+    id: string;
+    ad: string;
+};
+
 const FormFields = ({
     formData,
     setFormData,
     araclar,
     personeller,
+    sirketler,
     onAracChange,
     tankGosterge,
 }: {
@@ -124,16 +132,17 @@ const FormFields = ({
     setFormData: any,
     araclar: AracOption[],
     personeller: PersonelOption[],
+    sirketler: SirketOption[],
     onAracChange: (aracId: string) => void,
     tankGosterge?: any,
 }) => {
     const seciliArac = araclar.find((a) => a.id === formData.aracId);
     const seciliPersonel = personeller.find((personel) => personel.id === formData.soforId);
-    const bagliSirket = seciliArac?.sirketAd?.trim() || "-";
-    const calistigiKurum =
+    const varsayilanKurum =
         seciliArac?.calistigiKurum?.trim() ||
         seciliPersonel?.calistigiKurum?.trim() ||
         seciliPersonel?.sirketAd?.trim() ||
+        seciliArac?.sirketAd?.trim() ||
         "-";
     const alindigiYerOptions = React.useMemo(() => {
         const defaultOptions = ["Mithra", "Binlik Bidon"];
@@ -193,6 +202,22 @@ const FormFields = ({
                 />
                 <p className="text-[11px] text-slate-500">
                     Şoför harici personel de seçilebilir. Admin seçimi yapılamaz.
+                </p>
+            </div>
+            <div className="space-y-1.5">
+                <label className="text-sm font-medium">Kurum</label>
+                <select
+                    value={formData.sirketId}
+                    onChange={(e) => setFormData({ ...formData, sirketId: e.target.value })}
+                    className="h-9 flex w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                    <option value="">Kurum seçilmedi</option>
+                    {sirketler.map((sirket) => (
+                        <option key={sirket.id} value={sirket.id}>{sirket.ad}</option>
+                    ))}
+                </select>
+                <p className="text-[11px] text-slate-500">
+                    Plaka seçilince aracın varsayılan kurumu gelir; gerekirse değiştirilebilir. Varsayılan: {varsayilanKurum}
                 </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -551,11 +576,13 @@ export default function YakitlarClient({
     araclar,
     personeller,
     yakitTanklari,
+    sirketler,
 }: {
     initialYakitlar: YakitRow[],
     araclar: AracOption[],
     personeller: PersonelOption[],
     yakitTanklari: any[],
+    sirketler: SirketOption[],
 }) {
     const { confirmModal, openConfirm } = useConfirm();
     const { canAccessAllCompanies } = useDashboardScope();
@@ -716,6 +743,7 @@ export default function YakitlarClient({
         setFormData((prev) => ({
             ...prev,
             aracId,
+            sirketId: seciliArac?.sirketId || "",
             soforId: normalizeSoforId(seciliArac?.aktifSoforId || seciliArac?.kullaniciId),
         }));
     };
@@ -739,6 +767,7 @@ export default function YakitlarClient({
             km,
             endeks: formData.endeks ? Math.trunc(Number(formData.endeks)) : null,
             soforId: formData.soforId || null,
+            sirketId: formData.sirketId || null,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -768,6 +797,7 @@ export default function YakitlarClient({
             km,
             endeks: formData.endeks ? Math.trunc(Number(formData.endeks)) : null,
             soforId: formData.soforId || null,
+            sirketId: formData.sirketId || null,
             odemeYontemi: formData.odemeYontemi
         });
         if (res.success) {
@@ -798,6 +828,7 @@ export default function YakitlarClient({
         setFormData({
             aracId: row.arac.id,
             soforId: normalizeSoforId(row.soforId || (row as any).kullanici?.id || row.arac.kullanici?.id),
+            sirketId: row.sirketId || "",
             tarih: new Date(row.tarih).toISOString().slice(0, 10),
             litre: row.litre.toString(),
             km: row.km != null ? row.km.toString() : '',
@@ -881,6 +912,7 @@ export default function YakitlarClient({
                                 setFormData={setFormData}
                                 araclar={araclar}
                                 personeller={personeller}
+                                sirketler={sirketler}
                                 onAracChange={handleAracSelection}
                                 tankGosterge={tankGosterge}
                             />

@@ -1,35 +1,33 @@
-version: '3.8'
-
 services:
-  db:
-    image: postgres:15-alpine
-    container_name: filo_postgres_db
-    restart: always
-    environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: filo_sifre_2026
-      POSTGRES_DB: filo_db
-      DATABASE_URL: postgresql://admin:filo_sifre_2026@localhost:5432/filo_db?schema=public
-    ports:
-      - "5432:5432"
-    volumes:
-      - db_data:/var/lib/postgresql/data
-
   app:
     build: .
-    container_name: filo_app
-    restart: always
+    container_name: filo-yonetimi-app
+    restart: unless-stopped
     depends_on:
       - db
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: postgresql://admin:filo_sifre_2026@db:5432/filo_db?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-filo_sifre_2026}@db:5432/${POSTGRES_DB:-filo_db}?schema=public
       UPLOADS_DIR: /uploads
       PORT: 3001
     ports:
-      - "3001:3001"
+      - "${APP_PORT:-8443}:3001"
     volumes:
-      - uploads_data:/uploads
+      - ${UPLOADS_HOST_PATH:-./uploads}:/uploads
+
+  db:
+    image: postgres:15-alpine
+    container_name: filo_postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-filo_sifre_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-filo_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
 
 volumes:
   db_data:
-  uploads_data:

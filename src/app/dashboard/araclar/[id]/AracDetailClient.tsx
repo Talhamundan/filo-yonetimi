@@ -1423,7 +1423,6 @@ export default function AracDetailClient({
                         <label className="text-sm font-medium">Dosya Seç</label>
                         <Input
                             type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
                             onChange={e => setRuhsatDokumanForm({ ...ruhsatDokumanForm, file: e.target.files?.[0] || null })}
                             className="h-9"
                         />
@@ -1685,7 +1684,6 @@ export default function AracDetailClient({
                         <label className="text-sm font-medium">Dosya Seç</label>
                         <Input
                             type="file"
-                            accept=".pdf,.jpg,.jpeg,.png"
                             onChange={e => setDokumanForm({ ...dokumanForm, file: e.target.files?.[0] || null })}
                             className="h-9"
                         />

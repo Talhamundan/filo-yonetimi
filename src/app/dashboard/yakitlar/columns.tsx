@@ -16,6 +16,8 @@ export type YakitRow = {
     km: number | null;
     istasyon: string | null;
     odemeYontemi: 'NAKIT' | 'TASIT_TANIMA';
+    sirketId?: string | null;
+    sirketAd?: string | null;
     soforId?: string | null;
     sofor?: {
         id: string;
@@ -56,6 +58,18 @@ export const getColumns = (showCompanyInfo = false): ColumnDef<YakitRow>[] => {
             header: "Tarih",
             cell: ({ row }) => {
                 return <div className="text-slate-700 font-medium">{formatDate(row.getValue("tarih"))}</div>
+            },
+        },
+        {
+            accessorKey: "kurum",
+            header: "Kurum",
+            accessorFn: (row) => row.sirketAd || row.arac.sirket?.ad || row.arac.calistigiKurum || "",
+            cell: ({ row }) => {
+                if (row.original.isStokHareketi) {
+                    return <span className="text-sm text-slate-500">{row.original.arac.sirket?.ad || row.original.sirketAd || "-"}</span>;
+                }
+                const kurum = row.original.sirketAd || row.original.arac.sirket?.ad || row.original.arac.calistigiKurum;
+                return <span className="text-sm font-semibold text-slate-700">{kurum || "-"}</span>;
             },
         },
         {

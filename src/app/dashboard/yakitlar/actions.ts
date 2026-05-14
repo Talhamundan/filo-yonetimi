@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { assertAuthenticatedUser, getScopedAracOrThrow, getScopedKullaniciOrThrow, getScopedRecordOrThrow } from "@/lib/action-scope";
 import { assertKmWriteConsistency, syncAracGuncelKm } from "@/lib/km-consistency";
 import { canRoleAccessAllCompanies, isDriverRole } from "@/lib/policy";
+import { getSirketListFilter } from "@/lib/auth-utils";
 import { resolveVehicleUsageCompanyId } from "@/lib/vehicle-usage-company";
 
 const PATH = '/dashboard/yakitlar';
@@ -114,6 +115,7 @@ type CreateYakitInput = {
     km?: number | null;
     endeks?: number | null;
     soforId?: string | null;
+    sirketId?: string | null;
     istasyon?: string;
     odemeYontemi?: OdemeYontemi | string;
 };
@@ -292,6 +294,24 @@ async function resolveYakitSoforId(inputSoforId: string | null | undefined, fall
     return (personel as any).id as string;
 }
 
+async function resolveYakitSirketId(inputSirketId: string | null | undefined, fallbackSirketId?: string | null) {
+    const normalized = normalizeSirketId(inputSirketId);
+    if (!normalized) return fallbackSirketId || null;
+
+    const sirketScope = await getSirketListFilter();
+    const sirket = await (prisma as any).sirket.findFirst({
+        where: {
+            id: normalized,
+            ...(sirketScope as any),
+        },
+        select: { id: true },
+    });
+    if (!sirket) {
+        throw new Error("Seçilen kuruma erişim yetkiniz yok.");
+    }
+    return sirket.id as string;
+}
+
 export async function addFuelToTanker(data: {
     tankId: string;
     litre: number;
@@ -450,7 +470,8 @@ export async function createYakit(data: CreateYakitInput) {
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
         });
-        const usageTankScope = getTankScopeForCompany(usageContext.kullanimSirketId, actorTankScope);
+        const resolvedSirketId = await resolveYakitSirketId(data.sirketId, usageContext.kullanimSirketId);
+        const usageTankScope = getTankScopeForCompany(resolvedSirketId, actorTankScope);
         const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = parseDateInput(data.tarih, "Yakıt tarihi");
         const parsedLitre = parseDecimalInput(data.litre, "Litre");
@@ -542,7 +563,7 @@ export async function createYakit(data: CreateYakitInput) {
             const yakit = await tx.yakit.create({
                 data: {
                     arac: { connect: { id: arac.id } },
-                    sirketId: usageContext.kullanimSirketId,
+                    sirketId: resolvedSirketId,
                     tarih: parsedTarih,
                     litre: parsedLitre,
                     tutar: finalTutar,
@@ -652,7 +673,8 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
         const usageContext = await getAracUsageContext(arac.id, {
             soforId: (arac as any)?.kullanici?.id || arac.kullaniciId || null,
         });
-        const usageTankScope = getTankScopeForCompany(usageContext.kullanimSirketId, actorTankScope);
+        const resolvedSirketId = await resolveYakitSirketId(data.sirketId, usageContext.kullanimSirketId);
+        const usageTankScope = getTankScopeForCompany(resolvedSirketId, actorTankScope);
         const resolvedSoforId = await resolveYakitSoforId(data.soforId, usageContext.soforId);
         const parsedTarih = data.tarih ? parseDateInput(data.tarih, "Yakıt tarihi") : undefined;
         const parsedLitre = data.litre !== undefined ? parseDecimalInput(data.litre, "Litre") : undefined;
@@ -750,7 +772,7 @@ export async function updateYakit(id: string, data: UpdateYakitInput) {
                 where: { id },
                 data: {
                     arac: { connect: { id: arac.id } },
-                    sirketId: usageContext.kullanimSirketId,
+                    sirketId: data.sirketId !== undefined ? resolvedSirketId : usageContext.kullanimSirketId,
                     tarih: parsedTarih,
                     litre: parsedLitre,
                     tutar: finalTutar,

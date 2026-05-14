@@ -1,7 +1,7 @@
 import { prisma } from "../../../lib/prisma";
 import YakitlarClient from "./client";
 import { YakitRow } from "./columns";
-import { getAracUsageFilter, getModelFilter, getPersonnelSelectFilter } from "@/lib/auth-utils";
+import { getAracUsageFilter, getModelFilter, getPersonnelSelectFilter, getSirketListFilter } from "@/lib/auth-utils";
 import { getAyDateRange, getSelectedAy, getSelectedSirketId, getSelectedYil, type DashboardSearchParams } from "@/lib/company-scope";
 import { getCommonListFilters, getDateRangeFilter } from "@/lib/list-filters";
 import { getActivePersonelId, getPersonelDisplayName } from "@/lib/personel-display";
@@ -21,11 +21,12 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
     ]);
     const { start: rangeStart, end: rangeEnd } = getAyDateRange(selectedYil, selectedAy);
 
-    const [queryFilter, aracFilter, personelFilter, yakitTankFilter] = await Promise.all([
+    const [queryFilter, aracFilter, personelFilter, yakitTankFilter, sirketListFilter] = await Promise.all([
         getModelFilter("yakit", selectedSirketId),
         getAracUsageFilter(selectedSirketId),
         getPersonnelSelectFilter(selectedSirketId),
         YAKIT_TANK_HAS_SIRKET_FIELD ? getModelFilter("yakitTank", selectedSirketId) : Promise.resolve({}),
+        getSirketListFilter(),
     ]);
 
     const yakitWhere = (queryFilter || {}) as Record<string, unknown>;
@@ -83,7 +84,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             } as Record<string, unknown>)
             : null;
 
-    const [yakitlar, araclar, personeller, yakitTanklari, tankHareketleri] = await Promise.all([
+    const [yakitlar, araclar, personeller, yakitTanklari, tankHareketleri, sirketler] = await Promise.all([
         (prisma as any).yakit.findMany({ 
             where: scopedYakitWhere as any,
             orderBy: { tarih: 'desc' }, 
@@ -100,14 +101,14 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 },
                 arac: {
                     include: {
-                        sirket: { select: { ad: true } },
+                        sirket: { select: { id: true, ad: true } },
                         kullanici: {
                             select: {
                                 id: true,
                                 ad: true,
                                 soyad: true,
                                 deletedAt: true,
-                                sirket: { select: { ad: true } },
+                                sirket: { select: { id: true, ad: true } },
                             },
                         },
                         kullaniciGecmisi: {
@@ -121,7 +122,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                                         ad: true,
                                         soyad: true,
                                         deletedAt: true,
-                                        sirket: { select: { ad: true } },
+                                        sirket: { select: { id: true, ad: true } },
                                     },
                                 },
                             },
@@ -142,14 +143,14 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 guncelKm: true,
                 durum: true,
                 disFirma: { select: { tur: true, ad: true } },
-                sirket: { select: { ad: true } },
+                sirket: { select: { id: true, ad: true } },
                 kullanici: {
                     select: {
                         id: true,
                         ad: true,
                         soyad: true,
                         deletedAt: true,
-                        sirket: { select: { ad: true } },
+                        sirket: { select: { id: true, ad: true } },
                     },
                 },
                 kullaniciGecmisi: {
@@ -163,7 +164,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                                 ad: true,
                                 soyad: true,
                                 deletedAt: true,
-                                sirket: { select: { ad: true } },
+                                sirket: { select: { id: true, ad: true } },
                             },
                         },
                     },
@@ -213,8 +214,19 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                     tank: { select: { ad: true } },
                     hedefTank: { select: { ad: true } },
                 }
-        })
+        }),
+        (prisma as any).sirket.findMany({
+            where: sirketListFilter as any,
+            select: { id: true, ad: true },
+            orderBy: { ad: "asc" },
+        }),
     ]);
+
+    const sirketlerList = sirketler as Array<{ id: string; ad: string }>;
+    const sirketAdById = new Map(sirketlerList.map((sirket) => [sirket.id, sirket.ad]));
+    const sirketIdByName = new Map(
+        sirketlerList.map((sirket) => [String(sirket.ad || "").trim().toLocaleLowerCase("tr-TR"), sirket.id])
+    );
     
     const rawYakitlar = yakitlar as any[];
     const { byCurrentRecordId } = buildFuelIntervalMetrics(
@@ -233,8 +245,10 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         const metric = byCurrentRecordId.get(row.id);
         const aracAktifSofor = row.arac?.kullaniciGecmisi?.[0]?.kullanici || row.arac?.kullanici || null;
         const kullanimSirket = aracAktifSofor?.sirket || row.arac?.sirket || null;
+        const rowSirketAd = row.sirketId ? (sirketAdById.get(row.sirketId) || null) : null;
         return {
             ...row,
+            sirketAd: rowSirketAd || kullanimSirket?.ad || row.arac?.calistigiKurum || null,
             arac: row.arac
                 ? {
                     ...row.arac,
@@ -256,6 +270,12 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
         const istasyon = isTransfer 
             ? `${h.tank?.ad} ➔ ${h.hedefTank?.ad}`
             : `${h.tank?.ad}`;
+        const hareketSirketId = YAKIT_TANK_HAS_SIRKET_FIELD
+            ? (h.tank?.sirket?.id || h.hedefTank?.sirket?.id || null)
+            : null;
+        const hareketSirketAd = YAKIT_TANK_HAS_SIRKET_FIELD
+            ? (h.tank?.sirket?.ad || h.hedefTank?.sirket?.ad || "-")
+            : "-";
             
         return {
             id: h.id,
@@ -265,15 +285,15 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             km: 0,
             istasyon: istasyon,
             odemeYontemi: 'NAKIT' as any,
+            sirketId: hareketSirketId,
+            sirketAd: hareketSirketAd,
             arac: {
                 id: h.tankId,
                 plaka: plaka,
                 marka: "Tanker",
                 model: "Sistem",
                 sirket: {
-                    ad: YAKIT_TANK_HAS_SIRKET_FIELD
-                        ? (h.tank?.sirket?.ad || h.hedefTank?.sirket?.ad || "-")
-                        : "-"
+                    ad: hareketSirketAd
                 }
             } as any,
             isStokHareketi: true // Custom flag for UI
@@ -290,6 +310,10 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
             araclar={(araclar as any[]).map((a) => {
                 const aktifSofor = a.kullaniciGecmisi?.[0]?.kullanici || a.kullanici || null;
                 const kullanimSirketAd = aktifSofor?.sirket?.ad || a.sirket?.ad || null;
+                const calistigiKurumSirketId = a.calistigiKurum
+                    ? (sirketIdByName.get(String(a.calistigiKurum).trim().toLocaleLowerCase("tr-TR")) || null)
+                    : null;
+                const kullanimSirketId = calistigiKurumSirketId || aktifSofor?.sirket?.id || a.sirket?.id || null;
                 return {
                 id: a.id,
                 plaka: a.plaka,
@@ -299,6 +323,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 bulunduguIl: a.bulunduguIl,
                 calistigiKurum: a.calistigiKurum || null,
                 sirketAd: kullanimSirketAd,
+                sirketId: kullanimSirketId,
                 guncelKm: a.guncelKm,
                 aktifSoforId: getActivePersonelId(aktifSofor),
                 aktifSofor: aktifSofor || null,
@@ -315,6 +340,7 @@ export default async function YakitlarPage(props: { searchParams?: Promise<Dashb
                 calistigiKurum: p.calistigiKurum || null,
             }))}
             yakitTanklari={yakitTanklari as any[]}
-        />
+            sirketler={sirketlerList}
+            />
     );
 }

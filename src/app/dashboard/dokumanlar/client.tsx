@@ -179,7 +179,6 @@ export default function DokumanlarClient({
                                     <label className="text-sm font-medium">Dosya Seç</label>
                                     <Input 
                                         type="file" 
-                                        accept=".pdf,.jpg,.jpeg,.png"
                                         className="h-9" 
                                         onChange={(e) => setFormData({...formData, dosya: e.target.files?.[0] || null})}
                                     />
