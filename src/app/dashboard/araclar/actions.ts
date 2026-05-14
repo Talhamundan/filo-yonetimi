@@ -339,7 +339,7 @@ export async function updateArac(id: string, data: any) {
             plaka: normalizedPlaka,
             marka: data.marka ? toUpperTr(data.marka) : undefined,
             model: data.model ? toUpperTr(data.model) : undefined,
-            yil: data.yil ? Number(data.yil) : undefined,
+            yil: data.yil !== undefined ? Number(data.yil) : undefined,
             bulunduguIl: data.bulunduguIl ? normalizeSantiyeValue(data.bulunduguIl) : undefined,
             guncelKm: resolvedGuncelKm,
             bedel: data.bedel !== undefined ? normalizeBedelInput(data.bedel) : undefined,
