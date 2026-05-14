@@ -44,7 +44,7 @@ const EMPTY = {
     plaka: '',
     marka: '',
     model: '',
-    yil: new Date().getFullYear(),
+    yil: 0,
     muayeneGecerlilikTarihi: '',
     bulunduguIl: 'MERKEZ',
     guncelKm: 0,
@@ -133,15 +133,15 @@ const FormFields = ({
             <Input value={formData.model} onChange={e => setFormData({...formData, model: forceUppercase(e.target.value)})} placeholder="MEGANE" className="h-9 uppercase" />
         </div>
         <div className="space-y-1.5">
-            <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
+            <label className="text-sm font-medium">Model Yılı</label>
             <Input
                 type="number"
-                value={safeNumberInputValue(formData.yil, new Date().getFullYear())}
+                value={safeNumberInputValue(formData.yil, 0) > 0 ? safeNumberInputValue(formData.yil, 0) : ""}
                 onChange={e => setFormData({
                     ...formData,
                     yil: parseNumberInput(
                         e.target.value,
-                        safeNumberInputValue(formData.yil, new Date().getFullYear())
+                        0
                     )
                 })}
                 className="h-9"
@@ -432,7 +432,7 @@ export default function AraclarClient({
         }
         const yil = Number(formData.yil);
         const guncelKm = Number(formData.guncelKm);
-        if (!Number.isFinite(yil) || yil < 1900) {
+        if (!Number.isFinite(yil) || (yil !== 0 && yil < 1900)) {
             return toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
         }
         if (!Number.isFinite(guncelKm) || guncelKm < 0) {
@@ -465,7 +465,7 @@ export default function AraclarClient({
         }
         const yil = Number(formData.yil);
         const guncelKm = Number(formData.guncelKm);
-        if (!Number.isFinite(yil) || yil < 1900) {
+        if (!Number.isFinite(yil) || (yil !== 0 && yil < 1900)) {
             toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
             return;
         }

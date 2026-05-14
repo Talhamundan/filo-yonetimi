@@ -160,7 +160,7 @@ export async function createKiralikArac(input: KiralikAracInput) {
                 plaka,
                 marka: "KIRALIK",
                 model: "ARAC",
-                yil: new Date().getFullYear(),
+                yil: 0,
                 guncelKm: 0,
                 bulunduguIl: sirket.bulunduguIl || "BURSA",
                 durum: driver ? "AKTIF" : "BOSTA",

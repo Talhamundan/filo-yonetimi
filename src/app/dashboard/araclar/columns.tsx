@@ -60,6 +60,10 @@ function getFuelAverageUnitLabel(unit?: "LITRE_PER_100_KM" | "LITRE_PER_HOUR" | 
     return unit === "LITRE_PER_HOUR" ? "L/saat" : "L/100 km";
 }
 
+function formatModelYili(yil?: number | null) {
+    return typeof yil === "number" && yil > 0 ? yil : "-";
+}
+
 function renderGecerlilikDurumu(tarih: Date) {
     const kalan = getDaysLeft(tarih);
 
@@ -219,7 +223,7 @@ export const getColumns = (showCompanyInfo = false, isTeknik = false, isAdmin = 
                     <div className="flex flex-col">
                         <span className="font-medium text-slate-900">{row.original.marka} {row.original.model}</span>
                         <span className="text-[11px] text-slate-500 mt-0.5 whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">
-                            {row.original.yil}
+                            {formatModelYili(row.original.yil)}
                         </span>
                     </div>
                 )

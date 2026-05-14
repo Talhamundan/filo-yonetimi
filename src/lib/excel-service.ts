@@ -2542,7 +2542,7 @@ export function sanitizeAracImportRow(parsedRow: Record<string, unknown>) {
     }
 
     if (parsedRow.yil === null || parsedRow.yil === undefined || parsedRow.yil === "") {
-        parsedRow.yil = new Date().getFullYear();
+        parsedRow.yil = 0;
     }
 }
 
@@ -3109,7 +3109,7 @@ export async function exportEntity(entityKey: string, where?: WhereData, options
             output.altKategori = toExportCell(kategoriFields.altKategori);
             output.marka = toExportCell(row.marka);
             output.model = toExportCell(row.model);
-            output.yil = toExportCell(row.yil);
+            output.yil = toExportCell(Number(row.yil) > 0 ? row.yil : "-");
             output.kullanici = toExportCell(adSoyad || zimmet?.adSoyad || null);
             output.calistigiKurum = toExportCell(row.calistigiKurum || kullaniciSirketAd || zimmet?.sirketAd || null);
             output.muayene = toExportCell(formatDeadlineExportValue(aracDerivedData.latestMuayeneByAracId.get(rowId)));
@@ -3393,7 +3393,7 @@ export async function importEntity(entityKey: string, records: any[], tx: any, o
                     }
                     const yilValue = Number(parsedRow.yil);
                     if (!Number.isInteger(yilValue) || yilValue < 1990 || yilValue > new Date().getFullYear() + 1) {
-                        parsedRow.yil = new Date().getFullYear();
+                        parsedRow.yil = 0;
                     }
                     if (!normalizeLookupString(parsedRow.sirketId)) {
                         throw new Error(`Satir ${index + 2}: Çalıştığı firmamız zorunludur.`);

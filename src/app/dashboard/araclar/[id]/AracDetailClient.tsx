@@ -301,7 +301,7 @@ export default function AracDetailClient({
         plaka: forceUppercase(arac.plaka || ""),
         marka: forceUppercase(arac.marka || ""),
         model: forceUppercase(arac.model || ""),
-        yil: Number(arac.yil || new Date().getFullYear()),
+        yil: Number(arac.yil || 0),
         muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
         bulunduguIl: arac.bulunduguIl || "MERKEZ",
         guncelKm: Number(arac.guncelKm || 0),
@@ -472,7 +472,7 @@ export default function AracDetailClient({
             plaka: forceUppercase(arac.plaka || ""),
             marka: forceUppercase(arac.marka || ""),
             model: forceUppercase(arac.model || ""),
-            yil: Number(arac.yil || new Date().getFullYear()),
+            yil: Number(arac.yil || 0),
             muayeneGecerlilikTarihi: toDateTimeLocalInput(arac.muayene?.[0]?.gecerlilikTarihi),
             bulunduguIl: arac.bulunduguIl || "MERKEZ",
             guncelKm: Number(arac.guncelKm || 0),
@@ -498,7 +498,7 @@ export default function AracDetailClient({
 
         const yil = Number(aracEditForm.yil);
         const guncelKm = Number(aracEditForm.guncelKm);
-        if (!Number.isFinite(yil) || yil < 1900) {
+        if (!Number.isFinite(yil) || (yil !== 0 && yil < 1900)) {
             toast.warning("Geçersiz Değer", { description: "Model yılı geçerli bir sayı olmalıdır." });
             return;
         }
@@ -1750,15 +1750,15 @@ export default function AracDetailClient({
                                     <Input value={aracEditForm.model} onChange={e => setAracEditForm({ ...aracEditForm, model: forceUppercase(e.target.value) })} placeholder="MEGANE" className="h-9 uppercase" />
                                 </div>
                                 <div className="space-y-1.5">
-                                    <label className="text-sm font-medium">Model Yılı <span className="text-rose-500">*</span></label>
+                                    <label className="text-sm font-medium">Model Yılı</label>
                                     <Input
                                         type="number"
-                                        value={safeNumberInputValue(aracEditForm.yil, new Date().getFullYear())}
+                                        value={safeNumberInputValue(aracEditForm.yil, 0) > 0 ? safeNumberInputValue(aracEditForm.yil, 0) : ""}
                                         onChange={e => setAracEditForm({
                                             ...aracEditForm,
                                             yil: parseNumberInput(
                                                 e.target.value,
-                                                safeNumberInputValue(aracEditForm.yil, new Date().getFullYear())
+                                                0
                                             )
                                         })}
                                         className="h-9"
@@ -1992,7 +1992,7 @@ export default function AracDetailClient({
                                 <h1 className="text-3xl font-black text-slate-900 font-mono tracking-tight">{arac.plaka}</h1>
                                 {getStatusBadge(arac.kullanici ? 'AKTIF' : arac.durum)}
                             </div>
-                            <h2 className="text-lg font-semibold text-slate-700 tracking-tight">{arac.marka} {arac.model} <span className="text-slate-400 font-medium ml-1">({arac.yil})</span></h2>
+                            <h2 className="text-lg font-semibold text-slate-700 tracking-tight">{arac.marka} {arac.model} <span className="text-slate-400 font-medium ml-1">({Number(arac.yil) > 0 ? arac.yil : "-"})</span></h2>
                             {arac.aciklama ? (
                                 <p className="mt-2 text-sm text-slate-500">{arac.aciklama}</p>
                             ) : null}
@@ -2722,7 +2722,7 @@ export default function AracDetailClient({
                                             </li>
                                             <li className="flex justify-between items-center px-6 py-4">
                                                 <span className="text-sm font-medium text-slate-500">Model Yılı</span>
-                                                <span className="text-sm font-semibold text-slate-900">{arac.yil}</span>
+                                                <span className="text-sm font-semibold text-slate-900">{Number(arac.yil) > 0 ? arac.yil : "-"}</span>
                                             </li>
                                         </ul>
                                     </CardContent>

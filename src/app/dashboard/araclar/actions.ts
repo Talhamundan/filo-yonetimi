@@ -635,7 +635,7 @@ export async function importAraclarFromExcel(formData: FormData) {
                 plaka: String(row.Plaka || row.plaka || '').replace(/\s+/g, '').toUpperCase(),
                 marka: toUpperTr(String(row.Marka || row.marka || '')),
                 model: toUpperTr(String(row.Model || row.model || '')),
-                yil: parseInt(row.Yil || row.yil) || new Date().getFullYear(),
+                yil: parseInt(row.Yil || row.yil) || 0,
                 bulunduguIl: normalizeSantiyeValue(row["Bulunduğu Şantiye"] || row.BulunduguIl || row.Santiye || row.Il || row.il || "MERKEZ"),
                 guncelKm: parseInt(row.GuncelKm || row.Km || row.km) || 0,
                 aciklama: row.Aciklama || row.aciklama || null,
